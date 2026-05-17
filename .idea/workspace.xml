@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="9f19855e-d8bb-4098-8ca0-ec24f377eb2e" name="Changes" comment="initialize project with basic configuration and files">
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/docs/superpowers/specs/2026-05-17-show-uploader-design.md" beforeDir="false" afterPath="$PROJECT_DIR$/docs/superpowers/specs/2026-05-17-show-uploader-design.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -62,7 +61,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1779047222664</updated>
-      <workItem from="1779047223963" duration="2543000" />
+      <workItem from="1779047223963" duration="2557000" />
     </task>
     <task id="LOCAL-00001" summary="initialize project with basic configuration and files">
       <option name="closed" value="true" />

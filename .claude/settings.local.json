@@ -6,6 +6,7 @@
       "Bash(git commit -m ' *)",
       "Bash(git remote *)",
       "Bash(git *)"
+      "Bash(*)"
     ]
   }
 }
