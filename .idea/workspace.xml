@@ -4,8 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9f19855e-d8bb-4098-8ca0-ec24f377eb2e" name="Changes" comment="initialize project with basic configuration and files">
+    <list default="true" id="9f19855e-d8bb-4098-8ca0-ec24f377eb2e" name="Changes" comment="Fix settings.local.json and update workspace.xml for project configuration">
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -61,7 +62,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1779047222664</updated>
-      <workItem from="1779047223963" duration="2557000" />
+      <workItem from="1779047223963" duration="2650000" />
     </task>
     <task id="LOCAL-00001" summary="initialize project with basic configuration and files">
       <option name="closed" value="true" />
@@ -71,15 +72,25 @@
       <option name="project" value="LOCAL" />
       <updated>1779048707356</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Fix settings.local.json and update workspace.xml for project configuration">
+      <option name="closed" value="true" />
+      <created>1779049887821</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1779049887821</updated>
+    </task>
+    <option name="localTasksCounter" value="3" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
   </component>
   <component name="VcsManagerConfiguration">
+    <option name="CHECK_CODE_SMELLS_BEFORE_PROJECT_COMMIT" value="false" />
     <MESSAGE value="initialize project with basic configuration and files" />
-    <option name="LAST_COMMIT_MESSAGE" value="initialize project with basic configuration and files" />
+    <MESSAGE value="Fix settings.local.json and update workspace.xml for project configuration" />
+    <option name="LAST_COMMIT_MESSAGE" value="Fix settings.local.json and update workspace.xml for project configuration" />
   </component>
   <component name="github-copilot-workspace">
     <instructionFileLocations>
