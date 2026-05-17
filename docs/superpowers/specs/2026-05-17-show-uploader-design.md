@@ -128,9 +128,9 @@ expires_at          timestamptz
 
 ### MixCloud job
 1. Stream video from Netcup S3
-2. ffmpeg: extract audio as MP3 (192kbps)
+2. ffmpeg: extract audio as AAC (256kbps, `.m4a`)
 3. ffmpeg: prepend jingle if enabled (`concat` filter)
-4. `node-id3`: embed ID3 tags (title, artist, cover art)
+4. Embed ID3-equivalent metadata (title, artist, cover art via ffmpeg metadata)
 5. Multipart upload to MixCloud API
 6. On success: write URL to `platform_jobs` + call `PATCH /shows/:id`
 
