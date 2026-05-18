@@ -21,7 +21,7 @@ export async function extractAudio(
       });
     }
 
-    cmd.on('end', resolve).on('error', reject).run();
+    cmd.on('end', () => resolve()).on('error', reject).run();
   });
 }
 
@@ -72,7 +72,7 @@ export async function transcodeToMp4(
       });
     }
 
-    cmd.on('end', resolve).on('error', reject).run();
+    cmd.on('end', () => resolve()).on('error', reject).run();
   });
 }
 
