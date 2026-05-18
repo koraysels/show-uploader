@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useEffect, useState, type ReactNode } from 'react';
 import { UserManager, type User } from 'oidc-client-ts';
 
 export const userManager = new UserManager({
@@ -22,13 +22,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    userManager.getUser().then(setUser).finally(() => setLoading(false));
-
     const handleUserLoaded = (u: User) => setUser(u);
     const handleUserUnloaded = () => setUser(null);
 
     userManager.events.addUserLoaded(handleUserLoaded);
     userManager.events.addUserUnloaded(handleUserUnloaded);
+
+    userManager.getUser().then(setUser).finally(() => setLoading(false));
 
     return () => {
       userManager.events.removeUserLoaded(handleUserLoaded);
