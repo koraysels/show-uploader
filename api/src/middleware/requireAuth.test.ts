@@ -6,7 +6,7 @@ vi.mock('jose', () => ({
 }));
 
 vi.mock('../env', () => ({
-  env: { ZITADEL_DOMAIN: 'test.zitadel.cloud' },
+  env: { ZITADEL_DOMAIN: 'test.zitadel.cloud', ZITADEL_CLIENT_ID: 'test-client-id' },
 }));
 
 // Import AFTER mocking so the module uses mocked versions
@@ -83,7 +83,7 @@ describe('requireAuth', () => {
     expect(vi.mocked(jwtVerify)).toHaveBeenCalledWith(
       'token',
       'mock-jwks',
-      { issuer: 'https://test.zitadel.cloud' }
+      { issuer: 'https://test.zitadel.cloud', audience: 'test-client-id' }
     );
   });
 });

@@ -17,6 +17,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   try {
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: `https://${env.ZITADEL_DOMAIN}`,
+      audience: env.ZITADEL_CLIENT_ID,
     });
 
     const roles = payload['urn:zitadel:iam:org:project:roles'] as Record<string, unknown> | undefined;

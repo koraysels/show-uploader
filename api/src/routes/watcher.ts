@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/client';
 import { env } from '../env';
+import { requireAuth } from '../middleware/requireAuth';
 
 export const watcherRouter = Router();
 
@@ -36,7 +37,7 @@ watcherRouter.post('/notify', (req, res) => {
 });
 
 // GET /api/watcher/pending — UI polls this to show recently dropped files
-watcherRouter.get('/pending', async (_req, res) => {
+watcherRouter.get('/pending', requireAuth, async (_req, res) => {
   try {
     const rows = await db`
       SELECT * FROM pending_videos
@@ -51,7 +52,7 @@ watcherRouter.get('/pending', async (_req, res) => {
 });
 
 // DELETE /api/watcher/pending/:id — mark as claimed once an upload is created
-watcherRouter.delete('/pending/:id', async (req, res) => {
+watcherRouter.delete('/pending/:id', requireAuth, async (req, res) => {
   await db`UPDATE pending_videos SET claimed = true WHERE id = ${req.params.id}`;
   res.json({ ok: true });
 });

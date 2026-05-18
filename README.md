@@ -265,11 +265,11 @@ Users who sign up via Zitadel but haven't been granted the `member` role see "Ac
 UI env vars — set in `ui/.env` (not committed to git):
 
 ```
-VITE_ZITADEL_DOMAIN=onder-stroom-auth-n32ncs.eu1.zitadel.cloud
-VITE_ZITADEL_CLIENT_ID=373451781885243427
+VITE_ZITADEL_DOMAIN=your-org.eu1.zitadel.cloud
+VITE_ZITADEL_CLIENT_ID=your-client-id
 ```
 
-The `ZITADEL_DOMAIN` variable (without `VITE_` prefix) is also required in the root `.env` for the API server.
+The `ZITADEL_DOMAIN` and `ZITADEL_CLIENT_ID` variables (without `VITE_` prefix) are also required in the root `.env` for the API server.
 
 ---
 

@@ -15,6 +15,12 @@ function AppShell() {
   const { pathname } = useLocation();
 
   useEffect(() => {
+    if (!loading && !user) {
+      userManager.signinRedirect();
+    }
+  }, [loading, user, userManager]);
+
+  useEffect(() => {
     if (!user) return;
     setChecking(true);
     api
@@ -28,10 +34,7 @@ function AppShell() {
 
   if (loading || checking) return null;
 
-  if (!user) {
-    userManager.signinRedirect();
-    return null;
-  }
+  if (!user) return null;
 
   if (accessDenied) return <AccessDenied />;
 

@@ -7,6 +7,7 @@ export const userManager = new UserManager({
   redirect_uri: `${window.location.origin}/callback`,
   scope: 'openid profile email urn:zitadel:iam:org:project:roles',
   response_type: 'code',
+  automaticSilentRenew: true,
 });
 
 type AuthContextValue = {
@@ -24,15 +25,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleUserLoaded = (u: User) => setUser(u);
     const handleUserUnloaded = () => setUser(null);
+    const handleSilentRenewError = () => {
+      setUser(null);
+      userManager.signinRedirect();
+    };
 
     userManager.events.addUserLoaded(handleUserLoaded);
     userManager.events.addUserUnloaded(handleUserUnloaded);
+    userManager.events.addSilentRenewError(handleSilentRenewError);
 
     userManager.getUser().then(setUser).finally(() => setLoading(false));
 
     return () => {
       userManager.events.removeUserLoaded(handleUserLoaded);
       userManager.events.removeUserUnloaded(handleUserUnloaded);
+      userManager.events.removeSilentRenewError(handleSilentRenewError);
     };
   }, []);
 

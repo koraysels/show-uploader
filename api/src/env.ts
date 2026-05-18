@@ -14,6 +14,7 @@ const schema = z.object({
   JINGLE_S3_KEY: z.string().optional(),
   WATCHER_API_KEY: z.string().default('change-me'),
   ZITADEL_DOMAIN: z.string(),
+  ZITADEL_CLIENT_ID: z.string(),
   PORT: z.string().default('3000'),
   NODE_ENV: z.string().default('development'),
 });
