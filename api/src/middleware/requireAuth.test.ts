@@ -9,7 +9,8 @@ vi.mock('../env', () => ({
   env: { ZITADEL_DOMAIN: 'test.zitadel.cloud' },
 }));
 
-import { jwtVerify } from 'jose';
+// Import AFTER mocking so the module uses mocked versions
+import { jwtVerify, createRemoteJWKSet } from 'jose';
 import { requireAuth } from './requireAuth';
 
 function makeReq(authHeader?: string) {
@@ -22,6 +23,14 @@ function makeRes() {
   res.json = vi.fn(() => res);
   return res;
 }
+
+// Test that createRemoteJWKSet was called at module load time
+// This must be outside the describe block to verify module initialization
+it('uses the correct JWKS URL from ZITADEL_DOMAIN', () => {
+  expect(vi.mocked(createRemoteJWKSet)).toHaveBeenCalledWith(
+    new URL('https://test.zitadel.cloud/oauth/v2/keys')
+  );
+});
 
 describe('requireAuth', () => {
   const next = vi.fn();
@@ -71,5 +80,10 @@ describe('requireAuth', () => {
     await requireAuth(makeReq('Bearer token'), res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+    expect(vi.mocked(jwtVerify)).toHaveBeenCalledWith(
+      'token',
+      'mock-jwks',
+      { issuer: 'https://test.zitadel.cloud' }
+    );
   });
 });
