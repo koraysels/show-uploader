@@ -1,3 +1,5 @@
+import { userManager } from '../auth/AuthProvider';
+
 export type AgendaShow = {
   id: string;
   title: string;
@@ -38,12 +40,21 @@ export type UploadWithJobs = {
 };
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(path, options);
+  const user = await userManager.getUser();
+  const headers: Record<string, string> = {
+    ...(options?.headers as Record<string, string>),
+  };
+  if (user?.access_token) {
+    headers['Authorization'] = `Bearer ${user.access_token}`;
+  }
+  const res = await fetch(path, { ...options, headers });
   if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
 }
 
 export const api = {
+  checkAuth: () => apiFetch<{ ok: boolean }>('/api/auth/me'),
+
   listShows: () => apiFetch<AgendaShow[]>('/api/shows'),
 
   generateMeta: (title: string, description: string) =>

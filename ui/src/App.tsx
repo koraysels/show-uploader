@@ -1,9 +1,40 @@
+import { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { AuthProvider } from './auth/AuthProvider';
+import { useAuth } from './auth/useAuth';
+import AuthCallback from './pages/AuthCallback';
+import AccessDenied from './pages/AccessDenied';
 import NewUpload from './pages/NewUpload';
 import History from './pages/History';
+import { api } from './api/client';
 
-export default function App() {
+function AppShell() {
+  const { user, loading, userManager } = useAuth();
+  const [accessDenied, setAccessDenied] = useState(false);
+  const [checking, setChecking] = useState(false);
   const { pathname } = useLocation();
+
+  useEffect(() => {
+    if (!user) return;
+    setChecking(true);
+    api
+      .checkAuth()
+      .then(() => setAccessDenied(false))
+      .catch((err: Error) => {
+        if (err.message.includes('403')) setAccessDenied(true);
+      })
+      .finally(() => setChecking(false));
+  }, [user]);
+
+  if (loading || checking) return null;
+
+  if (!user) {
+    userManager.signinRedirect();
+    return null;
+  }
+
+  if (accessDenied) return <AccessDenied />;
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <nav className="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
@@ -28,5 +59,16 @@ export default function App() {
         </Routes>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <Routes>
+        <Route path="/callback" element={<AuthCallback />} />
+        <Route path="*" element={<AppShell />} />
+      </Routes>
+    </AuthProvider>
   );
 }
