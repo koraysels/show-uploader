@@ -1,0 +1,54 @@
+import type { Job } from 'bullmq';
+import path from 'path';
+import type { JobPayload } from '../types';
+import { downloadFromS3 } from '../services/s3';
+import { uploadToYoutube } from '../services/youtube-client';
+import { writeBackUrls } from '../services/shows-api';
+import { setJobStatus, getUploadRow } from '../db';
+import { makeTempPath, cleanup } from '../services/ffmpeg';
+import { maybeEnqueueArchive } from './archive';
+
+export async function processYoutube(job: Job<JobPayload>): Promise<string> {
+  const { jobId, uploadId, videoS3Key, title, description, tags } = job.data;
+
+  await setJobStatus(jobId, 'processing', { progress_pct: 0 });
+
+  const videoPath = makeTempPath(path.basename(videoS3Key));
+  try {
+    await job.updateProgress({ uploadId, platform: 'youtube', pct: 5 });
+    await downloadFromS3(videoS3Key, videoPath);
+
+    await setJobStatus(jobId, 'processing', { progress_pct: 20 });
+    await job.updateProgress({ uploadId, platform: 'youtube', pct: 20 });
+
+    const resultUrl = await uploadToYoutube({
+      videoPath,
+      title,
+      description,
+      tags,
+      onProgress: async (pct) => {
+        const adjusted = 20 + Math.round(pct * 0.78);
+        await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
+        await job.updateProgress({ uploadId, platform: 'youtube', pct: adjusted });
+      },
+    });
+
+    await setJobStatus(jobId, 'done', { result_url: resultUrl, progress_pct: 100 });
+    await job.updateProgress({ uploadId, platform: 'youtube', pct: 100 });
+
+    const row = await getUploadRow(uploadId);
+    if (row) {
+      await writeBackUrls(row.show_id, { youtube: resultUrl });
+    }
+
+    await maybeEnqueueArchive(job.data);
+
+    return JSON.stringify({ uploadId, platform: 'youtube', url: resultUrl });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await setJobStatus(jobId, 'failed', { error: msg });
+    throw err;
+  } finally {
+    cleanup(videoPath);
+  }
+}
