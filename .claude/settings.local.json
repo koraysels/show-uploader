@@ -30,7 +30,8 @@
       "Bash(echo \"API PID: $!\")",
       "Bash(kill 71070)",
       "Bash(echo \"UI PID: $!\")",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(xargs kill -9)"
     ]
   }
 }
