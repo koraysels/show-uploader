@@ -1,0 +1,299 @@
+# Show Uploader
+
+Upload recorded DJ sets and live shows to YouTube and MixCloud simultaneously. Pick a show from your agenda, select a video file (or let the drop-folder watcher handle it), trim if needed, and publish — all in one click.
+
+## What it does
+
+- Pulls upcoming shows from your agenda API (title, description, tags)
+- Generates platform-appropriate copy via Groq AI
+- Uploads the full video to **YouTube**
+- Extracts AAC 256kbps audio and optionally prepends a jingle, uploads to **MixCloud**
+- After both succeed: transcodes the raw MKV to MP4 at configurable bitrates and stores it in Minio, then deletes the raw file
+- Windows drop-folder watcher: drag a recording to a local folder and it uploads to S3 automatically
+
+---
+
+## Architecture
+
+```
+Windows PC (OBS)
+  └─ watcher script  ──upload──►  Minio S3 (in Docker)
+                     ──notify──►  API
+
+Cloud server (Docker Compose)
+  ├─ api      (Express, port 3000) — REST + SSE + serves UI
+  ├─ worker   (BullMQ) — ffmpeg, YouTube, MixCloud, archive jobs
+  ├─ redis    — job queue
+  └─ minio    — S3-compatible storage (ports 9000, 9001)
+
+External
+  ├─ Neon     — managed Postgres
+  ├─ Groq     — AI copy generation
+  ├─ YouTube  — OAuth2 upload
+  └─ MixCloud — OAuth2 upload
+```
+
+---
+
+## Prerequisites
+
+- Docker + Docker Compose (on the cloud server)
+- Node.js 20+ and npm (on the Windows machine, for the watcher)
+- A [Neon](https://neon.tech) Postgres database
+- A [Groq](https://console.groq.com) API key (free tier)
+- YouTube Data API v3 credentials
+- MixCloud app credentials
+
+---
+
+## Cloud server setup
+
+### 1. Clone the repo
+
+```bash
+git clone https://github.com/koraysels/show-uploader.git
+cd show-uploader
+```
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` — every variable is documented inline. At minimum fill in:
+
+| Variable | Description |
+|---|---|
+| `DATABASE_URI` | Neon connection string |
+| `SHOWS_API_URL` | Your agenda API base URL |
+| `SHOWS_API_KEY` | Bearer token for the agenda API |
+| `S3_ACCESS_KEY` | Minio root user (min 3 chars) |
+| `S3_SECRET_KEY` | Minio root password (min 8 chars) |
+| `S3_BUCKET` | `show-uploader` (or whatever you prefer) |
+| `GROQ_API_KEY` | Groq API key |
+| `YOUTUBE_CLIENT_ID` | See YouTube setup below |
+| `YOUTUBE_CLIENT_SECRET` | See YouTube setup below |
+| `YOUTUBE_REFRESH_TOKEN` | See YouTube setup below |
+| `MIXCLOUD_ACCESS_TOKEN` | See MixCloud setup below |
+| `WATCHER_API_KEY` | Random secret — paste same value into watcher `.env` |
+| `UI_USERNAME` | HTTP Basic Auth username for the web UI |
+| `UI_PASSWORD` | HTTP Basic Auth password for the web UI |
+
+### 3. Run database migrations
+
+```bash
+# From the repo root — run once on first deploy, re-run safely after updates
+psql "$DATABASE_URI" -f api/src/db/migrations/001_initial.sql
+psql "$DATABASE_URI" -f api/src/db/migrations/002_pending_videos_and_trim.sql
+```
+
+### 4. Start the stack
+
+```bash
+docker compose up -d
+```
+
+On first run `minio-init` creates the bucket and folder structure (`uploads/`, `archive/`, `jingles/`, `images/`) and exits. Check with:
+
+```bash
+docker compose logs minio-init
+```
+
+### 5. Expose the app
+
+Put a reverse proxy (Nginx, Caddy, Traefik) in front of port 3000. Example Caddy config:
+
+```
+your-domain.com {
+  reverse_proxy localhost:3000
+}
+```
+
+Minio S3 API (port 9000) should also be publicly accessible for the Windows watcher to upload files directly. Keep the Minio console (port 9001) private or firewall it.
+
+### 6. Updating
+
+```bash
+git pull
+docker compose build
+docker compose up -d
+# run any new migration files
+```
+
+---
+
+## YouTube OAuth2 setup
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com)
+2. Create a project (or use an existing one)
+3. Enable **YouTube Data API v3**
+4. Go to **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
+5. Application type: **Desktop app**
+6. Download the JSON — note the `client_id` and `client_secret`
+7. Run the one-time OAuth flow to get a refresh token:
+
+```bash
+# Install the Google auth library temporarily
+npx --yes google-auth-library-nodejs-token-cli \
+  --client-id YOUR_CLIENT_ID \
+  --client-secret YOUR_CLIENT_SECRET \
+  --scope https://www.googleapis.com/auth/youtube.upload
+```
+
+Follow the browser prompt. Paste the resulting `refresh_token` into `.env`.
+
+> Alternatively use the [OAuth 2.0 Playground](https://developers.google.com/oauthplayground) — select the YouTube Upload scope, exchange the auth code, and copy the refresh token.
+
+---
+
+## MixCloud OAuth2 setup
+
+1. Go to [mixcloud.com/developers](https://www.mixcloud.com/developers/) and create an app
+2. Note the **Client ID** and **Client Secret**
+3. Perform the OAuth2 Authorization Code flow once to get an access token:
+
+```
+https://www.mixcloud.com/oauth/authorize?client_id=CLIENT_ID&redirect_uri=REDIRECT_URI&response_type=code
+```
+
+4. Exchange the code:
+
+```bash
+curl "https://www.mixcloud.com/oauth/access_token" \
+  -d "client_id=CLIENT_ID&redirect_uri=REDIRECT_URI&client_secret=CLIENT_SECRET&code=CODE"
+```
+
+5. Paste the `access_token` into `.env` as `MIXCLOUD_ACCESS_TOKEN`
+
+> MixCloud access tokens do not expire in the traditional sense, but if uploads start failing re-run this flow.
+
+---
+
+## Jingle setup (optional)
+
+A jingle is a short audio clip prepended to every MixCloud upload.
+
+1. Open the Minio console at `http://your-server:9001` (login with `S3_ACCESS_KEY` / `S3_SECRET_KEY`)
+2. Browse to the `show-uploader` bucket → `jingles/` folder
+3. Upload your file (AAC/M4A recommended, e.g. `intro.m4a`)
+4. Set in `.env`:
+
+```
+JINGLE_S3_KEY=jingles/intro.m4a
+```
+
+Restart the worker: `docker compose restart worker`
+
+---
+
+## Windows drop-folder watcher
+
+The watcher is a standalone Node.js script that runs on your Windows machine (where OBS saves recordings). It watches a local folder and automatically uploads new files to Minio.
+
+### Setup
+
+```powershell
+cd watcher
+cp .env.example .env
+```
+
+Edit `watcher/.env`:
+
+```env
+WATCH_FOLDER=C:\Users\you\obs-drop
+S3_ENDPOINT=https://minio.your-domain.com   # public Minio URL (port 9000)
+S3_ACCESS_KEY=your-minio-root-user
+S3_SECRET_KEY=your-minio-root-password
+S3_BUCKET=show-uploader
+API_URL=https://your-show-uploader.example.com
+API_KEY=same-value-as-WATCHER_API_KEY-in-cloud-env
+```
+
+### Run
+
+```powershell
+npm install
+npm run dev
+```
+
+To run at Windows startup, create a scheduled task that runs:
+```
+node C:\path\to\show-uploader\watcher\dist\index.js
+```
+
+### How it works
+
+1. New file appears in the watch folder → watcher waits until the file size is stable for 20 seconds (so OBS has finished writing)
+2. Uploads to Minio under `uploads/{timestamp}-{filename}`
+3. POSTs to `/api/watcher/notify` — the cloud API records it in the database
+4. In the web UI, the file appears at the top of the **New Upload** page under "Videos from drop folder"
+5. Click the file to select it, fill in metadata, publish
+
+---
+
+## Using the web UI
+
+Open `https://your-domain.com` in your browser. You'll be prompted for the `UI_USERNAME` / `UI_PASSWORD` you set in `.env`.
+
+### New Upload
+
+1. **Videos from drop folder** (top of page) — click a file to use it. Or use the file dropzone below to upload manually.
+2. **Pick a show** — select from your upcoming agenda. Title, description, and tags are pre-filled and AI-refined.
+3. **Edit metadata** — adjust title, description, tags, and cover image URL as needed.
+4. **Trim** (optional) — enter Start and/or End times in `HH:MM:SS` format to cut the beginning or end. Applied to all outputs (YouTube, MixCloud, archive).
+5. **Platforms** — toggle YouTube / MixCloud. The jingle toggle appears when a jingle is configured.
+6. Click **Publish**.
+
+You're redirected to the History page where you can watch per-platform progress bars update in real time.
+
+### History
+
+Shows all uploads with live progress. Each platform shows its status and, once done, a link to the result URL.
+
+---
+
+## Authentication
+
+| Route | Auth |
+|---|---|
+| Web UI + all `/api/*` routes | HTTP Basic Auth (`UI_USERNAME` / `UI_PASSWORD`) — active when both are set |
+| `POST /api/watcher/notify` | Bearer token (`WATCHER_API_KEY`) — always enforced regardless of basic auth |
+
+If `UI_USERNAME` and `UI_PASSWORD` are not set, the web UI is open to anyone — **do not deploy without setting these** if the server is internet-facing.
+
+---
+
+## Archive quality
+
+Control the output bitrates for the archived MP4:
+
+```env
+ARCHIVE_VIDEO_BITRATE=4000k   # video bitrate
+ARCHIVE_AUDIO_BITRATE=256k    # audio bitrate
+```
+
+The raw MKV is deleted from S3 after the archive job succeeds. The MP4 is stored under `archive/` in Minio.
+
+---
+
+## Troubleshooting
+
+**Worker not processing jobs**
+```bash
+docker compose logs worker -f
+```
+
+**Minio bucket missing**
+```bash
+docker compose run --rm minio-init
+```
+
+**YouTube upload fails with "invalid_grant"**
+Re-run the OAuth flow to get a fresh refresh token.
+
+**MixCloud upload fails**
+Check that `MIXCLOUD_ACCESS_TOKEN` is set and not expired. Re-run the OAuth flow if needed.
+
+**Watcher not picking up files**
+Make sure `WATCH_FOLDER` exists and the path uses backslashes (Windows). Check `API_URL` is reachable from the Windows machine.
