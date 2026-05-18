@@ -1,0 +1,102 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { db } from '../db/client';
+import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs } from '../db/queries';
+import { uploadQueue } from '../queue';
+import { createUploadPresignedUrl } from '../services/s3';
+import { env } from '../env';
+
+export const uploadsRouter = Router();
+
+const CreateUploadSchema = z.object({
+  showId: z.string(),
+  title: z.string().min(1),
+  description: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+  imageUrl: z.string().url().nullable().default(null),
+  videoS3Key: z.string().min(1),
+  platforms: z.array(z.enum(['youtube', 'mixcloud'])).min(1),
+  includeJingle: z.boolean().default(true),
+});
+
+uploadsRouter.post('/presign', async (req, res) => {
+  const { filename, contentType } = req.body as { filename: string; contentType: string };
+  if (!filename || !contentType) {
+    return res.status(400).json({ error: 'filename and contentType required' });
+  }
+  const key = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  try {
+    const url = await createUploadPresignedUrl(key, contentType);
+    res.json({ url, key });
+  } catch {
+    res.status(500).json({ error: 'Failed to create presigned URL' });
+  }
+});
+
+uploadsRouter.post('/', async (req, res) => {
+  const parsed = CreateUploadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+  const data = parsed.data;
+  const jingleS3Key = env.JINGLE_S3_KEY ?? null;
+
+  try {
+    const upload = await createUpload(db, {
+      show_id: data.showId,
+      title: data.title,
+      description: data.description,
+      tags: data.tags,
+      image_url: data.imageUrl,
+      video_s3_key: data.videoS3Key,
+      jingle_s3_key: jingleS3Key,
+    });
+
+    const jobs = await Promise.all(
+      data.platforms.map((platform) =>
+        createPlatformJob(db, { upload_id: upload.id, platform })
+      )
+    );
+
+    await Promise.all(
+      jobs.map((job) =>
+        uploadQueue.add(job.platform, {
+          jobId: job.id,
+          uploadId: upload.id,
+          platform: job.platform,
+          videoS3Key: data.videoS3Key,
+          title: data.title,
+          description: data.description,
+          tags: data.tags,
+          imageUrl: data.imageUrl,
+          jingleS3Key,
+          includeJingle: data.includeJingle,
+        })
+      )
+    );
+
+    res.status(201).json({ uploadId: upload.id, jobs });
+  } catch (err) {
+    console.error('Failed to create upload:', err);
+    res.status(500).json({ error: 'Failed to create upload' });
+  }
+});
+
+uploadsRouter.get('/', async (_req, res) => {
+  try {
+    const uploads = await listUploadsWithJobs(db);
+    res.json(uploads);
+  } catch {
+    res.status(500).json({ error: 'Failed to list uploads' });
+  }
+});
+
+uploadsRouter.get('/:id', async (req, res) => {
+  try {
+    const upload = await getUploadWithJobs(db, req.params.id);
+    if (!upload) return res.status(404).json({ error: 'Not found' });
+    res.json(upload);
+  } catch {
+    res.status(500).json({ error: 'Failed to get upload' });
+  }
+});
