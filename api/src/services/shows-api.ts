@@ -15,7 +15,7 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${env.SHOWS_API_URL}${path}`, {
     ...options,
     headers: {
-      Authorization: `Bearer ${env.SHOWS_API_TOKEN}`,
+      Authorization: `Bearer ${env.SHOWS_API_KEY}`,
       'Content-Type': 'application/json',
       ...options?.headers,
     },

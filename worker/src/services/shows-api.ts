@@ -7,7 +7,7 @@ export async function writeBackUrls(
   const res = await fetch(`${env.SHOWS_API_URL}/shows/${showId}`, {
     method: 'PATCH',
     headers: {
-      Authorization: `Bearer ${env.SHOWS_API_TOKEN}`,
+      Authorization: `Bearer ${env.SHOWS_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ uploads }),

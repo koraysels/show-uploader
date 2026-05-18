@@ -14,6 +14,9 @@ export async function uploadToMixcloud(params: {
   tags: string[];
   imagePath?: string;
 }): Promise<string> {
+  if (!env.MIXCLOUD_ACCESS_TOKEN) {
+    throw new Error('MixCloud credentials not configured (MIXCLOUD_ACCESS_TOKEN)');
+  }
   const form = new FormData();
   form.append('mp3', fs.createReadStream(params.audioPath));
   form.append('name', params.title);

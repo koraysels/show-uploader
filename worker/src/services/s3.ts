@@ -10,17 +10,17 @@ import { Readable } from 'stream';
 import { env } from '../env';
 
 export const s3 = new S3Client({
-  endpoint: env.S3_ENDPOINT,
+  endpoint: env.S3_ENDPOINT ?? 'http://localhost:9000',
   region: env.S3_REGION,
   credentials: {
-    accessKeyId: env.S3_ACCESS_KEY,
-    secretAccessKey: env.S3_SECRET_KEY,
+    accessKeyId: env.S3_ACCESS_KEY ?? '',
+    secretAccessKey: env.S3_SECRET_KEY ?? '',
   },
   forcePathStyle: true,
 });
 
 export async function downloadFromS3(key: string, destPath: string): Promise<void> {
-  const cmd = new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key });
+  const cmd = new GetObjectCommand({ Bucket: (env.S3_BUCKET ?? ''), Key: key });
   const { Body } = await s3.send(cmd);
   if (!Body) throw new Error(`Empty body for S3 key: ${key}`);
 
@@ -39,7 +39,7 @@ export async function uploadToS3(localPath: string, key: string, contentType: st
   const stat = await fs.promises.stat(localPath);
   await s3.send(
     new PutObjectCommand({
-      Bucket: env.S3_BUCKET,
+      Bucket: (env.S3_BUCKET ?? ''),
       Key: key,
       Body: fs.createReadStream(localPath),
       ContentType: contentType,
@@ -49,5 +49,5 @@ export async function uploadToS3(localPath: string, key: string, contentType: st
 }
 
 export async function deleteFromS3(key: string): Promise<void> {
-  await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+  await s3.send(new DeleteObjectCommand({ Bucket: (env.S3_BUCKET ?? ''), Key: key }));
 }

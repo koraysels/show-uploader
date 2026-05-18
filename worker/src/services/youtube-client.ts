@@ -3,6 +3,9 @@ import fs from 'fs';
 import { env } from '../env';
 
 function getYouTubeClient() {
+  if (!env.YOUTUBE_CLIENT_ID || !env.YOUTUBE_CLIENT_SECRET || !env.YOUTUBE_REFRESH_TOKEN) {
+    throw new Error('YouTube credentials not configured (YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN)');
+  }
   const auth = new google.auth.OAuth2(
     env.YOUTUBE_CLIENT_ID,
     env.YOUTUBE_CLIENT_SECRET
