@@ -1,0 +1,53 @@
+import { google } from 'googleapis';
+import fs from 'fs';
+import { env } from '../env';
+
+function getYouTubeClient() {
+  const auth = new google.auth.OAuth2(
+    env.YOUTUBE_CLIENT_ID,
+    env.YOUTUBE_CLIENT_SECRET
+  );
+  auth.setCredentials({ refresh_token: env.YOUTUBE_REFRESH_TOKEN });
+  return google.youtube({ version: 'v3', auth });
+}
+
+export async function uploadToYoutube(params: {
+  videoPath: string;
+  title: string;
+  description: string;
+  tags: string[];
+  onProgress?: (pct: number) => void;
+}): Promise<string> {
+  const youtube = getYouTubeClient();
+  const stat = fs.statSync(params.videoPath);
+
+  const res = await youtube.videos.insert(
+    {
+      part: ['snippet', 'status'],
+      requestBody: {
+        snippet: {
+          title: params.title,
+          description: params.description,
+          tags: params.tags,
+          categoryId: '10', // Music
+        },
+        status: { privacyStatus: 'public' },
+      },
+      media: {
+        mimeType: 'video/x-matroska',
+        body: fs.createReadStream(params.videoPath),
+      },
+    },
+    {
+      onUploadProgress: (evt: { bytesRead: number }) => {
+        const pct = Math.round((evt.bytesRead / stat.size) * 100);
+        params.onProgress?.(Math.min(99, pct));
+      },
+    }
+  );
+
+  const videoId = res.data.id;
+  if (!videoId) throw new Error('YouTube upload returned no video ID');
+
+  return `https://www.youtube.com/watch?v=${videoId}`;
+}
