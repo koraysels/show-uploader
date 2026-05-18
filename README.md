@@ -234,7 +234,7 @@ node C:\path\to\show-uploader\watcher\dist\index.js
 
 ## Using the web UI
 
-Open `https://your-domain.com` in your browser. You'll be prompted for the `UI_USERNAME` / `UI_PASSWORD` you set in `.env`.
+Open `https://your-domain.com` in your browser. You'll be redirected to Zitadel to log in. If your account hasn't been granted the `member` role yet, you'll see an "Access pending approval" screen.
 
 ### New Upload
 
@@ -257,10 +257,19 @@ Shows all uploads with live progress. Each platform shows its status and, once d
 
 | Route | Auth |
 |---|---|
-| Web UI + all `/api/*` routes | HTTP Basic Auth (`UI_USERNAME` / `UI_PASSWORD`) — active when both are set |
-| `POST /api/watcher/notify` | Bearer token (`WATCHER_API_KEY`) — always enforced regardless of basic auth |
+| Web UI + all `/api/*` routes | Zitadel OIDC — valid JWT with `member` role required |
+| `POST /api/watcher/notify` | Bearer token (`WATCHER_API_KEY`) — unaffected by Zitadel |
 
-If `UI_USERNAME` and `UI_PASSWORD` are not set, the web UI is open to anyone — **do not deploy without setting these** if the server is internet-facing.
+Users who sign up via Zitadel but haven't been granted the `member` role see "Access pending approval" and cannot use the app. To grant access: Zitadel console → Projects → Team → Users → find the user → assign role `member`.
+
+UI env vars — set in `ui/.env` (not committed to git):
+
+```
+VITE_ZITADEL_DOMAIN=onder-stroom-auth-n32ncs.eu1.zitadel.cloud
+VITE_ZITADEL_CLIENT_ID=373451781885243427
+```
+
+The `ZITADEL_DOMAIN` variable (without `VITE_` prefix) is also required in the root `.env` for the API server.
 
 ---
 
