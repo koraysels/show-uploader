@@ -7,16 +7,10 @@
     <list default="true" id="9f19855e-d8bb-4098-8ca0-ec24f377eb2e" name="Changes" comment="Fix settings.local.json and update workspace.xml for project configuration">
       <change beforePath="$PROJECT_DIR$/.claude/settings.local.json" beforeDir="false" afterPath="$PROJECT_DIR$/.claude/settings.local.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/src/db/client.ts" beforeDir="false" afterPath="$PROJECT_DIR$/api/src/db/client.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/src/env.ts" beforeDir="false" afterPath="$PROJECT_DIR$/api/src/env.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/src/services/s3.ts" beforeDir="false" afterPath="$PROJECT_DIR$/api/src/services/s3.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/src/services/shows-api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/api/src/services/shows-api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/src/db.ts" beforeDir="false" afterPath="$PROJECT_DIR$/worker/src/db.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/src/env.ts" beforeDir="false" afterPath="$PROJECT_DIR$/worker/src/env.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/src/services/mixcloud-client.ts" beforeDir="false" afterPath="$PROJECT_DIR$/worker/src/services/mixcloud-client.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/src/services/s3.ts" beforeDir="false" afterPath="$PROJECT_DIR$/worker/src/services/s3.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/src/services/shows-api.ts" beforeDir="false" afterPath="$PROJECT_DIR$/worker/src/services/shows-api.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/worker/src/services/youtube-client.ts" beforeDir="false" afterPath="$PROJECT_DIR$/worker/src/services/youtube-client.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/api/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/worker/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/worker/package.json" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -31,6 +25,18 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "koraysels"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/koraysels/show-uploader.git",
+    "accountId": "fd3bdc83-196e-440a-b98e-fe1401de3242"
+  }
+}]]></component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
 }</component>
@@ -54,7 +60,7 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "to.speed.mode.migration.done": "true",
-    "ts.external.directory.path": "/Users/koraysels/Applications/WebStorm.app/Contents/plugins/javascript-plugin/jsLanguageServicesImpl/external",
+    "ts.external.directory.path": "/Users/koraysels/work/show-uploader/node_modules/typescript/lib",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -72,7 +78,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1779047222664</updated>
-      <workItem from="1779047223963" duration="6322000" />
+      <workItem from="1779047223963" duration="17295000" />
     </task>
     <task id="LOCAL-00001" summary="initialize project with basic configuration and files">
       <option name="closed" value="true" />

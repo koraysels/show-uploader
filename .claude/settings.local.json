@@ -16,7 +16,21 @@
       "Bash(git push *)",
       "Bash(gh auth *)",
       "Bash(gh api *)",
-      "Bash(gh repo *)"
+      "Bash(gh repo *)",
+      "Skill(superpowers:subagent-driven-development)",
+      "Bash(npm test *)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(git -C /Users/koraysels/work/show-uploader check-ignore -v ui/.env)",
+      "Bash(node -e \"const pkg = require\\('./ui/node_modules/oidc-client-ts/package.json'\\); console.log\\('version:', pkg.version\\); console.log\\('peerDeps:', JSON.stringify\\(pkg.peerDependencies, null, 2\\)\\);\")",
+      "Bash(npx tsc *)",
+      "Bash(pnpm --version)",
+      "Bash(grep -v '^$')",
+      "Bash(pnpm run *)",
+      "Bash(echo \"API PID: $!\")",
+      "Bash(kill 71070)",
+      "Bash(echo \"UI PID: $!\")",
+      "Bash(curl *)"
     ]
   }
 }

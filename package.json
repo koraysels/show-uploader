@@ -2,5 +2,11 @@
   "name": "show-uploader",
   "version": "1.0.0",
   "private": true,
-  "workspaces": ["api", "worker", "ui", "watcher"]
+  "workspaces": ["api", "worker", "ui", "watcher"],
+  "scripts": {
+    "dev:api": "pnpm --filter @show-uploader/api dev",
+    "dev:worker": "pnpm --filter @show-uploader/worker dev",
+    "dev:ui": "pnpm --filter @show-uploader/ui dev",
+    "dev": "pnpm run dev:api & pnpm run dev:worker & pnpm run dev:ui"
+  }
 }
