@@ -12,7 +12,11 @@
       "Bash(git commit *)",
       "Bash(npm install *)",
       "Bash(npm run *)",
-      "Bash(docker compose *)"
+      "Bash(docker compose *)",
+      "Bash(git push *)",
+      "Bash(gh auth *)",
+      "Bash(gh api *)",
+      "Bash(gh repo *)"
     ]
   }
 }

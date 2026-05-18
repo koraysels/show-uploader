@@ -8,6 +8,9 @@ import { env } from '../env';
 
 export const uploadsRouter = Router();
 
+// HH:MM:SS or MM:SS format
+const TimeCode = z.string().regex(/^(\d{1,2}:)?\d{2}:\d{2}$/).optional().nullable();
+
 const CreateUploadSchema = z.object({
   showId: z.string(),
   title: z.string().min(1),
@@ -17,6 +20,8 @@ const CreateUploadSchema = z.object({
   videoS3Key: z.string().min(1),
   platforms: z.array(z.enum(['youtube', 'mixcloud'])).min(1),
   includeJingle: z.boolean().default(true),
+  trimStart: TimeCode,
+  trimEnd: TimeCode,
 });
 
 uploadsRouter.post('/presign', async (req, res) => {
@@ -50,6 +55,8 @@ uploadsRouter.post('/', async (req, res) => {
       image_url: data.imageUrl,
       video_s3_key: data.videoS3Key,
       jingle_s3_key: jingleS3Key,
+      trim_start: data.trimStart ?? null,
+      trim_end: data.trimEnd ?? null,
     });
 
     const jobs = await Promise.all(
@@ -71,6 +78,8 @@ uploadsRouter.post('/', async (req, res) => {
           imageUrl: data.imageUrl,
           jingleS3Key,
           includeJingle: data.includeJingle,
+          trimStart: data.trimStart ?? null,
+          trimEnd: data.trimEnd ?? null,
         })
       )
     );

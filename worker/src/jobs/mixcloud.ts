@@ -9,7 +9,7 @@ import { setJobStatus, getUploadRow } from '../db';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key, title, description, tags, jingleS3Key, includeJingle } = job.data;
+  const { jobId, uploadId, videoS3Key, title, description, tags, jingleS3Key, includeJingle, trimStart, trimEnd } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
@@ -25,10 +25,14 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 15 });
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 15 });
 
-    await extractAudio(videoPath, audioPath, async (pct) => {
-      const adjusted = 15 + Math.round(pct * 0.4);
-      await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
-      await job.updateProgress({ uploadId, platform: 'mixcloud', pct: adjusted });
+    await extractAudio(videoPath, audioPath, {
+      trimStart,
+      trimEnd,
+      onProgress: async (pct) => {
+        const adjusted = 15 + Math.round(pct * 0.4);
+        await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
+        await job.updateProgress({ uploadId, platform: 'mixcloud', pct: adjusted });
+      },
     });
 
     let finalAudioPath = audioPath;

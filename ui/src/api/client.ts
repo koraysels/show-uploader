@@ -67,6 +67,8 @@ export const api = {
     videoS3Key: string;
     platforms: string[];
     includeJingle: boolean;
+    trimStart?: string | null;
+    trimEnd?: string | null;
   }) =>
     apiFetch<{ uploadId: string }>('/api/uploads', {
       method: 'POST',
@@ -75,4 +77,12 @@ export const api = {
     }),
 
   listUploads: () => apiFetch<UploadWithJobs[]>('/api/uploads'),
+
+  listPendingVideos: () =>
+    apiFetch<{ id: string; s3_key: string; filename: string; size_bytes: number; created_at: string }[]>(
+      '/api/watcher/pending'
+    ),
+
+  claimPendingVideo: (id: string) =>
+    apiFetch(`/api/watcher/pending/${id}`, { method: 'DELETE' }),
 };

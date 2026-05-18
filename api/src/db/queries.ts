@@ -10,6 +10,8 @@ export type ShowUpload = {
   video_s3_key: string;
   archive_s3_key: string | null;
   jingle_s3_key: string | null;
+  trim_start: string | null;
+  trim_end: string | null;
   created_at: Date;
 };
 
@@ -27,14 +29,15 @@ export type PlatformJob = {
 
 export function createUpload(
   db: Sql,
-  data: Pick<ShowUpload, 'show_id' | 'title' | 'description' | 'tags' | 'image_url' | 'video_s3_key' | 'jingle_s3_key'>
+  data: Pick<ShowUpload, 'show_id' | 'title' | 'description' | 'tags' | 'image_url' | 'video_s3_key' | 'jingle_s3_key' | 'trim_start' | 'trim_end'>
 ) {
   return db<ShowUpload[]>`
-    INSERT INTO show_uploads (show_id, title, description, tags, image_url, video_s3_key, jingle_s3_key)
+    INSERT INTO show_uploads (show_id, title, description, tags, image_url, video_s3_key, jingle_s3_key, trim_start, trim_end)
     VALUES (
       ${data.show_id}, ${data.title}, ${data.description ?? null},
       ${db.array(data.tags)}, ${data.image_url ?? null},
-      ${data.video_s3_key}, ${data.jingle_s3_key ?? null}
+      ${data.video_s3_key}, ${data.jingle_s3_key ?? null},
+      ${data.trim_start ?? null}, ${data.trim_end ?? null}
     )
     RETURNING *
   `.then((rows) => rows[0]);

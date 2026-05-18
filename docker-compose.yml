@@ -8,8 +8,10 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
     depends_on:
       - redis
+      - minio
     restart: unless-stopped
 
   worker:
@@ -19,8 +21,10 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
     depends_on:
       - redis
+      - minio
     restart: unless-stopped
 
   redis:
@@ -29,5 +33,44 @@ services:
     volumes:
       - redis_data:/data
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Minio web console
+    env_file: .env
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # One-shot container that creates the bucket and folder structure on first run
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $${S3_ACCESS_KEY} $${S3_SECRET_KEY};
+        mc mb --ignore-existing local/$${S3_BUCKET};
+        mc mb --ignore-existing local/$${S3_BUCKET}/uploads;
+        mc mb --ignore-existing local/$${S3_BUCKET}/archive;
+        mc mb --ignore-existing local/$${S3_BUCKET}/jingles;
+        mc mb --ignore-existing local/$${S3_BUCKET}/images;
+        echo 'Minio bucket and folders ready.';
+      "
+    restart: "no"
+
 volumes:
   redis_data:
+  minio_data:

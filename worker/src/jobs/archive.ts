@@ -7,7 +7,7 @@ import { setJobStatus, setArchiveKey, getPlatformJobsForUpload, createArchiveJob
 import { uploadQueue } from '../queue';
 
 export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
-  const { uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle } = payload;
+  const { uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle, trimStart, trimEnd } = payload;
 
   const jobs = await getPlatformJobsForUpload(uploadId);
   const platformJobs = jobs.filter((j) => j.platform !== 'archive');
@@ -30,11 +30,13 @@ export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
     imageUrl,
     jingleS3Key,
     includeJingle,
+    trimStart,
+    trimEnd,
   });
 }
 
 export async function processArchive(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key } = job.data;
+  const { jobId, uploadId, videoS3Key, trimStart, trimEnd } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
@@ -50,10 +52,14 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 15 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 15 });
 
-    await transcodeToMp4(inputPath, outputPath, async (pct) => {
-      const adjusted = 15 + Math.round(pct * 0.7);
-      await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
-      await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
+    await transcodeToMp4(inputPath, outputPath, {
+      trimStart,
+      trimEnd,
+      onProgress: async (pct) => {
+        const adjusted = 15 + Math.round(pct * 0.7);
+        await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
+        await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
+      },
     });
 
     const archiveKey = `archive/${base}.mp4`;

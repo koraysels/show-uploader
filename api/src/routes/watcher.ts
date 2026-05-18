@@ -1,0 +1,57 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import { db } from '../db/client';
+import { env } from '../env';
+
+export const watcherRouter = Router();
+
+const NotifySchema = z.object({
+  key: z.string(),
+  filename: z.string(),
+  sizeBytes: z.number(),
+});
+
+// POST /api/watcher/notify — called by the Windows watcher when a file lands on S3
+watcherRouter.post('/notify', (req, res) => {
+  const authHeader = req.headers.authorization ?? '';
+  const token = authHeader.replace('Bearer ', '');
+  if (token !== env.WATCHER_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const parsed = NotifySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+
+  const { key, filename, sizeBytes } = parsed.data;
+
+  // Store as a pending video so the UI can pick it up
+  void db`
+    INSERT INTO pending_videos (s3_key, filename, size_bytes)
+    VALUES (${key}, ${filename}, ${sizeBytes})
+    ON CONFLICT (s3_key) DO NOTHING
+  `;
+
+  console.log(`Watcher notified: ${filename} → ${key}`);
+  res.json({ ok: true });
+});
+
+// GET /api/watcher/pending — UI polls this to show recently dropped files
+watcherRouter.get('/pending', async (_req, res) => {
+  try {
+    const rows = await db`
+      SELECT * FROM pending_videos
+      WHERE claimed = false
+      ORDER BY created_at DESC
+      LIMIT 20
+    `;
+    res.json(rows);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch pending videos' });
+  }
+});
+
+// DELETE /api/watcher/pending/:id — mark as claimed once an upload is created
+watcherRouter.delete('/pending/:id', async (req, res) => {
+  await db`UPDATE pending_videos SET claimed = true WHERE id = ${req.params.id}`;
+  res.json({ ok: true });
+});

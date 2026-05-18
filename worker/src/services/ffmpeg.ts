@@ -6,18 +6,22 @@ import { env } from '../env';
 export async function extractAudio(
   videoPath: string,
   outputPath: string,
-  onProgress?: (pct: number) => void
+  opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg(videoPath)
       .noVideo()
       .audioCodec('aac')
-      .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)
-      .output(outputPath);
+      .audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
 
-    if (onProgress) {
+    if (opts?.trimStart) cmd.seekInput(opts.trimStart);
+    if (opts?.trimEnd) cmd.outputOptions(['-to', opts.trimEnd]);
+
+    cmd.output(outputPath);
+
+    if (opts?.onProgress) {
       cmd.on('progress', (p: { percent?: number }) => {
-        onProgress(Math.min(99, Math.round(p.percent ?? 0)));
+        opts.onProgress!(Math.min(99, Math.round(p.percent ?? 0)));
       });
     }
 
@@ -55,7 +59,7 @@ export async function prependJingle(
 export async function transcodeToMp4(
   inputPath: string,
   outputPath: string,
-  onProgress?: (pct: number) => void
+  opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const cmd = ffmpeg(inputPath)
@@ -63,12 +67,16 @@ export async function transcodeToMp4(
       .videoBitrate(env.ARCHIVE_VIDEO_BITRATE)
       .audioCodec('aac')
       .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)
-      .outputOptions(['-movflags', '+faststart'])
-      .output(outputPath);
+      .outputOptions(['-movflags', '+faststart']);
 
-    if (onProgress) {
+    if (opts?.trimStart) cmd.seekInput(opts.trimStart);
+    if (opts?.trimEnd) cmd.outputOptions(['-to', opts.trimEnd]);
+
+    cmd.output(outputPath);
+
+    if (opts?.onProgress) {
       cmd.on('progress', (p: { percent?: number }) => {
-        onProgress(Math.min(99, Math.round(p.percent ?? 0)));
+        opts.onProgress!(Math.min(99, Math.round(p.percent ?? 0)));
       });
     }
 
