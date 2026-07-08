@@ -1,6 +1,7 @@
 import FormData from 'form-data';
 import fs from 'fs';
 import { env } from '../env';
+import { shouldDryRun, simulateUpload } from './dry-run';
 
 type MixcloudResponse = {
   key?: string;
@@ -14,8 +15,9 @@ export async function uploadToMixcloud(params: {
   tags: string[];
   imagePath?: string;
 }): Promise<string> {
-  if (!env.MIXCLOUD_ACCESS_TOKEN) {
-    throw new Error('MixCloud credentials not configured (MIXCLOUD_ACCESS_TOKEN)');
+  if (shouldDryRun([env.MIXCLOUD_ACCESS_TOKEN])) {
+    await simulateUpload('mixcloud');
+    return `https://www.mixcloud.com/dryrun-${Date.now().toString(36)}/`;
   }
   const form = new FormData();
   form.append('mp3', fs.createReadStream(params.audioPath));

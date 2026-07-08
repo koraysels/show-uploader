@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import fs from 'fs';
 import { env } from '../env';
+import { shouldDryRun, simulateUpload } from './dry-run';
 
 function getYouTubeClient() {
   if (!env.YOUTUBE_CLIENT_ID || !env.YOUTUBE_CLIENT_SECRET || !env.YOUTUBE_REFRESH_TOKEN) {
@@ -21,6 +22,11 @@ export async function uploadToYoutube(params: {
   tags: string[];
   onProgress?: (pct: number) => void;
 }): Promise<string> {
+  if (shouldDryRun([env.YOUTUBE_CLIENT_ID, env.YOUTUBE_CLIENT_SECRET, env.YOUTUBE_REFRESH_TOKEN])) {
+    await simulateUpload('youtube', params.onProgress);
+    return `https://www.youtube.com/watch?v=dryrun-${Date.now().toString(36)}`;
+  }
+
   const youtube = getYouTubeClient();
   const stat = fs.statSync(params.videoPath);
 
@@ -34,7 +40,7 @@ export async function uploadToYoutube(params: {
           tags: params.tags,
           categoryId: '10', // Music
         },
-        status: { privacyStatus: 'public' },
+        status: { privacyStatus: env.YOUTUBE_PRIVACY_STATUS },
       },
       media: {
         mimeType: 'video/x-matroska',
