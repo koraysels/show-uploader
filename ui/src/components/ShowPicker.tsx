@@ -1,37 +1,28 @@
-import { useEffect, useState } from 'react';
-import { api, type AgendaShow } from '../api/client';
+import { useNavigate } from '@tanstack/react-router';
+import { useShows } from '../api/hooks';
 
 type Props = {
-  onSelect: (show: AgendaShow) => void;
+  selectedId: string | undefined;
 };
 
-export default function ShowPicker({ onSelect }: Props) {
-  const [shows, setShows] = useState<AgendaShow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    api
-      .listShows()
-      .then(setShows)
-      .catch(() => setError(true))
-      .finally(() => setLoading(false));
-  }, []);
+export default function ShowPicker({ selectedId }: Props) {
+  const navigate = useNavigate();
+  const { data: shows = [], isLoading, isError } = useShows();
 
   return (
     <div>
       <label className="block text-sm text-gray-400 mb-1">Select show</label>
       <select
         className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 disabled:opacity-50"
-        disabled={loading || error}
-        defaultValue=""
+        disabled={isLoading || isError}
+        value={selectedId ?? ''}
         onChange={(e) => {
-          const show = shows.find((s) => s.id === e.target.value);
-          if (show) onSelect(show);
+          const id = e.target.value;
+          if (id) void navigate({ to: '/upload/$showId', params: { showId: id } });
         }}
       >
         <option value="" disabled>
-          {loading ? 'Loading shows...' : error ? 'Failed to load shows' : 'Pick a show'}
+          {isLoading ? 'Loading shows...' : isError ? 'Failed to load shows' : 'Pick a show'}
         </option>
         {shows.map((s) => (
           <option key={s.id} value={s.id}>
