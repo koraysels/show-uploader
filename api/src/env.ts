@@ -4,6 +4,9 @@ const schema = z.object({
   DATABASE_URI: z.string().url(),
   REDIS_URL: z.string().default('redis://localhost:6379'),
   S3_ENDPOINT: z.string().url().optional(),
+  // Browser-reachable host for presigned upload URLs (S3_ENDPOINT is the
+  // internal docker host the worker uses). Falls back to S3_ENDPOINT.
+  S3_PUBLIC_ENDPOINT: z.string().url().optional(),
   S3_ACCESS_KEY: z.string().optional(),
   S3_SECRET_KEY: z.string().optional(),
   S3_BUCKET: z.string().default('show-uploader'),
