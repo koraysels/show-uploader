@@ -6,7 +6,7 @@ export const showsRouter = Router();
 
 showsRouter.get('/', async (_req, res) => {
   try {
-    const shows = await listShows({ status: 'all' });
+    const shows = await listShows();
     res.json(shows);
   } catch {
     res.status(502).json({ error: 'Failed to fetch shows' });
