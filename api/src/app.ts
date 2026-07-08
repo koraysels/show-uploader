@@ -15,14 +15,15 @@ export function createApp() {
   // Watcher uses its own API key — exempt from JWT auth
   app.use('/api/watcher', watcherRouter);
 
-  // All routes below require a valid Zitadel JWT with the member role
-  app.use(requireAuth);
+  // Protected API — each router requires a valid Zitadel JWT with the member role.
+  // Scoped to the API only, so the static SPA below stays public (otherwise the
+  // login page itself would be gated and the OIDC flow could never start).
+  app.get('/api/auth/me', requireAuth, (_req, res) => res.json({ ok: true }));
+  app.use('/api/shows', requireAuth, showsRouter);
+  app.use('/api/uploads', requireAuth, uploadsRouter);
+  app.use('/api/uploads', requireAuth, eventsRouter);
 
-  app.get('/api/auth/me', (_req, res) => res.json({ ok: true }));
-  app.use('/api/shows', showsRouter);
-  app.use('/api/uploads', uploadsRouter);
-  app.use('/api/uploads', eventsRouter);
-
+  // Public static UI + SPA fallback
   const uiDist = path.join(__dirname, '..', '..', 'ui', 'dist');
   app.use(express.static(uiDist));
   app.get('*', (_req, res) => {
