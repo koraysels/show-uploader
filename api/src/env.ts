@@ -15,6 +15,8 @@ const schema = z.object({
   WATCHER_API_KEY: z.string().default('change-me'),
   ZITADEL_DOMAIN: z.string(),
   ZITADEL_CLIENT_ID: z.string(),
+  POCKETBASE_URL: z.string().url().default('https://agenda.coming-soon.space'),
+  LIVE_GUARD_BUFFER_MIN: z.coerce.number().default(15),
   PORT: z.string().default('3000'),
   NODE_ENV: z.string().default('development'),
 });

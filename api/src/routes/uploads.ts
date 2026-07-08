@@ -4,6 +4,7 @@ import { db } from '../db/client';
 import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs } from '../db/queries';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl } from '../services/s3';
+import { getLiveState } from '../services/live-guard';
 import { env } from '../env';
 
 export const uploadsRouter = Router();
@@ -65,26 +66,42 @@ uploadsRouter.post('/', async (req, res) => {
       )
     );
 
+    // Don't run heavy work (transcode/upload) while a show is on air — defer the
+    // jobs until the live window (plus buffer) clears. Fails open if PB is down.
+    const live = await getLiveState(new Date());
+    const delay = live.isLive && live.resumeAt ? Math.max(0, live.resumeAt.getTime() - Date.now()) : 0;
+    if (delay > 0) {
+      console.log(`Show live — deferring upload ${upload.id} jobs until ${live.resumeAt!.toISOString()}`);
+    }
+
     await Promise.all(
       jobs.map((job) =>
-        uploadQueue.add(job.platform, {
-          jobId: job.id,
-          uploadId: upload.id,
-          platform: job.platform,
-          videoS3Key: data.videoS3Key,
-          title: data.title,
-          description: data.description,
-          tags: data.tags,
-          imageUrl: data.imageUrl,
-          jingleS3Key,
-          includeJingle: data.includeJingle,
-          trimStart: data.trimStart ?? null,
-          trimEnd: data.trimEnd ?? null,
-        })
+        uploadQueue.add(
+          job.platform,
+          {
+            jobId: job.id,
+            uploadId: upload.id,
+            platform: job.platform,
+            videoS3Key: data.videoS3Key,
+            title: data.title,
+            description: data.description,
+            tags: data.tags,
+            imageUrl: data.imageUrl,
+            jingleS3Key,
+            includeJingle: data.includeJingle,
+            trimStart: data.trimStart ?? null,
+            trimEnd: data.trimEnd ?? null,
+          },
+          { delay }
+        )
       )
     );
 
-    res.status(201).json({ uploadId: upload.id, jobs });
+    res.status(201).json({
+      uploadId: upload.id,
+      jobs,
+      deferredUntil: delay > 0 ? live.resumeAt!.toISOString() : null,
+    });
   } catch (err) {
     console.error('Failed to create upload:', err);
     res.status(500).json({ error: 'Failed to create upload' });
