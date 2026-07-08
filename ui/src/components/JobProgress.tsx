@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useAuth } from '../auth/useAuth';
 import type { PlatformJob } from '../api/client';
 
 type Props = {
@@ -20,6 +21,7 @@ const PLATFORM_LABELS: Record<string, string> = {
 };
 
 export default function JobProgress({ uploadId, jobs }: Props) {
+  const { user } = useAuth();
   const [state, setState] = useState<Record<string, JobState>>(() =>
     Object.fromEntries(
       jobs.map((j) => [
@@ -36,9 +38,12 @@ export default function JobProgress({ uploadId, jobs }: Props) {
 
   useEffect(() => {
     const allSettled = jobs.every((j) => j.status === 'done' || j.status === 'failed');
-    if (allSettled) return;
+    if (allSettled || !user?.access_token) return;
 
-    const es = new EventSource(`/api/uploads/${uploadId}/events`);
+    // EventSource can't set an Authorization header — pass the token as a query param.
+    const es = new EventSource(
+      `/api/uploads/${uploadId}/events?access_token=${encodeURIComponent(user.access_token)}`
+    );
 
     es.onmessage = (e) => {
       try {
@@ -68,7 +73,7 @@ export default function JobProgress({ uploadId, jobs }: Props) {
     };
 
     return () => es.close();
-  }, [uploadId, jobs]);
+  }, [uploadId, jobs, user?.access_token]);
 
   return (
     <div className="space-y-3">
