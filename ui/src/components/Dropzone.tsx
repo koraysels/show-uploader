@@ -1,31 +1,19 @@
 import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { useFileUpload, type FileUpload } from './useFileUpload';
+import { useUpload } from '../upload/UploadProvider';
 
-type Ctx = FileUpload & { open: () => void };
-const DropzoneContext = createContext<Ctx | null>(null);
+// Only the browse trigger is local to the dropzone; upload state is global.
+const OpenContext = createContext<() => void>(() => {});
 
-export function useUploadContext(): Ctx {
-  const ctx = useContext(DropzoneContext);
-  if (!ctx) throw new Error('useUploadContext must be used inside FullPageDropzone');
-  return ctx;
-}
-
-// Wraps the page so a video dropped ANYWHERE over it is uploaded. noClick keeps
-// the form's own controls clickable; a full-screen overlay appears while dragging.
-export function FullPageDropzone({
-  onUploaded,
-  children,
-}: {
-  onUploaded: (key: string) => void;
-  children: ReactNode;
-}) {
-  const fu = useFileUpload(onUploaded);
+// Wraps the page so a video dropped ANYWHERE over it starts uploading. noClick
+// keeps the form's own controls clickable; a full-screen overlay shows on drag.
+export function FullPageDropzone({ children }: { children: ReactNode }) {
+  const { start } = useUpload();
   const onDrop = useCallback(
     (accepted: File[]) => {
-      if (accepted[0]) void fu.upload(accepted[0]);
+      if (accepted[0]) start(accepted[0]);
     },
-    [fu]
+    [start]
   );
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
@@ -38,12 +26,12 @@ export function FullPageDropzone({
   return (
     <div {...getRootProps({ className: 'relative min-h-screen' })}>
       <input {...getInputProps()} />
-      <DropzoneContext.Provider value={{ ...fu, open }}>{children}</DropzoneContext.Provider>
+      <OpenContext.Provider value={open}>{children}</OpenContext.Provider>
       {isDragActive && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm pointer-events-none">
           <div className="border-2 border-dashed border-white/60 rounded-2xl px-16 py-12 text-center">
             <p className="text-lg font-medium text-white">Drop video to upload</p>
-            <p className="text-sm text-gray-400 mt-1">MKV, MP4, MOV or WebM</p>
+            <p className="text-sm text-gray-400 mt-1">MKV, MP4, MOV or WebM · resumable</p>
           </div>
         </div>
       )}
@@ -51,39 +39,65 @@ export function FullPageDropzone({
   );
 }
 
-// Inline control shown in the form: browse button + upload status/progress.
+function fmtBytes(n: number): string {
+  if (n > 1e9) return `${(n / 1e9).toFixed(2)} GB`;
+  if (n > 1e6) return `${(n / 1e6).toFixed(0)} MB`;
+  return `${(n / 1e3).toFixed(0)} KB`;
+}
+
+// Inline control in the form: browse button + upload status/progress.
 export function UploadControl() {
-  const { status, progress, filename, error, open } = useUploadContext();
+  const open = useContext(OpenContext);
+  const { state, cancel } = useUpload();
+  const pct = Math.round(state.fraction * 100);
+
   return (
-    <button
-      type="button"
-      onClick={() => status !== 'uploading' && open()}
-      className="w-full border-2 border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-gray-500 transition-colors disabled:cursor-default"
-      disabled={status === 'uploading'}
-    >
-      {status === 'idle' && (
-        <span className="text-gray-400 text-sm">Drop video anywhere, or click to browse</span>
+    <div className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center">
+      {state.status === 'idle' && (
+        <button type="button" onClick={open} className="text-gray-400 text-sm hover:text-white">
+          Drop video anywhere, or click to browse
+        </button>
       )}
-      {status === 'uploading' && (
-        <span className="block space-y-2">
-          <span className="block text-gray-300 text-sm truncate">{filename}</span>
-          <span className="block w-full bg-gray-800 rounded-full h-1.5">
-            <span
-              className="block bg-white h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${progress}%` }}
-            />
-          </span>
-          <span className="block text-gray-400 text-xs">{progress}% — uploading to storage</span>
-        </span>
+      {state.status === 'uploading' && (
+        <div className="space-y-2">
+          <p className="text-gray-300 text-sm truncate">{state.filename}</p>
+          <div className="w-full bg-gray-800 rounded-full h-1.5">
+            <div className="bg-white h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
+          </div>
+          <p className="text-gray-400 text-xs">
+            {pct}% · {fmtBytes(state.uploadedBytes)} / {fmtBytes(state.totalBytes)} · resumable
+          </p>
+          <button type="button" onClick={cancel} className="text-gray-500 text-xs underline hover:text-gray-300">
+            Cancel
+          </button>
+        </div>
       )}
-      {status === 'done' && <span className="text-green-400 text-sm">✓ {filename}</span>}
-      {status === 'error' && (
-        <span className="block space-y-1">
-          <span className="block text-red-400 text-sm">Upload failed</span>
-          <span className="block text-gray-500 text-xs">{error}</span>
-          <span className="block text-gray-400 text-xs mt-2">Click to try again</span>
-        </span>
+      {state.status === 'done' && <p className="text-green-400 text-sm">✓ {state.filename}</p>}
+      {state.status === 'error' && (
+        <div className="space-y-1">
+          <p className="text-red-400 text-sm">Upload failed</p>
+          <p className="text-gray-500 text-xs">{state.error}</p>
+          <button type="button" onClick={open} className="text-gray-400 text-xs underline mt-2">
+            Choose file to retry
+          </button>
+        </div>
       )}
-    </button>
+    </div>
+  );
+}
+
+// Global indicator for the nav — visible on every route while uploading.
+export function UploadIndicator() {
+  const { state } = useUpload();
+  if (state.status !== 'uploading') return null;
+  const pct = Math.round(state.fraction * 100);
+  return (
+    <div className="ml-auto flex items-center gap-2 text-xs text-gray-400">
+      <span className="truncate max-w-[160px]">{state.filename}</span>
+      <span className="w-24 bg-gray-800 rounded-full h-1">
+        <span className="block bg-white h-1 rounded-full" style={{ width: `${pct}%` }} />
+      </span>
+      <span>{pct}%</span>
+    </div>
   );
 }

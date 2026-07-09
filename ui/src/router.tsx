@@ -11,6 +11,7 @@ import { useAuthCheck } from './api/hooks';
 import NewUpload from './pages/NewUpload';
 import History from './pages/History';
 import Archive from './pages/Archive';
+import { UploadIndicator } from './components/Dropzone';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
 
@@ -52,6 +53,7 @@ function AuthedLayout() {
         >
           Archive
         </Link>
+        <UploadIndicator />
       </nav>
       <main className="max-w-2xl mx-auto px-6 py-10">
         <Outlet />

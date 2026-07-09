@@ -70,6 +70,34 @@ export const api = {
       body: JSON.stringify({ filename, contentType }),
     }),
 
+  // Resumable multipart upload
+  mpCreate: (filename: string, contentType: string, size: number) =>
+    apiFetch<{ sessionId: string; key: string; partSize: number; partCount: number }>(
+      '/api/uploads/multipart/create',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, contentType, size }),
+      }
+    ),
+  mpStatus: (sessionId: string) =>
+    apiFetch<{
+      sessionId: string;
+      key: string;
+      filename: string;
+      size: number;
+      contentType: string;
+      partSize: number;
+      status: string;
+      uploadedParts: { partNumber: number; size: number }[];
+    }>(`/api/uploads/multipart/${sessionId}`),
+  mpPartUrl: (sessionId: string, n: number) =>
+    apiFetch<{ url: string }>(`/api/uploads/multipart/${sessionId}/part/${n}`, { method: 'POST' }),
+  mpComplete: (sessionId: string) =>
+    apiFetch<{ key: string }>(`/api/uploads/multipart/${sessionId}/complete`, { method: 'POST' }),
+  mpAbort: (sessionId: string) =>
+    apiFetch(`/api/uploads/multipart/${sessionId}/abort`, { method: 'POST' }),
+
   createUpload: (body: {
     showId: string;
     title: string;

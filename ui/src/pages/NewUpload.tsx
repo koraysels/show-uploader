@@ -6,6 +6,7 @@ import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import TrimFields from '../components/TrimFields';
+import { useUpload } from '../upload/UploadProvider';
 
 export default function NewUpload() {
   const { showId } = useParams({ strict: false }) as { showId?: string };
@@ -29,6 +30,15 @@ export default function NewUpload() {
   const pending = usePendingVideos();
   const claim = useClaimPending();
   const createUpload = useCreateUpload();
+  const upload = useUpload();
+
+  // A completed background upload provides the S3 key to publish.
+  useEffect(() => {
+    if (upload.state.status === 'done' && upload.state.key) {
+      setVideoS3Key(upload.state.key);
+      setSelectedPendingId(null);
+    }
+  }, [upload.state.status, upload.state.key]);
 
   // Seed the form when the selected show changes.
   useEffect(() => {
@@ -84,7 +94,7 @@ export default function NewUpload() {
   const pendingVideos = pending.data ?? [];
 
   return (
-    <FullPageDropzone onUploaded={setVideoS3Key}>
+    <FullPageDropzone>
       <div className="space-y-8">
         <h1 className="text-xl font-semibold">New Upload</h1>
 
