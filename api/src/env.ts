@@ -20,6 +20,9 @@ const schema = z.object({
   ZITADEL_CLIENT_ID: z.string(),
   POCKETBASE_URL: z.string().url().default('https://agenda.coming-soon.space'),
   LIVE_GUARD_BUFFER_MIN: z.coerce.number().default(15),
+  // Superuser creds — needed at runtime to read draft archive records (gated).
+  PB_SERVICE_EMAIL: z.string().optional(),
+  PB_SERVICE_PASSWORD: z.string().optional(),
   PORT: z.string().default('3000'),
   NODE_ENV: z.string().default('development'),
 });

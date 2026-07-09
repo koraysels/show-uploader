@@ -59,15 +59,15 @@ export default function Archive() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">Archive</h1>
+      <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">archive</h1>
       {archived.length === 0 ? (
-        <p className="text-sm text-muted">No archived files yet.</p>
+        <p className="text-sm text-muted">no archived files yet.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+        <div className="overflow-hidden border border-ink bg-surface">
           <table className="w-full text-sm">
             <thead>
               {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="border-b border-line text-left">
+                <tr key={hg.id} className="border-b border-ink text-left">
                   {hg.headers.map((h) => (
                     <th key={h.id} className="px-5 py-3">
                       <button
@@ -85,7 +85,7 @@ export default function Archive() {
             </thead>
             <tbody>
               {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="border-b border-line/70 last:border-0 hover:bg-paper/60">
+                <tr key={row.id} className="border-b border-line last:border-0 hover:bg-accent-soft">
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="whitespace-nowrap px-5 py-3.5">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}

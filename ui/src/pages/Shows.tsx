@@ -51,8 +51,8 @@ export default function Shows() {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">New upload</h1>
-          <p className="mt-1 text-sm text-muted">Choose a show to publish a recording for.</p>
+          <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">to process</h1>
+          <p className="mt-1 text-sm text-muted">draft archive records. pick one to publish its recording.</p>
         </div>
         <input
           value={filter}
@@ -67,11 +67,11 @@ export default function Shows() {
       ) : isError ? (
         <p className="text-sm text-danger">Couldn't load shows. Check the schedule connection.</p>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-card">
+        <div className="overflow-hidden border border-ink bg-surface">
           <table className="w-full text-sm">
             <thead>
               {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="border-b border-line text-left">
+                <tr key={hg.id} className="border-b border-ink text-left">
                   {hg.headers.map((h) => (
                     <th key={h.id} className="px-5 py-3 font-medium">
                       <button
@@ -94,7 +94,7 @@ export default function Shows() {
                 <tr
                   key={row.id}
                   onClick={() => navigate({ to: '/upload/$showId', params: { showId: row.original.id } })}
-                  className="group cursor-pointer border-b border-line/70 last:border-0 transition-colors hover:bg-accent-soft/50"
+                  className="group cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-accent-soft"
                 >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="whitespace-nowrap px-5 py-3.5">

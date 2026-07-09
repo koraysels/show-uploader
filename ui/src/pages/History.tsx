@@ -18,18 +18,18 @@ export default function History() {
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">History</h1>
+      <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">history</h1>
 
       {uploads.length === 0 ? (
-        <p className="text-sm text-muted">No uploads yet. Pick a show to get started.</p>
+        <p className="text-sm text-muted">no uploads yet. pick a show to get started.</p>
       ) : (
         <div className="space-y-3">
           {uploads.map((upload) => (
             <div
               key={upload.id}
               ref={upload.id === highlight ? highlightRef : null}
-              className={`rounded-xl border bg-surface p-5 transition-colors ${
-                upload.id === highlight ? 'border-accent shadow-card' : 'border-line'
+              className={`border bg-surface p-5 transition-colors ${
+                upload.id === highlight ? 'border-ink' : 'border-line'
               }`}
             >
               <div className="mb-4 flex items-baseline justify-between gap-4">

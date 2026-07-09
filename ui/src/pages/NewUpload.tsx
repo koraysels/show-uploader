@@ -10,7 +10,7 @@ import { useUpload } from '../upload/UploadProvider';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-t border-line pt-6">
-      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.09em] text-faint">{title}</h2>
+      <h2 className="mb-4 text-[11px] lowercase tracking-wide text-faint">{title}</h2>
       {children}
     </section>
   );
@@ -111,8 +111,8 @@ export default function NewUpload() {
     <FullPageDropzone>
       <div className="mx-auto max-w-xl space-y-8">
         <div>
-          <Link to="/" className="text-sm text-muted hover:text-ink">← Shows</Link>
-          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">{selectedShow.title}</h1>
+          <Link to="/" className="text-sm lowercase text-muted hover:text-ink">← to process</Link>
+          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{selectedShow.title}</h1>
           <p className="mt-1 font-mono text-[13px] text-muted">
             {selectedShow.date} · {selectedShow.startTime}–{selectedShow.endTime}
           </p>

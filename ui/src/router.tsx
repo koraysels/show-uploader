@@ -28,26 +28,26 @@ function AuthedLayout() {
   if (authCheck.isError && authCheck.error.message.includes('403')) return <AccessDenied />;
   if (authCheck.isPending) return null;
 
-  const navLink = 'rounded-md px-3 py-1.5 text-sm text-muted hover:text-ink transition-colors';
-  const navActive = 'rounded-md px-3 py-1.5 text-sm text-ink bg-line/60';
+  const navLink = 'px-3 py-1.5 text-sm lowercase text-muted hover:text-ink transition-colors';
+  const navActive = 'px-3 py-1.5 text-sm lowercase text-paper bg-ink';
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-ink bg-paper/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-4xl items-center gap-6 px-6">
-          <Link to="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink">
-            <span className="h-2.5 w-2.5 rounded-full bg-accent" aria-hidden />
-            Show&nbsp;Uploader
+          <Link to="/" className="flex items-center gap-2 text-base font-semibold lowercase tracking-tight text-ink">
+            <span className="h-2.5 w-2.5 bg-ink" aria-hidden />
+            show uploader
           </Link>
           <nav className="flex items-center gap-0.5">
             <Link to="/" activeOptions={{ exact: true }} className={navLink} activeProps={{ className: navActive }}>
-              Upload
+              upload
             </Link>
             <Link to="/history" className={navLink} activeProps={{ className: navActive }}>
-              History
+              history
             </Link>
             <Link to="/archive" className={navLink} activeProps={{ className: navActive }}>
-              Archive
+              archive
             </Link>
           </nav>
           <div className="ml-auto">

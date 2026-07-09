@@ -1,30 +1,34 @@
 # DESIGN.md — Show Uploader
 
-Light, editorial, music-zine. A calm daytime tool for the coming-soon.space /
-Onder Stroom radio crew to publish archived sets. Clarity and speed over chrome.
+Matches the coming-soon.space house style: brutalist, monochrome, monospace.
+An internal tool for the coming-soon.space / Onder Stroom radio crew to publish
+archived sets. Utilitarian, high-contrast, no decoration.
 
 ## Register
-Product (UI serves the task). Not a marketing surface.
+Product. Reference: https://coming-soon.space (stark B/W, mono, dithered, boxed, lowercase).
 
 ## Theme
-Light. Scene: a host at their desk in the afternoon grabbing last night's set,
-dropping the file, publishing. Warm paper, ink text — never dark, never clinical.
+Light, near-achromatic. White page, near-black ink. No color accent — emphasis
+by inversion (black fill, white text) and hard black borders.
 
-## Color (OKLCH, warm-tinted neutrals + one accent)
-- paper `oklch(0.972 0.008 78)` — page
-- surface `oklch(0.995 0.003 80)` — inputs, cards, tables
-- ink `oklch(0.24 0.012 60)` — text
-- muted `oklch(0.505 0.012 60)` / faint `oklch(0.66 0.010 65)` — secondary/tertiary
-- line `oklch(0.905 0.008 75)` / line-strong `oklch(0.83 0.010 70)` — borders
-- **accent** vermilion `oklch(0.585 0.19 33)` — primary actions, active state, links (≤10% of surface)
-- ok `oklch(0.55 0.13 150)`, danger `oklch(0.55 0.19 25)` (+ `-soft` tints)
+## Color (OKLCH, ~zero chroma)
+- paper `oklch(0.985 0 0)` · surface `oklch(0.998 0 0)`
+- ink `oklch(0.17 0 0)` · muted `oklch(0.42 0 0)` · faint `oklch(0.58 0 0)`
+- line `oklch(0.86 0 0)` (soft dividers) · border-ink for hard boxes
+- accent = ink (black); ok/danger reserved for job status only
 
 ## Type
-- Display: **Fraunces** (page titles, wordmark) — editorial serif.
-- Body/UI: **Inter**. Mono: system ui-monospace for dates/times/keys.
-- Hierarchy via scale + weight; section labels are 11px uppercase, tracked.
+- **Monospace only** (ui-monospace / SF Mono / Menlo). No display serif.
+- Headings and labels are **lowercase**. Hierarchy via size + weight, not case.
 
-## Components (see src/index.css @layer components)
-`.field` (focus ring = accent tint), `.label`, `.btn-primary` / `.btn-ghost`,
-`.card`. Tables are hairline editorial lists (no card-grids). One accent, no
-gradients, no side-stripes, no glass.
+## Form
+- Sharp corners everywhere (borderRadius overridden to 0; `full` kept for dots).
+- Hard 1px black borders on boxes/tables/inputs; soft gray row dividers.
+- Buttons: black fill, white text (`.btn-primary`), or bordered ghost.
+- Tables are the primary layout (editorial lists), never card grids.
+- No gradients, shadows, glass, side-stripes, em dashes.
+
+## The data
+Pick list = **draft records in the PocketBase `archive` collection** (past shows
+whose recording still needs uploading — the admin's "to process" list), read
+with superuser auth. Not `episodes`.

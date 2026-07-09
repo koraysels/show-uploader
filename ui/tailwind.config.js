@@ -4,30 +4,36 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Warm tinted neutrals (OKLCH) — light editorial "paper + ink"
-        paper: 'oklch(0.972 0.008 78)',
-        surface: 'oklch(0.995 0.003 80)',
-        ink: 'oklch(0.24 0.012 60)',
-        muted: 'oklch(0.505 0.012 60)',
-        faint: 'oklch(0.66 0.010 65)',
-        line: 'oklch(0.905 0.008 75)',
-        'line-strong': 'oklch(0.83 0.010 70)',
-        accent: 'oklch(0.585 0.19 33)', // vermilion
-        'accent-strong': 'oklch(0.52 0.19 33)',
-        'accent-soft': 'oklch(0.95 0.045 45)',
-        ok: 'oklch(0.55 0.13 150)',
-        'ok-soft': 'oklch(0.95 0.05 150)',
-        danger: 'oklch(0.55 0.19 25)',
-        'danger-soft': 'oklch(0.95 0.05 25)',
+        // Monochrome, near-achromatic (OKLCH) — matches coming-soon.space
+        paper: 'oklch(0.985 0 0)',
+        surface: 'oklch(0.998 0 0)',
+        ink: 'oklch(0.17 0 0)',
+        muted: 'oklch(0.42 0 0)',
+        faint: 'oklch(0.58 0 0)',
+        line: 'oklch(0.86 0 0)',
+        'line-strong': 'oklch(0.17 0 0)',
+        accent: 'oklch(0.17 0 0)', // black — inverted buttons/active
+        'accent-strong': 'oklch(0.17 0 0)',
+        'accent-soft': 'oklch(0.93 0 0)', // light gray wash for hovers/active
+        ok: 'oklch(0.5 0.13 150)',
+        'ok-soft': 'oklch(0.95 0.04 150)',
+        danger: 'oklch(0.5 0.2 27)',
+        'danger-soft': 'oklch(0.95 0.05 27)',
       },
       fontFamily: {
-        display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        // Everything monospace — the house style
+        display: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        sans: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
       },
-      boxShadow: {
-        card: '0 1px 2px oklch(0.4 0.02 60 / 0.04), 0 8px 24px oklch(0.4 0.02 60 / 0.06)',
-        pop: '0 12px 40px oklch(0.3 0.02 60 / 0.14)',
+      borderRadius: {
+        // Brutalist: sharp by default
+        DEFAULT: '0px',
+        md: '0px',
+        lg: '0px',
+        xl: '0px',
+        '2xl': '0px',
+        full: '9999px',
       },
     },
   },

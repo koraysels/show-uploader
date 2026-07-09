@@ -7,57 +7,59 @@
 }
 
 body {
-  background-color: oklch(0.972 0.008 78);
-  color: oklch(0.24 0.012 60);
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  background-color: oklch(0.985 0 0);
+  color: oklch(0.17 0 0);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: oklch(0.585 0.19 33 / 0.16);
+  background: oklch(0.17 0 0);
+  color: oklch(0.985 0 0);
 }
 
 @layer components {
   .field {
-    @apply w-full rounded-lg border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder-faint;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    @apply w-full border border-ink bg-surface px-3 py-2 text-sm text-ink placeholder-faint;
+    transition: box-shadow 0.12s ease;
   }
   .field:focus {
     outline: none;
-    border-color: oklch(0.585 0.19 33);
-    box-shadow: 0 0 0 3px oklch(0.585 0.19 33 / 0.13);
+    box-shadow: inset 0 0 0 1px oklch(0.17 0 0);
   }
   .field-invalid {
-    border-color: oklch(0.55 0.19 25);
+    border-color: oklch(0.5 0.2 27);
+    color: oklch(0.5 0.2 27);
   }
 
   .label {
-    @apply mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.09em] text-muted;
+    @apply mb-1.5 block text-[11px] lowercase tracking-wide text-muted;
   }
 
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium;
-    transition: filter 0.15s ease, border-color 0.15s ease, background-color 0.15s ease;
+    @apply inline-flex items-center justify-center gap-2 border border-ink px-4 py-2.5 text-sm font-medium;
+    transition: background-color 0.12s ease, color 0.12s ease;
   }
   .btn-primary {
-    @apply btn bg-accent text-white;
+    @apply btn bg-ink text-paper;
   }
   .btn-primary:hover:not(:disabled) {
-    filter: brightness(0.93);
+    background-color: oklch(0.28 0 0);
   }
   .btn-primary:disabled {
-    opacity: 0.4;
+    background-color: oklch(0.86 0 0);
+    border-color: oklch(0.86 0 0);
+    color: oklch(0.58 0 0);
     cursor: default;
   }
   .btn-ghost {
-    @apply btn border border-line bg-surface text-ink;
+    @apply btn bg-surface text-ink;
   }
   .btn-ghost:hover {
-    border-color: oklch(0.83 0.01 70);
+    @apply bg-ink text-paper;
   }
 
   .card {
-    @apply rounded-xl border border-line bg-surface;
+    @apply border border-ink bg-surface;
   }
 }
