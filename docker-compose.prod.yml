@@ -15,6 +15,9 @@ services:
         VITE_ZITADEL_DOMAIN: ${ZITADEL_DOMAIN}
         VITE_ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID}
         VITE_POCKETBASE_URL: ${POCKETBASE_URL}
+    # Rebuild from source on every deploy (Komodo runs `compose up`, which
+    # otherwise reuses the cached image and ships stale code).
+    pull_policy: build
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379
@@ -39,6 +42,7 @@ services:
     build:
       context: .
       dockerfile: worker/Dockerfile
+    pull_policy: build
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379
