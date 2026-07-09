@@ -76,22 +76,18 @@ export default function JobProgress({ uploadId, jobs }: Props) {
   }, [uploadId, jobs, user?.access_token]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3.5">
       {Object.entries(state).map(([platform, s]) => (
         <div key={platform}>
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-gray-400">{PLATFORM_LABELS[platform] ?? platform}</span>
+          <div className="mb-1.5 flex items-center justify-between text-xs">
+            <span className="font-medium text-muted">{PLATFORM_LABELS[platform] ?? platform}</span>
             <span
               className={
-                s.status === 'done'
-                  ? 'text-green-400'
-                  : s.status === 'failed'
-                  ? 'text-red-400'
-                  : 'text-gray-500'
+                s.status === 'done' ? 'text-ok' : s.status === 'failed' ? 'text-danger' : 'text-faint tabular-nums'
               }
             >
               {s.status === 'done' && s.url ? (
-                <a href={s.url} target="_blank" rel="noreferrer" className="underline hover:no-underline">
+                <a href={s.url} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
                   View ↗
                 </a>
               ) : s.status === 'done' ? (
@@ -103,14 +99,10 @@ export default function JobProgress({ uploadId, jobs }: Props) {
               )}
             </span>
           </div>
-          <div className="w-full bg-gray-800 rounded-full h-1">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
             <div
-              className={`h-1 rounded-full transition-all duration-500 ${
-                s.status === 'done'
-                  ? 'bg-green-400'
-                  : s.status === 'failed'
-                  ? 'bg-red-500'
-                  : 'bg-white'
+              className={`h-full rounded-full transition-all duration-500 ${
+                s.status === 'done' ? 'bg-ok' : s.status === 'failed' ? 'bg-danger' : 'bg-accent'
               }`}
               style={{ width: `${s.status === 'done' ? 100 : s.pct}%` }}
             />

@@ -9,30 +9,27 @@ type Props = {
 
 export default function MetadataForm({ title, description, tags, imageUrl, generating, onChange }: Props) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Title</label>
-        <input
-          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
-          value={title}
-          onChange={(e) => onChange('title', e.target.value)}
-        />
+        <label className="label">Title</label>
+        <input className="field" value={title} onChange={(e) => onChange('title', e.target.value)} />
       </div>
       <div>
-        <label className="block text-sm text-gray-400 mb-1">
+        <label className="label">
           Description
-          {generating && <span className="ml-2 text-xs text-gray-500">generating...</span>}
+          {generating && <span className="ml-2 lowercase tracking-normal text-accent">· writing…</span>}
         </label>
         <textarea
-          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500 min-h-[80px] resize-y"
+          className="field min-h-[96px] resize-y leading-relaxed"
           value={description}
           onChange={(e) => onChange('description', e.target.value)}
         />
       </div>
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Tags (comma-separated)</label>
+        <label className="label">Tags</label>
         <input
-          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
+          className="field"
+          placeholder="comma, separated"
           value={tags.join(', ')}
           onChange={(e) =>
             onChange(
@@ -46,10 +43,12 @@ export default function MetadataForm({ title, description, tags, imageUrl, gener
         />
       </div>
       <div>
-        <label className="block text-sm text-gray-400 mb-1">Cover image URL (optional)</label>
+        <label className="label">
+          Cover image URL <span className="lowercase tracking-normal text-faint">optional</span>
+        </label>
         <input
-          className="w-full bg-gray-900 border border-gray-700 rounded px-3 py-2 text-white text-sm focus:outline-none focus:ring-1 focus:ring-gray-500"
-          placeholder="https://..."
+          className="field"
+          placeholder="https://…"
           value={imageUrl}
           onChange={(e) => onChange('imageUrl', e.target.value)}
         />

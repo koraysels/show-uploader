@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useShows, useGeneratedMeta, usePendingVideos, useClaimPending, useCreateUpload } from '../api/hooks';
-import ShowPicker from '../components/ShowPicker';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import TrimFields from '../components/TrimFields';
 import { useUpload } from '../upload/UploadProvider';
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="border-t border-line pt-6">
+      <h2 className="mb-4 text-[11px] font-semibold uppercase tracking-[0.09em] text-faint">{title}</h2>
+      {children}
+    </section>
+  );
+}
 
 export default function NewUpload() {
   const { showId } = useParams({ strict: false }) as { showId?: string };
@@ -32,7 +40,6 @@ export default function NewUpload() {
   const createUpload = useCreateUpload();
   const upload = useUpload();
 
-  // A completed background upload provides the S3 key to publish.
   useEffect(() => {
     if (upload.state.status === 'done' && upload.state.key) {
       setVideoS3Key(upload.state.key);
@@ -40,7 +47,6 @@ export default function NewUpload() {
     }
   }, [upload.state.status, upload.state.key]);
 
-  // Seed the form when the selected show changes.
   useEffect(() => {
     if (!selectedShow) return;
     setTitle(selectedShow.title);
@@ -51,7 +57,6 @@ export default function NewUpload() {
     setSelectedPendingId(null);
   }, [selectedShow?.id]);
 
-  // Overlay the AI-generated copy once it arrives.
   useEffect(() => {
     if (meta.data) {
       setDescription(meta.data.youtubeDescription);
@@ -93,15 +98,29 @@ export default function NewUpload() {
   const canSubmit = !!selectedShow && !!videoS3Key && platforms.length > 0 && !createUpload.isPending;
   const pendingVideos = pending.data ?? [];
 
+  if (!selectedShow) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm text-muted">That show isn't in the schedule (it may have loaded already).</p>
+        <Link to="/" className="btn-ghost w-fit">← Back to shows</Link>
+      </div>
+    );
+  }
+
   return (
     <FullPageDropzone>
-      <div className="space-y-8">
-        <h1 className="text-xl font-semibold">New Upload</h1>
+      <div className="mx-auto max-w-xl space-y-8">
+        <div>
+          <Link to="/" className="text-sm text-muted hover:text-ink">← Shows</Link>
+          <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-ink">{selectedShow.title}</h1>
+          <p className="mt-1 font-mono text-[13px] text-muted">
+            {selectedShow.date} · {selectedShow.startTime}–{selectedShow.endTime}
+          </p>
+        </div>
 
         {pendingVideos.length > 0 && (
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Videos from drop folder</label>
-            <div className="space-y-1">
+          <Section title="From drop folder">
+            <div className="space-y-1.5">
               {pendingVideos.map((v) => (
                 <button
                   key={v.id}
@@ -110,60 +129,65 @@ export default function NewUpload() {
                     setVideoS3Key(v.s3_key);
                     setSelectedPendingId(v.id);
                   }}
-                  className={`w-full text-left px-3 py-2 rounded border text-sm transition-colors ${
+                  className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-sm transition-colors ${
                     selectedPendingId === v.id
-                      ? 'border-white text-white bg-gray-800'
-                      : 'border-gray-700 text-gray-400 hover:border-gray-500 hover:text-white'
+                      ? 'border-accent bg-accent-soft/60 text-ink'
+                      : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink'
                   }`}
                 >
-                  <span className="font-mono">{v.filename}</span>
-                  <span className="ml-2 text-gray-600 text-xs">{(v.size_bytes / 1e9).toFixed(1)} GB</span>
+                  <span className="truncate font-mono text-[13px]">{v.filename}</span>
+                  <span className="ml-3 shrink-0 text-xs text-faint">{(v.size_bytes / 1e9).toFixed(1)} GB</span>
                 </button>
               ))}
             </div>
-          </div>
+          </Section>
         )}
 
-        <ShowPicker selectedId={showId} />
+        <Section title="Details">
+          <MetadataForm
+            title={title}
+            description={description}
+            tags={tags}
+            imageUrl={imageUrl}
+            generating={meta.isFetching}
+            onChange={handleField}
+          />
+        </Section>
 
-        {selectedShow && (
-          <>
-            <MetadataForm
-              title={title}
-              description={description}
-              tags={tags}
-              imageUrl={imageUrl}
-              generating={meta.isFetching}
-              onChange={handleField}
-            />
-
-            {!selectedPendingId && <UploadControl />}
-
-            <TrimFields
-              trimStart={trimStart}
-              trimEnd={trimEnd}
-              onChange={(field, value) => {
-                if (field === 'trimStart') setTrimStart(value);
-                if (field === 'trimEnd') setTrimEnd(value);
-              }}
-            />
-
-            <PlatformSelector
-              platforms={platforms}
-              includeJingle={includeJingle}
-              onChange={setPlatforms}
-              onJingleChange={setIncludeJingle}
-            />
-
-            <button
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              className="w-full bg-white text-black rounded py-2.5 text-sm font-medium disabled:opacity-40 hover:bg-gray-100 transition-colors"
-            >
-              {createUpload.isPending ? 'Publishing...' : 'Publish'}
-            </button>
-          </>
+        {!selectedPendingId && (
+          <Section title="Video">
+            <UploadControl />
+          </Section>
         )}
+
+        <Section title="Trim">
+          <TrimFields
+            trimStart={trimStart}
+            trimEnd={trimEnd}
+            onChange={(field, value) => {
+              if (field === 'trimStart') setTrimStart(value);
+              if (field === 'trimEnd') setTrimEnd(value);
+            }}
+          />
+        </Section>
+
+        <Section title="Publish to">
+          <PlatformSelector
+            platforms={platforms}
+            includeJingle={includeJingle}
+            onChange={setPlatforms}
+            onJingleChange={setIncludeJingle}
+          />
+        </Section>
+
+        <div className="border-t border-line pt-6">
+          <button onClick={handleSubmit} disabled={!canSubmit} className="btn-primary w-full py-3 text-[15px]">
+            {createUpload.isPending ? 'Publishing…' : 'Publish'}
+          </button>
+          {!videoS3Key && (
+            <p className="mt-2 text-center text-xs text-faint">Add a video to publish.</p>
+          )}
+        </div>
       </div>
     </FullPageDropzone>
   );

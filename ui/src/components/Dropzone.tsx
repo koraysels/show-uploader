@@ -2,11 +2,8 @@ import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { useUpload } from '../upload/UploadProvider';
 
-// Only the browse trigger is local to the dropzone; upload state is global.
 const OpenContext = createContext<() => void>(() => {});
 
-// Wraps the page so a video dropped ANYWHERE over it starts uploading. noClick
-// keeps the form's own controls clickable; a full-screen overlay shows on drag.
 export function FullPageDropzone({ children }: { children: ReactNode }) {
   const { start } = useUpload();
   const onDrop = useCallback(
@@ -28,10 +25,10 @@ export function FullPageDropzone({ children }: { children: ReactNode }) {
       <input {...getInputProps()} />
       <OpenContext.Provider value={open}>{children}</OpenContext.Provider>
       {isDragActive && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/80 backdrop-blur-sm pointer-events-none">
-          <div className="border-2 border-dashed border-white/60 rounded-2xl px-16 py-12 text-center">
-            <p className="text-lg font-medium text-white">Drop video to upload</p>
-            <p className="text-sm text-gray-400 mt-1">MKV, MP4, MOV or WebM · resumable</p>
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-paper/80 backdrop-blur-sm">
+          <div className="rounded-2xl border-2 border-dashed border-accent px-16 py-12 text-center">
+            <p className="font-display text-xl font-semibold text-ink">Drop to upload</p>
+            <p className="mt-1 text-sm text-muted">MKV · MP4 · MOV · WebM — resumable</p>
           </div>
         </div>
       )}
@@ -45,59 +42,74 @@ function fmtBytes(n: number): string {
   return `${(n / 1e3).toFixed(0)} KB`;
 }
 
-// Inline control in the form: browse button + upload status/progress.
 export function UploadControl() {
   const open = useContext(OpenContext);
   const { state, cancel } = useUpload();
   const pct = Math.round(state.fraction * 100);
 
-  return (
-    <div className="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center">
-      {state.status === 'idle' && (
-        <button type="button" onClick={open} className="text-gray-400 text-sm hover:text-white">
-          Drop video anywhere, or click to browse
-        </button>
-      )}
-      {state.status === 'uploading' && (
-        <div className="space-y-2">
-          <p className="text-gray-300 text-sm truncate">{state.filename}</p>
-          <div className="w-full bg-gray-800 rounded-full h-1.5">
-            <div className="bg-white h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }} />
-          </div>
-          <p className="text-gray-400 text-xs">
-            {pct}% · {fmtBytes(state.uploadedBytes)} / {fmtBytes(state.totalBytes)} · resumable
-          </p>
-          <button type="button" onClick={cancel} className="text-gray-500 text-xs underline hover:text-gray-300">
+  if (state.status === 'uploading') {
+    return (
+      <div className="rounded-xl border border-line bg-surface p-5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="truncate text-sm text-ink">{state.filename}</span>
+          <button type="button" onClick={cancel} className="shrink-0 text-xs text-faint hover:text-danger">
             Cancel
           </button>
         </div>
-      )}
-      {state.status === 'done' && <p className="text-green-400 text-sm">✓ {state.filename}</p>}
-      {state.status === 'error' && (
-        <div className="space-y-1">
-          <p className="text-red-400 text-sm">Upload failed</p>
-          <p className="text-gray-500 text-xs">{state.error}</p>
-          <button type="button" onClick={open} className="text-gray-400 text-xs underline mt-2">
-            Choose file to retry
-          </button>
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-line">
+          <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
         </div>
+        <p className="mt-2 text-xs text-muted">
+          {pct}% · {fmtBytes(state.uploadedBytes)} / {fmtBytes(state.totalBytes)} · resumable
+        </p>
+      </div>
+    );
+  }
+
+  if (state.status === 'done') {
+    return (
+      <div className="flex items-center justify-between rounded-xl border border-ok/40 bg-ok-soft px-5 py-4">
+        <span className="truncate text-sm text-ink">{state.filename}</span>
+        <span className="shrink-0 text-sm font-medium text-ok">✓ ready</span>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={open}
+      className={`w-full rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+        state.status === 'error' ? 'border-danger/50 bg-danger-soft' : 'border-line hover:border-accent hover:bg-accent-soft/40'
+      }`}
+    >
+      {state.status === 'error' ? (
+        <>
+          <p className="text-sm font-medium text-danger">Upload failed</p>
+          <p className="mt-1 text-xs text-muted">{state.error}</p>
+          <p className="mt-2 text-xs text-faint">Click to choose a file and retry</p>
+        </>
+      ) : (
+        <>
+          <p className="text-sm font-medium text-ink">Drop a video anywhere</p>
+          <p className="mt-1 text-xs text-muted">or click to browse · resumable, keeps going as you navigate</p>
+        </>
       )}
-    </div>
+    </button>
   );
 }
 
-// Global indicator for the nav — visible on every route while uploading.
 export function UploadIndicator() {
   const { state } = useUpload();
   if (state.status !== 'uploading') return null;
   const pct = Math.round(state.fraction * 100);
   return (
-    <div className="ml-auto flex items-center gap-2 text-xs text-gray-400">
-      <span className="truncate max-w-[160px]">{state.filename}</span>
-      <span className="w-24 bg-gray-800 rounded-full h-1">
-        <span className="block bg-white h-1 rounded-full" style={{ width: `${pct}%` }} />
+    <div className="flex items-center gap-2 text-xs text-muted">
+      <span className="max-w-[140px] truncate">{state.filename}</span>
+      <span className="h-1 w-20 overflow-hidden rounded-full bg-line">
+        <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
       </span>
-      <span>{pct}%</span>
+      <span className="tabular-nums">{pct}%</span>
     </div>
   );
 }

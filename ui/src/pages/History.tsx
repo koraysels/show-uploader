@@ -10,46 +10,44 @@ export default function History() {
 
   useEffect(() => {
     if (highlight && highlightRef.current) {
-      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   }, [highlight, uploads]);
 
-  if (isPending) return <p className="text-gray-400 text-sm">Loading...</p>;
-
-  if (uploads.length === 0) {
-    return (
-      <div className="space-y-4">
-        <h1 className="text-xl font-semibold">History</h1>
-        <p className="text-gray-500 text-sm">No uploads yet.</p>
-      </div>
-    );
-  }
+  if (isPending) return <p className="text-sm text-muted">Loading…</p>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">History</h1>
-      {uploads.map((upload) => (
-        <div
-          key={upload.id}
-          ref={upload.id === highlight ? highlightRef : null}
-          className={`border rounded-lg p-5 space-y-4 transition-colors ${
-            upload.id === highlight ? 'border-gray-500' : 'border-gray-800'
-          }`}
-        >
-          <div>
-            <p className="font-medium text-white">{upload.title}</p>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {new Date(upload.created_at).toLocaleString()}
-              {upload.archive_s3_key && <span className="ml-2 text-gray-600">· archived</span>}
-            </p>
-          </div>
-          {upload.jobs.length > 0 ? (
-            <JobProgress uploadId={upload.id} jobs={upload.jobs} />
-          ) : (
-            <p className="text-gray-600 text-xs">No jobs</p>
-          )}
+      <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">History</h1>
+
+      {uploads.length === 0 ? (
+        <p className="text-sm text-muted">No uploads yet. Pick a show to get started.</p>
+      ) : (
+        <div className="space-y-3">
+          {uploads.map((upload) => (
+            <div
+              key={upload.id}
+              ref={upload.id === highlight ? highlightRef : null}
+              className={`rounded-xl border bg-surface p-5 transition-colors ${
+                upload.id === highlight ? 'border-accent shadow-card' : 'border-line'
+              }`}
+            >
+              <div className="mb-4 flex items-baseline justify-between gap-4">
+                <p className="font-medium text-ink">{upload.title}</p>
+                <p className="shrink-0 text-xs text-faint">
+                  {new Date(upload.created_at).toLocaleString()}
+                  {upload.archive_s3_key && <span className="ml-2 text-ok">· archived</span>}
+                </p>
+              </div>
+              {upload.jobs.length > 0 ? (
+                <JobProgress uploadId={upload.id} jobs={upload.jobs} />
+              ) : (
+                <p className="text-xs text-faint">No jobs</p>
+              )}
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </div>
   );
 }

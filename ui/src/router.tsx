@@ -9,6 +9,7 @@ import {
 import { useAuth } from './auth/useAuth';
 import { useAuthCheck } from './api/hooks';
 import NewUpload from './pages/NewUpload';
+import Shows from './pages/Shows';
 import History from './pages/History';
 import Archive from './pages/Archive';
 import { UploadIndicator } from './components/Dropzone';
@@ -27,35 +28,34 @@ function AuthedLayout() {
   if (authCheck.isError && authCheck.error.message.includes('403')) return <AccessDenied />;
   if (authCheck.isPending) return null;
 
+  const navLink = 'rounded-md px-3 py-1.5 text-sm text-muted hover:text-ink transition-colors';
+  const navActive = 'rounded-md px-3 py-1.5 text-sm text-ink bg-line/60';
+
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100">
-      <nav className="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
-        <span className="font-semibold text-white tracking-tight">Show Uploader</span>
-        <Link
-          to="/"
-          activeOptions={{ exact: true }}
-          className="text-sm text-gray-400 hover:text-white"
-          activeProps={{ className: 'text-sm text-white' }}
-        >
-          New Upload
-        </Link>
-        <Link
-          to="/history"
-          className="text-sm text-gray-400 hover:text-white"
-          activeProps={{ className: 'text-sm text-white' }}
-        >
-          History
-        </Link>
-        <Link
-          to="/archive"
-          className="text-sm text-gray-400 hover:text-white"
-          activeProps={{ className: 'text-sm text-white' }}
-        >
-          Archive
-        </Link>
-        <UploadIndicator />
-      </nav>
-      <main className="max-w-2xl mx-auto px-6 py-10">
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-30 border-b border-line bg-paper/85 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-4xl items-center gap-6 px-6">
+          <Link to="/" className="flex items-center gap-2 font-display text-lg font-semibold tracking-tight text-ink">
+            <span className="h-2.5 w-2.5 rounded-full bg-accent" aria-hidden />
+            Show&nbsp;Uploader
+          </Link>
+          <nav className="flex items-center gap-0.5">
+            <Link to="/" activeOptions={{ exact: true }} className={navLink} activeProps={{ className: navActive }}>
+              Upload
+            </Link>
+            <Link to="/history" className={navLink} activeProps={{ className: navActive }}>
+              History
+            </Link>
+            <Link to="/archive" className={navLink} activeProps={{ className: navActive }}>
+              Archive
+            </Link>
+          </nav>
+          <div className="ml-auto">
+            <UploadIndicator />
+          </div>
+        </div>
+      </header>
+      <main className="mx-auto max-w-4xl px-6 py-10">
         <Outlet />
       </main>
     </div>
@@ -79,7 +79,7 @@ const authedRoute = createRoute({
 const indexRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/',
-  component: NewUpload,
+  component: Shows,
 });
 
 const uploadRoute = createRoute({
