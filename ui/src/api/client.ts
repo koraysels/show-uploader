@@ -35,6 +35,7 @@ export type UploadWithJobs = {
   tags: string[];
   video_s3_key: string;
   archive_s3_key: string | null;
+  archive_url: string | null;
   created_at: string;
   jobs: PlatformJob[];
 };

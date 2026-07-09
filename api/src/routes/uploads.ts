@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client';
 import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs } from '../db/queries';
 import { uploadQueue } from '../queue';
-import { createUploadPresignedUrl } from '../services/s3';
+import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { getLiveState } from '../services/live-guard';
 import { env } from '../env';
 
@@ -108,10 +108,28 @@ uploadsRouter.post('/', async (req, res) => {
   }
 });
 
+// Replace private S3 keys with browser-reachable presigned download URLs so the
+// UI can open the archived MP4 (bucket stays private).
+async function withDownloadUrls<T extends { archive_s3_key: string | null; jobs: { platform: string; result_url: string | null }[] }>(
+  upload: T
+): Promise<T & { archive_url: string | null }> {
+  const archive_url = upload.archive_s3_key
+    ? await createDownloadPresignedUrl(upload.archive_s3_key)
+    : null;
+  const jobs = await Promise.all(
+    upload.jobs.map(async (j) =>
+      j.platform === 'archive' && j.result_url
+        ? { ...j, result_url: await createDownloadPresignedUrl(j.result_url) }
+        : j
+    )
+  );
+  return { ...upload, archive_url, jobs };
+}
+
 uploadsRouter.get('/', async (_req, res) => {
   try {
     const uploads = await listUploadsWithJobs(db);
-    res.json(uploads);
+    res.json(await Promise.all(uploads.map(withDownloadUrls)));
   } catch {
     res.status(500).json({ error: 'Failed to list uploads' });
   }
@@ -121,7 +139,7 @@ uploadsRouter.get('/:id', async (req, res) => {
   try {
     const upload = await getUploadWithJobs(db, req.params.id);
     if (!upload) return res.status(404).json({ error: 'Not found' });
-    res.json(upload);
+    res.json(await withDownloadUrls(upload));
   } catch {
     res.status(500).json({ error: 'Failed to get upload' });
   }

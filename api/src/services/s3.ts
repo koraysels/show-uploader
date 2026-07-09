@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../env';
 
@@ -33,4 +33,12 @@ export async function createUploadPresignedUrl(key: string, contentType: string)
     ContentType: contentType,
   });
   return getSignedUrl(presignS3, command, { expiresIn: 3600 * 6 }); // 6 hours
+}
+
+// Presigned GET so the UI can download a private object (e.g. the archived MP4)
+// via a browser-reachable, time-limited link without exposing the bucket.
+export async function createDownloadPresignedUrl(key: string) {
+  if (!env.S3_BUCKET) throw new Error('S3 not configured (S3_BUCKET required)');
+  const command = new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key });
+  return getSignedUrl(presignS3, command, { expiresIn: 3600 * 6 });
 }

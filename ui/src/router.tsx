@@ -10,6 +10,7 @@ import { useAuth } from './auth/useAuth';
 import { useAuthCheck } from './api/hooks';
 import NewUpload from './pages/NewUpload';
 import History from './pages/History';
+import Archive from './pages/Archive';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
 
@@ -43,6 +44,13 @@ function AuthedLayout() {
           activeProps={{ className: 'text-sm text-white' }}
         >
           History
+        </Link>
+        <Link
+          to="/archive"
+          className="text-sm text-gray-400 hover:text-white"
+          activeProps={{ className: 'text-sm text-white' }}
+        >
+          Archive
         </Link>
       </nav>
       <main className="max-w-2xl mx-auto px-6 py-10">
@@ -78,6 +86,12 @@ const uploadRoute = createRoute({
   component: NewUpload,
 });
 
+const archiveRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/archive',
+  component: Archive,
+});
+
 const historyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/history',
@@ -89,7 +103,7 @@ const historyRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   callbackRoute,
-  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute]),
+  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute]),
 ]);
 
 export const router = createRouter({ routeTree });
