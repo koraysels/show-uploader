@@ -68,7 +68,7 @@ export async function getLiveState(
     ` && endTime>='${lower}' && startTime<='${upper}')`;
   const url =
     `${env.POCKETBASE_URL}/api/collections/episodes/records` +
-    `?perPage=200&fields=status,startTime,endTime&filter=${encodeURIComponent(filter)}`;
+    `?perPage=200&fields=status,startTime,endTime,livestream_override&filter=${encodeURIComponent(filter)}`;
 
   try {
     const res = await fetch(url);
