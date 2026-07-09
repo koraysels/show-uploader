@@ -4,10 +4,12 @@ type Props = {
   tags: string[];
   imageUrl: string;
   generating: boolean;
+  suggestedTags: string[];
   onChange: (field: string, value: string | string[]) => void;
 };
 
-export default function MetadataForm({ title, description, tags, imageUrl, generating, onChange }: Props) {
+export default function MetadataForm({ title, description, tags, imageUrl, generating, suggestedTags, onChange }: Props) {
+  const unusedSuggestions = suggestedTags.filter((t) => !tags.includes(t));
   return (
     <div className="space-y-5">
       <div>
@@ -41,6 +43,23 @@ export default function MetadataForm({ title, description, tags, imageUrl, gener
             )
           }
         />
+        {(generating || unusedSuggestions.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] lowercase text-faint">
+              {generating ? 'suggesting…' : 'suggested (ai, pre-audio):'}
+            </span>
+            {unusedSuggestions.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => onChange('tags', [...tags, t])}
+                className="border border-line px-2 py-0.5 text-xs text-muted hover:border-ink hover:text-ink"
+              >
+                + {t}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div>
         <label className="label">

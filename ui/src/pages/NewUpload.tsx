@@ -57,11 +57,10 @@ export default function NewUpload() {
     setSelectedPendingId(null);
   }, [selectedShow?.id]);
 
+  // Seed the description from AI, but NOT tags — good tags need the audio
+  // analysed first, so they're offered as suggestions instead (below the field).
   useEffect(() => {
-    if (meta.data) {
-      setDescription(meta.data.youtubeDescription);
-      setTags(meta.data.tags);
-    }
+    if (meta.data) setDescription(meta.data.youtubeDescription);
   }, [meta.data]);
 
   const handleField = (field: string, value: string | string[]) => {
@@ -150,6 +149,7 @@ export default function NewUpload() {
             tags={tags}
             imageUrl={imageUrl}
             generating={meta.isFetching}
+            suggestedTags={meta.data?.tags ?? []}
             onChange={handleField}
           />
         </Section>
