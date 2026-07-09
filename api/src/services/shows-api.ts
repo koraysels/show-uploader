@@ -1,4 +1,5 @@
 import { env } from '../env';
+import type { EpisodesRecord } from '../pocketbase-types';
 
 export type AgendaShow = {
   id: string;
@@ -11,30 +12,43 @@ export type AgendaShow = {
   tags: string[] | null;
 };
 
-async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${env.SHOWS_API_URL}${path}`, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${env.SHOWS_API_KEY}`,
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
-  if (!res.ok) throw new Error(`Shows API error: ${res.status} ${await res.text()}`);
-  return res.json() as Promise<T>;
+// PocketBase serialises datetimes as "YYYY-MM-DD HH:MM:SS.sssZ".
+function splitDateTime(ts: string): { date: string; time: string } {
+  const [date = '', rest = ''] = ts.split(' ');
+  return { date, time: rest.slice(0, 5) };
 }
 
-export function listShows(params?: { from?: string; to?: string; status?: string }) {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
-  return apiFetch<AgendaShow[]>(`/shows${qs ? `?${qs}` : ''}`);
+type EpisodeItem = Pick<
+  EpisodesRecord,
+  'id' | 'title' | 'notes' | 'startTime' | 'endTime' | 'image' | 'genres'
+> & { collectionId: string };
+
+export function toAgendaShow(ep: EpisodeItem): AgendaShow {
+  const start = splitDateTime(ep.startTime);
+  const end = splitDateTime(ep.endTime);
+  return {
+    id: ep.id,
+    title: ep.title ?? '',
+    description: ep.notes ?? '',
+    date: start.date,
+    startTime: start.time,
+    endTime: end.time,
+    imageUrl: ep.image
+      ? `${env.POCKETBASE_URL}/api/files/${ep.collectionId}/${ep.id}/${ep.image}`
+      : null,
+    tags: ep.genres && ep.genres.length ? ep.genres : null,
+  };
 }
 
-export function writeBackUrls(
-  id: string,
-  uploads: { youtube?: string; mixcloud?: string }
-) {
-  return apiFetch(`/shows/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ uploads }),
-  });
+// Read the schedule from PocketBase `episodes`, same source/format as the
+// live-guard (see live-guard.ts). Returns dated occurrences newest-first.
+export async function listShows(): Promise<AgendaShow[]> {
+  const fields = 'id,title,notes,startTime,endTime,image,genres,collectionId';
+  const url =
+    `${env.POCKETBASE_URL}/api/collections/episodes/records` +
+    `?perPage=100&sort=-startTime&fields=${fields}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`PocketBase episodes error: ${res.status}`);
+  const body = (await res.json()) as { items: EpisodeItem[] };
+  return body.items.map(toAgendaShow);
 }

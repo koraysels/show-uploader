@@ -6,7 +6,7 @@ export const showsRouter = Router();
 
 showsRouter.get('/', async (_req, res) => {
   try {
-    const shows = await listShows({ status: 'all' });
+    const shows = await listShows();
     res.json(shows);
   } catch {
     res.status(502).json({ error: 'Failed to fetch shows' });
@@ -14,11 +14,17 @@ showsRouter.get('/', async (_req, res) => {
 });
 
 showsRouter.get('/meta', async (req, res) => {
+  const { title, description } = req.query as Record<string, string>;
   try {
-    const { title, description } = req.query as Record<string, string>;
     const meta = await generateMeta(title ?? '', description ?? '');
     res.json(meta);
-  } catch {
-    res.status(502).json({ error: 'Failed to generate metadata' });
+  } catch (err) {
+    // Never block the form on an AI hiccup — fall back to the show's own copy.
+    console.error('Groq meta generation failed, using fallback:', err);
+    res.json({
+      youtubeDescription: description || title || '',
+      mixcloudDescription: description || title || '',
+      tags: [],
+    });
   }
 });

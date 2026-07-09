@@ -13,6 +13,9 @@ const schema = z.object({
   YOUTUBE_CLIENT_ID: z.string().optional(),
   YOUTUBE_CLIENT_SECRET: z.string().optional(),
   YOUTUBE_REFRESH_TOKEN: z.string().optional(),
+  YOUTUBE_PRIVACY_STATUS: z.enum(['public', 'unlisted', 'private']).default('unlisted'),
+  // 'auto' = dry-run only when platform creds are missing/placeholder; 'true'/'false' force it.
+  PUBLISH_DRY_RUN: z.enum(['auto', 'true', 'false']).default('auto'),
   MIXCLOUD_ACCESS_TOKEN: z.string().optional(),
   ARCHIVE_VIDEO_BITRATE: z.string().default('4000k'),
   ARCHIVE_AUDIO_BITRATE: z.string().default('256k'),

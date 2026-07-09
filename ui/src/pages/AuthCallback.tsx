@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../auth/useAuth';
 
 export default function AuthCallback() {
@@ -9,8 +9,8 @@ export default function AuthCallback() {
   useEffect(() => {
     userManager
       .signinRedirectCallback()
-      .then(() => navigate('/', { replace: true }))
-      .catch(() => navigate('/', { replace: true }));
+      .then(() => navigate({ to: '/', replace: true }))
+      .catch(() => navigate({ to: '/', replace: true }));
   }, [userManager, navigate]);
 
   return null;

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { db } from '../db/client';
 import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs } from '../db/queries';
 import { uploadQueue } from '../queue';
-import { createUploadPresignedUrl } from '../services/s3';
+import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
+import { getLiveState } from '../services/live-guard';
 import { env } from '../env';
 
 export const uploadsRouter = Router();
@@ -65,36 +66,70 @@ uploadsRouter.post('/', async (req, res) => {
       )
     );
 
+    // Don't run heavy work (transcode/upload) while a show is on air — defer the
+    // jobs until the live window (plus buffer) clears. Fails open if PB is down.
+    const live = await getLiveState(new Date());
+    const delay = live.isLive && live.resumeAt ? Math.max(0, live.resumeAt.getTime() - Date.now()) : 0;
+    if (delay > 0) {
+      console.log(`Show live — deferring upload ${upload.id} jobs until ${live.resumeAt!.toISOString()}`);
+    }
+
     await Promise.all(
       jobs.map((job) =>
-        uploadQueue.add(job.platform, {
-          jobId: job.id,
-          uploadId: upload.id,
-          platform: job.platform,
-          videoS3Key: data.videoS3Key,
-          title: data.title,
-          description: data.description,
-          tags: data.tags,
-          imageUrl: data.imageUrl,
-          jingleS3Key,
-          includeJingle: data.includeJingle,
-          trimStart: data.trimStart ?? null,
-          trimEnd: data.trimEnd ?? null,
-        })
+        uploadQueue.add(
+          job.platform,
+          {
+            jobId: job.id,
+            uploadId: upload.id,
+            platform: job.platform,
+            videoS3Key: data.videoS3Key,
+            title: data.title,
+            description: data.description,
+            tags: data.tags,
+            imageUrl: data.imageUrl,
+            jingleS3Key,
+            includeJingle: data.includeJingle,
+            trimStart: data.trimStart ?? null,
+            trimEnd: data.trimEnd ?? null,
+          },
+          { delay }
+        )
       )
     );
 
-    res.status(201).json({ uploadId: upload.id, jobs });
+    res.status(201).json({
+      uploadId: upload.id,
+      jobs,
+      deferredUntil: delay > 0 ? live.resumeAt!.toISOString() : null,
+    });
   } catch (err) {
     console.error('Failed to create upload:', err);
     res.status(500).json({ error: 'Failed to create upload' });
   }
 });
 
+// Replace private S3 keys with browser-reachable presigned download URLs so the
+// UI can open the archived MP4 (bucket stays private).
+async function withDownloadUrls<T extends { archive_s3_key: string | null; jobs: { platform: string; result_url: string | null }[] }>(
+  upload: T
+): Promise<T & { archive_url: string | null }> {
+  const archive_url = upload.archive_s3_key
+    ? await createDownloadPresignedUrl(upload.archive_s3_key)
+    : null;
+  const jobs = await Promise.all(
+    upload.jobs.map(async (j) =>
+      j.platform === 'archive' && j.result_url
+        ? { ...j, result_url: await createDownloadPresignedUrl(j.result_url) }
+        : j
+    )
+  );
+  return { ...upload, archive_url, jobs };
+}
+
 uploadsRouter.get('/', async (_req, res) => {
   try {
     const uploads = await listUploadsWithJobs(db);
-    res.json(uploads);
+    res.json(await Promise.all(uploads.map(withDownloadUrls)));
   } catch {
     res.status(500).json({ error: 'Failed to list uploads' });
   }
@@ -104,7 +139,7 @@ uploadsRouter.get('/:id', async (req, res) => {
   try {
     const upload = await getUploadWithJobs(db, req.params.id);
     if (!upload) return res.status(404).json({ error: 'Not found' });
-    res.json(upload);
+    res.json(await withDownloadUrls(upload));
   } catch {
     res.status(500).json({ error: 'Failed to get upload' });
   }

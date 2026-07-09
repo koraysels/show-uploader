@@ -8,12 +8,17 @@ const JWKS = createRemoteJWKSet(
 
 export async function requireAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) {
+  // SSE (EventSource) can't set an Authorization header, so the events stream
+  // passes the token as a query param instead.
+  const token = header?.startsWith('Bearer ')
+    ? header.slice(7)
+    : typeof req.query.access_token === 'string'
+      ? req.query.access_token
+      : undefined;
+  if (!token) {
     res.status(401).json({ error: 'Missing token' });
     return;
   }
-
-  const token = header.slice(7);
   try {
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: `https://${env.ZITADEL_DOMAIN}`,

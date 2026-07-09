@@ -1,20 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { api, type UploadWithJobs } from '../api/client';
+import { useEffect, useRef } from 'react';
+import { useSearch } from '@tanstack/react-router';
+import { useUploads } from '../api/hooks';
 import JobProgress from '../components/JobProgress';
 
 export default function History() {
-  const [uploads, setUploads] = useState<UploadWithJobs[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
-  const highlight = searchParams.get('highlight');
+  const { data: uploads = [], isPending } = useUploads();
+  const { highlight } = useSearch({ strict: false }) as { highlight?: string };
   const highlightRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    api.listUploads().then(setUploads).finally(() => setLoading(false));
-    const interval = setInterval(() => api.listUploads().then(setUploads), 10000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => {
     if (highlight && highlightRef.current) {
@@ -22,7 +14,7 @@ export default function History() {
     }
   }, [highlight, uploads]);
 
-  if (loading) return <p className="text-gray-400 text-sm">Loading...</p>;
+  if (isPending) return <p className="text-gray-400 text-sm">Loading...</p>;
 
   if (uploads.length === 0) {
     return (
@@ -48,9 +40,7 @@ export default function History() {
             <p className="font-medium text-white">{upload.title}</p>
             <p className="text-xs text-gray-500 mt-0.5">
               {new Date(upload.created_at).toLocaleString()}
-              {upload.archive_s3_key && (
-                <span className="ml-2 text-gray-600">· archived</span>
-              )}
+              {upload.archive_s3_key && <span className="ml-2 text-gray-600">· archived</span>}
             </p>
           </div>
           {upload.jobs.length > 0 ? (
