@@ -8,7 +8,8 @@ showsRouter.get('/', async (_req, res) => {
   try {
     const shows = await listShows();
     res.json(shows);
-  } catch {
+  } catch (err) {
+    console.error('Failed to fetch shows:', err);
     res.status(502).json({ error: 'Failed to fetch shows' });
   }
 });

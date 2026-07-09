@@ -67,7 +67,7 @@ export async function getLiveState(
     `((status='scheduled' || status='live') && livestream_override!='skip'` +
     ` && endTime>='${lower}' && startTime<='${upper}')`;
   const url =
-    `${env.POCKETBASE_URL}/api/collections/episodes/records` +
+    `${env.POCKETBASE_INTERNAL_URL ?? env.POCKETBASE_URL}/api/collections/episodes/records` +
     `?perPage=200&fields=status,startTime,endTime,livestream_override&filter=${encodeURIComponent(filter)}`;
 
   try {

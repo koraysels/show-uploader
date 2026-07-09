@@ -19,6 +19,10 @@ const schema = z.object({
   ZITADEL_DOMAIN: z.string(),
   ZITADEL_CLIENT_ID: z.string(),
   POCKETBASE_URL: z.string().url().default('https://agenda.coming-soon.space'),
+  // Server-side PB calls use this; on a single host it points at the internal
+  // docker alias to avoid NAT hairpinning. Falls back to POCKETBASE_URL.
+  // Browser-facing file links always use the public POCKETBASE_URL.
+  POCKETBASE_INTERNAL_URL: z.string().url().optional(),
   LIVE_GUARD_BUFFER_MIN: z.coerce.number().default(15),
   // Superuser creds — needed at runtime to read draft archive records (gated).
   PB_SERVICE_EMAIL: z.string().optional(),

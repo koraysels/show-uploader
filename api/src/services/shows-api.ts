@@ -1,6 +1,9 @@
 import { env } from '../env';
 import type { ArchiveRecord } from '../pocketbase-types';
 
+// Server-side calls prefer the internal host (no NAT hairpin on a single box).
+const pbBase = env.POCKETBASE_INTERNAL_URL ?? env.POCKETBASE_URL;
+
 export type AgendaShow = {
   id: string;
   title: string;
@@ -48,7 +51,7 @@ async function authenticate(): Promise<string> {
   if (!env.PB_SERVICE_EMAIL || !env.PB_SERVICE_PASSWORD) {
     throw new Error('PB_SERVICE_EMAIL / PB_SERVICE_PASSWORD required to read archive drafts');
   }
-  const res = await fetch(`${env.POCKETBASE_URL}/api/collections/_superusers/auth-with-password`, {
+  const res = await fetch(`${pbBase}/api/collections/_superusers/auth-with-password`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ identity: env.PB_SERVICE_EMAIL, password: env.PB_SERVICE_PASSWORD }),
@@ -63,7 +66,7 @@ async function fetchDrafts(token: string): Promise<Response> {
   const filter = `(status='draft')`;
   const fields = 'id,title,notes,startTime,endTime,image,genres,collectionId';
   const url =
-    `${env.POCKETBASE_URL}/api/collections/archive/records` +
+    `${pbBase}/api/collections/archive/records` +
     `?perPage=200&sort=-startTime&fields=${fields}&filter=${encodeURIComponent(filter)}`;
   return fetch(url, { headers: { Authorization: token } });
 }
