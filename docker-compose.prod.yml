@@ -1,0 +1,113 @@
+# Production stack for netcup-comingsoon (Komodo + Traefik).
+# App:   https://uploader.coming-soon.space
+# Minio: https://minio-uploader.coming-soon.space  (S3 API, presigned URLs)
+#
+# Requires the external Traefik network `reverse-proxy` and cert resolver
+# `myresolver` (same as the other coming-soon stacks). Inter-service traffic
+# uses the isolated `default` network; only api + minio join reverse-proxy.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      args:
+        VITE_ZITADEL_DOMAIN: ${ZITADEL_DOMAIN}
+        VITE_ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID}
+        VITE_POCKETBASE_URL: ${POCKETBASE_URL}
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_PUBLIC_ENDPOINT=https://minio-uploader.coming-soon.space
+    depends_on:
+      - redis
+      - minio
+    restart: unless-stopped
+    networks:
+      - default
+      - reverse-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=reverse-proxy
+      - traefik.http.routers.show-uploader.rule=Host(`uploader.coming-soon.space`)
+      - traefik.http.routers.show-uploader.entrypoints=websecure
+      - traefik.http.routers.show-uploader.tls.certresolver=myresolver
+      - traefik.http.services.show-uploader.loadbalancer.server.port=3000
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://minio:9000
+    depends_on:
+      - redis
+      - minio
+    restart: unless-stopped
+    networks:
+      - default
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - default
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    env_file: .env
+    environment:
+      - MINIO_ROOT_USER=${S3_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY}
+    volumes:
+      - ./data/minio:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+      - reverse-proxy
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=reverse-proxy
+      - traefik.http.routers.show-uploader-minio.rule=Host(`minio-uploader.coming-soon.space`)
+      - traefik.http.routers.show-uploader-minio.entrypoints=websecure
+      - traefik.http.routers.show-uploader-minio.tls.certresolver=myresolver
+      - traefik.http.services.show-uploader-minio.loadbalancer.server.port=9000
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    env_file: .env
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set local http://minio:9000 $${S3_ACCESS_KEY} $${S3_SECRET_KEY};
+        mc mb --ignore-existing local/$${S3_BUCKET};
+        mc mb --ignore-existing local/$${S3_BUCKET}/uploads;
+        mc mb --ignore-existing local/$${S3_BUCKET}/archive;
+        mc mb --ignore-existing local/$${S3_BUCKET}/jingles;
+        mc mb --ignore-existing local/$${S3_BUCKET}/images;
+        echo 'Minio bucket and folders ready.';
+      "
+    restart: "no"
+    networks:
+      - default
+
+volumes:
+  redis_data:
+
+networks:
+  default:
+  reverse-proxy:
+    external: true

@@ -6,6 +6,14 @@ COPY ui/package.json ui/
 RUN npm install --workspace=@show-uploader/api --workspace=@show-uploader/ui
 
 FROM base AS ui-builder
+# Vite bakes VITE_* into the bundle at build time. ui/.env is gitignored, so on
+# a clean server build these must arrive as build args (from the stack .env).
+ARG VITE_ZITADEL_DOMAIN
+ARG VITE_ZITADEL_CLIENT_ID
+ARG VITE_POCKETBASE_URL
+ENV VITE_ZITADEL_DOMAIN=$VITE_ZITADEL_DOMAIN \
+    VITE_ZITADEL_CLIENT_ID=$VITE_ZITADEL_CLIENT_ID \
+    VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
 COPY ui/ ui/
 RUN npm run build --workspace=@show-uploader/ui
 
