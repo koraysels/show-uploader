@@ -8,6 +8,9 @@ export const userManager = new UserManager({
   scope: 'openid profile email urn:zitadel:iam:org:project:roles',
   response_type: 'code',
   automaticSilentRenew: true,
+  // Zitadel omits name/email from the ID token; fetch them from the userinfo
+  // endpoint so user.profile has a display name (header chip, presence).
+  loadUserInfo: true,
 });
 
 type AuthContextValue = {
