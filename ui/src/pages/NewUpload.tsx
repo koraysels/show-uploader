@@ -6,6 +6,16 @@ import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import TrimFields from '../components/TrimFields';
 import { useUpload } from '../upload/UploadProvider';
+import { usePresence } from '../presence/PresenceProvider';
+import { shortName } from '../components/PresenceRoster';
+
+function timeAgo(iso: string): string {
+  const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  return `${Math.round(mins / 60)}h ago`;
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -39,6 +49,24 @@ export default function NewUpload() {
   const claim = useClaimPending();
   const createUpload = useCreateUpload();
   const upload = useUpload();
+  const presence = usePresence();
+
+  // Soft claim: opening auto-claims the show, unless someone else holds it — then
+  // we show an interstitial and only claim (steal) once the user opts to open anyway.
+  const existingClaim = showId ? presence.claims[showId] : undefined;
+  const heldByOther = !!existingClaim && existingClaim.userSub !== presence.myUserId;
+  const [ackSteal, setAckSteal] = useState(false);
+  const proceeding = !heldByOther || ackSteal;
+
+  useEffect(() => {
+    setAckSteal(false);
+  }, [showId]);
+
+  useEffect(() => {
+    if (!showId || !proceeding) return;
+    presence.hold(showId);
+    return () => presence.unhold(showId);
+  }, [showId, proceeding]);
 
   useEffect(() => {
     if (upload.state.status === 'done' && upload.state.key) {
@@ -106,9 +134,35 @@ export default function NewUpload() {
     );
   }
 
+  if (heldByOther && !ackSteal) {
+    return (
+      <div className="mx-auto max-w-md space-y-5 border border-ink bg-surface p-6">
+        <div>
+          <p className="text-[11px] lowercase tracking-wide text-faint">already being processed</p>
+          <h1 className="mt-2 text-xl font-semibold lowercase text-ink">{selectedShow.title}</h1>
+        </div>
+        <p className="text-sm text-muted">
+          <span className="text-ink">{shortName(existingClaim!.userName)}</span> is already working on this
+          {' '}({timeAgo(existingClaim!.claimedAt)}). Two people on the same show usually means duplicate work.
+        </p>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setAckSteal(true)} className="btn-primary flex-1 py-2.5">
+            open anyway
+          </button>
+          <Link to="/" className="btn-ghost flex-1 py-2.5 text-center">back</Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <FullPageDropzone>
       <div className="mx-auto max-w-xl space-y-8">
+        {existingClaim && existingClaim.userSub === presence.myUserId && ackSteal && (
+          <p className="border border-ink bg-paper px-3 py-2 text-xs lowercase text-muted">
+            you took this over — it's now claimed by you
+          </p>
+        )}
         <div>
           <Link to="/" className="text-sm lowercase text-muted hover:text-ink">← to process</Link>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{selectedShow.title}</h1>

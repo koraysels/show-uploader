@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/client';
-import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs } from '../db/queries';
+import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs, releaseClaimForShow } from '../db/queries';
+import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { getLiveState } from '../services/live-guard';
@@ -96,6 +97,11 @@ uploadsRouter.post('/', async (req, res) => {
         )
       )
     );
+
+    // The show is now published — free its claim so it drops off everyone's
+    // "being processed" list immediately.
+    await releaseClaimForShow(db, data.showId);
+    void presenceHub.broadcastClaims();
 
     res.status(201).json({
       uploadId: upload.id,

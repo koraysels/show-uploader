@@ -13,6 +13,7 @@ import Shows from './pages/Shows';
 import History from './pages/History';
 import Archive from './pages/Archive';
 import { UploadIndicator } from './components/Dropzone';
+import { PresenceRoster } from './components/PresenceRoster';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
 
@@ -50,7 +51,8 @@ function AuthedLayout() {
               archive
             </Link>
           </nav>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-5">
+            <PresenceRoster />
             <UploadIndicator />
           </div>
         </div>

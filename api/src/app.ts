@@ -6,6 +6,8 @@ import { uploadsRouter } from './routes/uploads';
 import { eventsRouter } from './routes/events';
 import { multipartRouter } from './routes/multipart';
 import { watcherRouter } from './routes/watcher';
+import { presenceRouter } from './routes/presence';
+import { presenceHub } from './services/presence-hub';
 import { requireAuth } from './middleware/requireAuth';
 
 export function createApp() {
@@ -24,6 +26,9 @@ export function createApp() {
   app.use('/api/uploads/multipart', requireAuth, multipartRouter);
   app.use('/api/uploads', requireAuth, uploadsRouter);
   app.use('/api/uploads', requireAuth, eventsRouter);
+  app.use('/api/presence', requireAuth, presenceRouter);
+
+  presenceHub.startSweeper();
 
   // Public static UI + SPA fallback
   const uiDist = path.join(__dirname, '..', '..', 'ui', 'dist');

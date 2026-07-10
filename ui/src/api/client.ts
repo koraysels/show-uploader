@@ -125,4 +125,35 @@ export const api = {
 
   claimPendingVideo: (id: string) =>
     apiFetch(`/api/watcher/pending/${id}`, { method: 'DELETE' }),
+
+  // Presence / soft-claims
+  claimShow: (showId: string) =>
+    apiFetch('/api/presence/claim', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ showId }),
+    }),
+  heartbeatShow: (showId: string) =>
+    apiFetch('/api/presence/heartbeat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ showId }),
+    }),
+  releaseShow: (showId: string) =>
+    apiFetch('/api/presence/claim', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ showId }),
+    }),
 };
+
+// EventSource can't set an Authorization header, so the presence stream takes
+// the token as a query param (same pattern as the upload events stream).
+export async function presenceStreamUrl(): Promise<string | null> {
+  const user = await userManager.getUser();
+  if (!user?.access_token) return null;
+  return `/api/presence/stream?access_token=${encodeURIComponent(user.access_token)}`;
+}
+
+export type OnlineUser = { sub: string; name: string };
+export type ClaimView = { showId: string; userSub: string; userName: string; claimedAt: string };

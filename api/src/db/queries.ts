@@ -113,3 +113,62 @@ export function getPlatformJobsForUpload(db: Sql, uploadId: string) {
     SELECT * FROM platform_jobs WHERE upload_id = ${uploadId}
   `;
 }
+
+export type ShowClaim = {
+  show_id: string;
+  user_sub: string;
+  user_name: string;
+  claimed_at: Date;
+  last_seen_at: Date;
+};
+
+// Claim (or steal) a show for a user. A conflicting claim by anyone is
+// overwritten — claims are soft/advisory, so "open anyway" just re-claims.
+export function upsertClaim(db: Sql, showId: string, userSub: string, userName: string) {
+  return db<ShowClaim[]>`
+    INSERT INTO show_claims (show_id, user_sub, user_name, claimed_at, last_seen_at)
+    VALUES (${showId}, ${userSub}, ${userName}, NOW(), NOW())
+    ON CONFLICT (show_id) DO UPDATE SET
+      user_sub = EXCLUDED.user_sub,
+      user_name = EXCLUDED.user_name,
+      claimed_at = CASE
+        WHEN show_claims.user_sub = EXCLUDED.user_sub THEN show_claims.claimed_at
+        ELSE NOW()
+      END,
+      last_seen_at = NOW()
+    RETURNING *
+  `.then((rows) => rows[0]);
+}
+
+// Refresh last_seen only while the claim is still held by this user (a steal
+// by someone else must not be kept alive by the previous owner's heartbeat).
+export function heartbeatClaim(db: Sql, showId: string, userSub: string) {
+  return db`
+    UPDATE show_claims SET last_seen_at = NOW()
+    WHERE show_id = ${showId} AND user_sub = ${userSub}
+  `;
+}
+
+// Release only if still owned by this user.
+export function releaseClaim(db: Sql, showId: string, userSub: string) {
+  return db`
+    DELETE FROM show_claims WHERE show_id = ${showId} AND user_sub = ${userSub}
+  `;
+}
+
+// Publish-time release: drop the claim regardless of owner.
+export function releaseClaimForShow(db: Sql, showId: string) {
+  return db`DELETE FROM show_claims WHERE show_id = ${showId}`;
+}
+
+// Sweep claims with no heartbeat for `olderThanMs`; returns the freed show_ids.
+export function releaseStaleClaims(db: Sql, olderThanMs: number) {
+  const cutoff = new Date(Date.now() - olderThanMs);
+  return db<{ show_id: string }[]>`
+    DELETE FROM show_claims WHERE last_seen_at < ${cutoff} RETURNING show_id
+  `;
+}
+
+export function listClaims(db: Sql) {
+  return db<ShowClaim[]>`SELECT * FROM show_claims`;
+}

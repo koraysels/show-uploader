@@ -2,6 +2,18 @@ import type { Request, Response, NextFunction } from 'express';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { env } from '../env';
 
+// The authenticated identity, attached to every request that clears requireAuth.
+export type AuthUser = { sub: string; name: string };
+
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      user?: AuthUser;
+    }
+  }
+}
+
 const JWKS = createRemoteJWKSet(
   new URL(`https://${env.ZITADEL_DOMAIN}/oauth/v2/keys`)
 );
@@ -12,7 +24,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // passes the token as a query param instead.
   const token = header?.startsWith('Bearer ')
     ? header.slice(7)
-    : typeof req.query.access_token === 'string'
+    : typeof req.query?.access_token === 'string'
       ? req.query.access_token
       : undefined;
   if (!token) {
@@ -30,6 +42,13 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       res.status(403).json({ error: 'Access not granted' });
       return;
     }
+
+    const name =
+      (payload.name as string) ||
+      (payload.preferred_username as string) ||
+      (payload.email as string) ||
+      payload.sub!;
+    req.user = { sub: payload.sub!, name };
 
     next();
   } catch {

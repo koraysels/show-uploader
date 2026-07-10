@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import {
   createColumnHelper,
@@ -10,29 +10,53 @@ import {
   type SortingState,
 } from '@tanstack/react-table';
 import { useShows } from '../api/hooks';
-import type { AgendaShow } from '../api/client';
+import type { AgendaShow, ClaimView } from '../api/client';
+import { usePresence } from '../presence/PresenceProvider';
+import { shortName } from '../components/PresenceRoster';
 
 const col = createColumnHelper<AgendaShow>();
 
-const columns = [
-  col.accessor('date', { header: 'Date', cell: (c) => <span className="font-mono text-[13px] text-muted">{c.getValue()}</span> }),
-  col.accessor('startTime', { header: 'Time', cell: (c) => <span className="font-mono text-[13px] text-muted">{c.getValue()}</span> }),
-  col.accessor('title', {
-    header: 'Show',
-    cell: (c) => <span className="font-medium text-ink">{c.getValue()}</span>,
-  }),
-  col.accessor((s) => s.tags?.length ?? 0, {
-    id: 'tags',
-    header: 'Tags',
-    cell: (c) => <span className="text-muted tabular-nums">{c.getValue() || '—'}</span>,
-  }),
-];
+function ClaimBadge({ claim, mine }: { claim: ClaimView | undefined; mine: boolean }) {
+  if (!claim) return <span className="text-faint">—</span>;
+  if (mine) return <span className="lowercase text-ok">you</span>;
+  return (
+    <span className="inline-flex items-center gap-1 lowercase text-muted" title={`claimed by ${claim.userName}`}>
+      <span aria-hidden>⚠</span> {shortName(claim.userName)}
+    </span>
+  );
+}
 
 export default function Shows() {
   const navigate = useNavigate();
   const { data: shows = [], isLoading, isError } = useShows();
+  const { claims, myUserId } = usePresence();
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [filter, setFilter] = useState('');
+
+  const columns = useMemo(
+    () => [
+      col.accessor('date', { header: 'Date', cell: (c) => <span className="font-mono text-[13px] text-muted">{c.getValue()}</span> }),
+      col.accessor('startTime', { header: 'Time', cell: (c) => <span className="font-mono text-[13px] text-muted">{c.getValue()}</span> }),
+      col.accessor('title', {
+        header: 'Show',
+        cell: (c) => <span className="font-medium text-ink">{c.getValue()}</span>,
+      }),
+      col.accessor((s) => s.tags?.length ?? 0, {
+        id: 'tags',
+        header: 'Tags',
+        cell: (c) => <span className="text-muted tabular-nums">{c.getValue() || '—'}</span>,
+      }),
+      col.accessor((s) => (claims[s.id] ? (claims[s.id].userSub === myUserId ? 0 : 1) : 2), {
+        id: 'status',
+        header: 'Who',
+        cell: (c) => {
+          const claim = claims[c.row.original.id];
+          return <ClaimBadge claim={claim} mine={!!claim && claim.userSub === myUserId} />;
+        },
+      }),
+    ],
+    [claims, myUserId]
+  );
 
   const table = useReactTable({
     data: shows,
