@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  CreateBucketCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
   ListPartsCommand,
@@ -31,6 +32,28 @@ const presignS3 = new S3Client({
   credentials,
   forcePathStyle: true,
 });
+
+// Create the bucket on startup so no separate one-shot init container is needed
+// (a lingering exited init container reads as "unhealthy" in orchestrators).
+// Idempotent + best-effort: retries while minio warms up, never throws.
+export async function ensureBucket(): Promise<void> {
+  if (!env.S3_BUCKET) return;
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    try {
+      await s3.send(new CreateBucketCommand({ Bucket: env.S3_BUCKET }));
+      console.log(`Ensured S3 bucket: ${env.S3_BUCKET}`);
+      return;
+    } catch (err) {
+      const name = (err as { name?: string })?.name ?? '';
+      if (name === 'BucketAlreadyOwnedByYou' || name === 'BucketAlreadyExists') return;
+      if (attempt === 5) {
+        console.warn(`ensureBucket: giving up — ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+      await new Promise((r) => setTimeout(r, 2000)); // minio may not be ready yet
+    }
+  }
+}
 
 export async function createUploadPresignedUrl(key: string, contentType: string) {
   if (!env.S3_ENDPOINT || !env.S3_BUCKET) {
