@@ -16,6 +16,30 @@ import { shortName } from '../components/PresenceRoster';
 
 const col = createColumnHelper<AgendaShow>();
 
+const SHORT: Record<string, string> = { YouTube: 'YT', MixCloud: 'MC' };
+
+function LinksCell({ show }: { show: AgendaShow }) {
+  const links = show.mediaLinks ?? [];
+  if (!links.length) return <span className="text-faint">—</span>;
+  return (
+    <div className="flex gap-1">
+      {links.map((l) => (
+        <a
+          key={l.label + l.url}
+          href={l.url}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title={l.url}
+          className="border border-line px-1.5 py-0.5 text-[11px] font-medium lowercase text-muted hover:border-ink hover:text-ink"
+        >
+          {SHORT[l.label] ?? l.label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
 function ClaimBadge({ claim, mine }: { claim: ClaimView | undefined; mine: boolean }) {
   if (!claim) return <span className="text-faint">—</span>;
   if (mine) return <span className="lowercase text-ok">you</span>;
@@ -40,6 +64,11 @@ export default function Shows() {
       col.accessor('title', {
         header: 'Show',
         cell: (c) => <span className="font-medium text-ink">{c.getValue()}</span>,
+      }),
+      col.accessor((s) => s.mediaLinks?.length ?? 0, {
+        id: 'links',
+        header: 'Links',
+        cell: (c) => <LinksCell show={c.row.original} />,
       }),
       col.accessor((s) => s.tags?.length ?? 0, {
         id: 'tags',

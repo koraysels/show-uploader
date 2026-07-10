@@ -13,6 +13,9 @@ import { shortName } from '../components/PresenceRoster';
 // `<base>/#/archive/<recordId>`, and the record id is the same id we use as showId.
 const AGENDA_BASE = import.meta.env.VITE_POCKETBASE_URL ?? 'https://agenda.coming-soon.space';
 
+const ALL_PLATFORMS = ['youtube', 'mixcloud'];
+const LABEL_TO_PLATFORM: Record<string, string> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
+
 function timeAgo(iso: string): string {
   const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
   if (secs < 60) return 'just now';
@@ -44,6 +47,7 @@ export default function NewUpload() {
   const [videoS3Key, setVideoS3Key] = useState('');
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
+  const [includeArchive, setIncludeArchive] = useState(true);
   const [trimStart, setTrimStart] = useState('');
   const [trimEnd, setTrimEnd] = useState('');
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
@@ -79,6 +83,10 @@ export default function NewUpload() {
     }
   }, [upload.state.status, upload.state.key]);
 
+  // Platforms already published on this record (YouTube/MixCloud), from mediaLinks.
+  const existingLinks = selectedShow?.mediaLinks ?? [];
+  const existingPlatforms = existingLinks.map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
+
   useEffect(() => {
     if (!selectedShow) return;
     setTitle(selectedShow.title);
@@ -87,6 +95,13 @@ export default function NewUpload() {
     setImageUrl(selectedShow.imageUrl ?? '');
     setVideoS3Key('');
     setSelectedPendingId(null);
+
+    // Re-publish smarts: pre-select only the platform(s) not yet up, and default
+    // archiving OFF when the show already has links (likely already archived).
+    const already = (selectedShow.mediaLinks ?? []).map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
+    const missing = ALL_PLATFORMS.filter((p) => !already.includes(p));
+    setPlatforms(missing.length ? missing : ALL_PLATFORMS);
+    setIncludeArchive(already.length === 0);
   }, [selectedShow?.id]);
 
   // Seed the description from AI, but NOT tags — good tags need the audio
@@ -114,6 +129,7 @@ export default function NewUpload() {
         videoS3Key,
         platforms,
         includeJingle,
+        includeArchive,
         trimStart: trimStart || null,
         trimEnd: trimEnd || null,
       },
@@ -240,11 +256,31 @@ export default function NewUpload() {
         </Section>
 
         <Section title="Publish to">
+          {existingLinks.length > 0 && (
+            <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs lowercase text-muted">
+              <span className="text-faint">already published:</span>
+              {existingLinks.map((l) => (
+                <a
+                  key={l.label + l.url}
+                  href={l.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-ink underline decoration-line underline-offset-2 hover:decoration-ink"
+                >
+                  {l.label} ↗
+                </a>
+              ))}
+              <span className="text-faint">— pre-selected the missing platform, archiving off.</span>
+            </p>
+          )}
           <PlatformSelector
             platforms={platforms}
             includeJingle={includeJingle}
+            includeArchive={includeArchive}
+            existingPlatforms={existingPlatforms}
             onChange={setPlatforms}
             onJingleChange={setIncludeJingle}
+            onArchiveChange={setIncludeArchive}
           />
         </Section>
 

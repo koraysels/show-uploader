@@ -34,6 +34,10 @@ export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
     await finalizeArchiveRecord(row.show_id, { title, notes: description, mediaLinks });
   }
 
+  // Skip the archive transcode when the operator opted out (e.g. adding a second
+  // platform to a show that's already archived). PB write-back above still runs.
+  if (payload.includeArchive === false) return;
+
   const archiveJobId = await createArchiveJobRecord(uploadId);
   if (!archiveJobId) return;
 

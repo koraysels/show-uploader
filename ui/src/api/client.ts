@@ -1,4 +1,7 @@
+import type { User } from 'oidc-client-ts';
 import { userManager } from '../auth/AuthProvider';
+
+export type MediaLink = { label: string; type: string; url: string };
 
 export type AgendaShow = {
   id: string;
@@ -9,6 +12,7 @@ export type AgendaShow = {
   endTime: string;
   imageUrl: string | null;
   tags: string[] | null;
+  mediaLinks: MediaLink[];
 };
 
 export type GeneratedMeta = {
@@ -40,15 +44,34 @@ export type UploadWithJobs = {
   jobs: PlatformJob[];
 };
 
+async function requestWith<T>(path: string, token: string | undefined, options?: RequestInit): Promise<Response> {
+  const headers: Record<string, string> = { ...(options?.headers as Record<string, string>) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return fetch(path, { ...options, headers });
+}
+
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const user = await userManager.getUser();
-  const headers: Record<string, string> = {
-    ...(options?.headers as Record<string, string>),
-  };
-  if (user?.access_token) {
-    headers['Authorization'] = `Bearer ${user.access_token}`;
+  let res = await requestWith(path, user?.access_token, options);
+
+  // Access token expired mid-session → try a silent renew and retry once; if
+  // that fails, bounce to the login page rather than dead-ending on a 401.
+  if (res.status === 401) {
+    let renewed: User | null = null;
+    try {
+      renewed = await userManager.signinSilent();
+    } catch {
+      renewed = null;
+    }
+    if (renewed?.access_token) {
+      res = await requestWith(path, renewed.access_token, options);
+    }
+    if (res.status === 401) {
+      await userManager.signinRedirect();
+      throw new Error('Session expired');
+    }
   }
-  const res = await fetch(path, { ...options, headers });
+
   if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -107,6 +130,7 @@ export const api = {
     videoS3Key: string;
     platforms: string[];
     includeJingle: boolean;
+    includeArchive: boolean;
     trimStart?: string | null;
     trimEnd?: string | null;
   }) =>

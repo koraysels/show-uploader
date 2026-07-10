@@ -1,8 +1,11 @@
 type Props = {
   platforms: string[];
   includeJingle: boolean;
+  includeArchive: boolean;
+  existingPlatforms: string[];
   onChange: (platforms: string[]) => void;
   onJingleChange: (v: boolean) => void;
+  onArchiveChange: (v: boolean) => void;
 };
 
 const PLATFORMS = [
@@ -10,7 +13,15 @@ const PLATFORMS = [
   { id: 'mixcloud', label: 'MixCloud' },
 ];
 
-export default function PlatformSelector({ platforms, includeJingle, onChange, onJingleChange }: Props) {
+export default function PlatformSelector({
+  platforms,
+  includeJingle,
+  includeArchive,
+  existingPlatforms,
+  onChange,
+  onJingleChange,
+  onArchiveChange,
+}: Props) {
   const toggle = (id: string) => {
     onChange(platforms.includes(id) ? platforms.filter((p) => p !== id) : [...platforms, id]);
   };
@@ -20,6 +31,7 @@ export default function PlatformSelector({ platforms, includeJingle, onChange, o
       <div className="flex gap-2.5">
         {PLATFORMS.map((p) => {
           const on = platforms.includes(p.id);
+          const already = existingPlatforms.includes(p.id);
           return (
             <button
               key={p.id}
@@ -41,6 +53,9 @@ export default function PlatformSelector({ platforms, includeJingle, onChange, o
                 ✓
               </span>
               {p.label}
+              {already && (
+                <span className={`text-[10px] lowercase ${on ? 'text-white/70' : 'text-faint'}`}>· already up</span>
+              )}
             </button>
           );
         })}
@@ -56,6 +71,16 @@ export default function PlatformSelector({ platforms, includeJingle, onChange, o
           Prepend jingle to the MixCloud audio
         </label>
       )}
+      <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
+        <input
+          type="checkbox"
+          checked={includeArchive}
+          onChange={(e) => onArchiveChange(e.target.checked)}
+          className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
+        />
+        Archive an MP4 copy to storage
+        <span className="text-xs text-faint">— off when the show is already archived</span>
+      </label>
     </div>
   );
 }

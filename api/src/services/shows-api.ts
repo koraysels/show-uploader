@@ -13,6 +13,9 @@ export type AgendaShow = {
   endTime: string;
   imageUrl: string | null;
   tags: string[] | null;
+  // Links already on the record (YouTube/MixCloud), so the UI can show what's
+  // published and pre-select only the missing platform on a re-publish.
+  mediaLinks: MediaLink[];
 };
 
 // PocketBase serialises datetimes as "YYYY-MM-DD HH:MM:SS.sssZ".
@@ -23,7 +26,7 @@ function splitDateTime(ts: string | undefined): { date: string; time: string } {
 
 type ArchiveItem = Pick<
   ArchiveRecord,
-  'id' | 'title' | 'notes' | 'startTime' | 'endTime' | 'image' | 'genres'
+  'id' | 'title' | 'notes' | 'startTime' | 'endTime' | 'image' | 'genres' | 'mediaLinks'
 > & { collectionId: string };
 
 export function toAgendaShow(rec: ArchiveItem): AgendaShow {
@@ -40,6 +43,7 @@ export function toAgendaShow(rec: ArchiveItem): AgendaShow {
       ? `${env.POCKETBASE_URL}/api/files/${rec.collectionId}/${rec.id}/${rec.image}`
       : null,
     tags: rec.genres && rec.genres.length ? rec.genres : null,
+    mediaLinks: Array.isArray(rec.mediaLinks) ? (rec.mediaLinks as MediaLink[]) : [],
   };
 }
 
@@ -64,7 +68,7 @@ async function authenticate(): Promise<string> {
 
 async function fetchDrafts(token: string): Promise<Response> {
   const filter = `(status='draft')`;
-  const fields = 'id,title,notes,startTime,endTime,image,genres,collectionId';
+  const fields = 'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId';
   const url =
     `${pbBase}/api/collections/archive/records` +
     `?perPage=200&sort=-startTime&fields=${fields}&filter=${encodeURIComponent(filter)}`;

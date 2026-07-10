@@ -22,6 +22,9 @@ const CreateUploadSchema = z.object({
   videoS3Key: z.string().min(1),
   platforms: z.array(z.enum(['youtube', 'mixcloud'])).min(1),
   includeJingle: z.boolean().default(true),
+  // Archive a transcoded MP4 copy to storage after publishing. Default on; turned
+  // off when adding a platform to an already-archived show (skips the transcode).
+  includeArchive: z.boolean().default(true),
   trimStart: TimeCode,
   trimEnd: TimeCode,
 });
@@ -90,6 +93,7 @@ uploadsRouter.post('/', async (req, res) => {
             imageUrl: data.imageUrl,
             jingleS3Key,
             includeJingle: data.includeJingle,
+            includeArchive: data.includeArchive,
             trimStart: data.trimStart ?? null,
             trimEnd: data.trimEnd ?? null,
           },

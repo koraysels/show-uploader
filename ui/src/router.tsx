@@ -32,6 +32,23 @@ function AuthedLayout() {
   const navLink = 'px-3 py-1.5 text-sm lowercase text-muted hover:text-ink transition-colors';
   const navActive = 'px-3 py-1.5 text-sm lowercase text-paper bg-ink';
 
+  const displayName =
+    (user.profile.name as string) ||
+    (user.profile.preferred_username as string) ||
+    (user.profile.email as string) ||
+    'account';
+
+  const handleLogout = async () => {
+    // Proper OIDC end-session; fall back to a local clear + re-login if the
+    // instance has no post-logout redirect configured.
+    try {
+      await userManager.signoutRedirect();
+    } catch {
+      await userManager.removeUser();
+      void userManager.signinRedirect();
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-ink bg-paper/90 backdrop-blur">
@@ -54,6 +71,18 @@ function AuthedLayout() {
           <div className="ml-auto flex items-center gap-5">
             <PresenceRoster />
             <UploadIndicator />
+            <div className="flex items-center gap-2 border-l border-line pl-4">
+              <span className="max-w-[140px] truncate text-xs lowercase text-muted" title={displayName}>
+                {displayName}
+              </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+              >
+                log out
+              </button>
+            </div>
           </div>
         </div>
       </header>
