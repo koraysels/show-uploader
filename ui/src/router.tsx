@@ -50,7 +50,7 @@ function AuthedLayout() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 border-b border-ink bg-paper/90 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-4xl items-center gap-6 px-6">
+        <div className="mx-auto flex min-h-16 max-w-4xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:gap-x-6 sm:px-6">
           <Link to="/" className="flex items-center gap-2 text-base font-semibold lowercase tracking-tight text-ink">
             <span className="h-2.5 w-2.5 bg-ink" aria-hidden />
             show uploader
@@ -66,7 +66,7 @@ function AuthedLayout() {
               archive
             </Link>
           </nav>
-          <div className="ml-auto flex items-center gap-5">
+          <div className="ml-auto flex items-center gap-3 sm:gap-5">
             <PresenceRoster />
             <UploadIndicator />
             <div className="flex items-center gap-2 border-l border-line pl-4">
@@ -84,7 +84,7 @@ function AuthedLayout() {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-4xl px-6 py-10">
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
         <Outlet />
       </main>
     </div>

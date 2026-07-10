@@ -63,8 +63,8 @@ export default function Archive() {
       {archived.length === 0 ? (
         <p className="text-sm text-muted">no archived files yet.</p>
       ) : (
-        <div className="overflow-hidden border border-ink bg-surface">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto border border-ink bg-surface">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-ink text-left">

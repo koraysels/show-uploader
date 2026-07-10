@@ -120,13 +120,13 @@ export default function Shows() {
       ) : isError ? (
         <p className="text-sm text-danger">Couldn't load shows. Check the schedule connection.</p>
       ) : (
-        <div className="overflow-hidden border border-ink bg-surface">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto border border-ink bg-surface">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id} className="border-b border-ink text-left">
                   {hg.headers.map((h) => (
-                    <th key={h.id} className="px-5 py-3 font-medium">
+                    <th key={h.id} className="px-4 py-3 font-medium sm:px-5">
                       <button
                         type="button"
                         onClick={h.column.getToggleSortingHandler()}
@@ -150,7 +150,7 @@ export default function Shows() {
                   className="group cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-accent-soft"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="whitespace-nowrap px-5 py-3.5">
+                    <td key={cell.id} className="whitespace-nowrap px-4 py-3.5 sm:px-5">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
