@@ -52,7 +52,16 @@ function AuthedLayout() {
       <header className="sticky top-0 z-30 border-b border-ink bg-paper/90 backdrop-blur">
         <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:gap-x-6 sm:px-6">
           <Link to="/" className="flex items-center gap-2 text-base font-semibold lowercase tracking-tight text-ink">
-            <span className="h-2.5 w-2.5 bg-ink" aria-hidden />
+            <svg viewBox="0 0 32 32" className="h-5 w-5 text-ink" fill="currentColor" aria-hidden>
+              <path d="M16 8 L21 14 H17.5 V19 H14.5 V14 H11 Z" />
+              <g opacity="0.9">
+                <rect x="8" y="22" width="2" height="3" rx="1" />
+                <rect x="12" y="21" width="2" height="5" rx="1" />
+                <rect x="16" y="22.5" width="2" height="2" rx="1" />
+                <rect x="20" y="20" width="2" height="6" rx="1" />
+                <rect x="24" y="22" width="2" height="3" rx="1" />
+              </g>
+            </svg>
             show uploader
           </Link>
           <nav className="flex items-center gap-0.5">
