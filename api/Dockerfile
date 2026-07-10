@@ -1,9 +1,13 @@
 FROM node:20-alpine AS base
+RUN corepack enable
 WORKDIR /app
-COPY package.json ./
+# Copy the lockfile + every workspace manifest so pnpm can resolve the graph.
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY api/package.json api/
+COPY worker/package.json worker/
 COPY ui/package.json ui/
-RUN npm install --workspace=@show-uploader/api --workspace=@show-uploader/ui
+COPY watcher/package.json watcher/
+RUN pnpm install --frozen-lockfile
 
 FROM base AS ui-builder
 # Vite bakes VITE_* into the bundle at build time. ui/.env is gitignored, so on
@@ -15,18 +19,22 @@ ENV VITE_ZITADEL_DOMAIN=$VITE_ZITADEL_DOMAIN \
     VITE_ZITADEL_CLIENT_ID=$VITE_ZITADEL_CLIENT_ID \
     VITE_POCKETBASE_URL=$VITE_POCKETBASE_URL
 COPY ui/ ui/
-RUN npm run build --workspace=@show-uploader/ui
+RUN pnpm --filter @show-uploader/ui build
 
 FROM base AS api-builder
 COPY api/src/ api/src/
 COPY api/tsconfig.json api/
-RUN npm run build --workspace=@show-uploader/api
+RUN pnpm --filter @show-uploader/api build
 
 FROM node:20-alpine
+RUN corepack enable
 WORKDIR /app
-COPY package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY api/package.json api/
-RUN npm install --workspace=@show-uploader/api --omit=dev
+COPY worker/package.json worker/
+COPY ui/package.json ui/
+COPY watcher/package.json watcher/
+RUN pnpm install --frozen-lockfile --prod --filter @show-uploader/api
 COPY --from=api-builder /app/api/dist api/dist
 COPY --from=ui-builder /app/ui/dist ui/dist
 # tsc does not copy .sql files; migration runner reads them at runtime

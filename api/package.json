@@ -7,7 +7,7 @@
     "build": "tsc",
     "dev": "tsx watch --env-file ../.env src/index.ts",
     "test": "vitest run",
-    "typegen": "npx --yes pocketbase-typegen --url \"${POCKETBASE_URL:-https://agenda.coming-soon.space}\" --email \"$PB_SERVICE_EMAIL\" --password \"$PB_SERVICE_PASSWORD\" --out src/pocketbase-types.ts"
+    "typegen": "pnpm dlx pocketbase-typegen --url \"${POCKETBASE_URL:-https://agenda.coming-soon.space}\" --email \"$PB_SERVICE_EMAIL\" --password \"$PB_SERVICE_PASSWORD\" --out src/pocketbase-types.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.600.0",

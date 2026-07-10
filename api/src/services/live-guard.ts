@@ -2,7 +2,7 @@ import { env } from '../env';
 import type { EpisodesRecord } from '../pocketbase-types';
 
 // The fields the guard reads, narrowed from the generated PocketBase record type
-// (regenerate with `npm run typegen`).
+// (regenerate with `pnpm run typegen`).
 export type Episode = Pick<
   EpisodesRecord,
   'status' | 'startTime' | 'endTime' | 'livestream_override'

@@ -38,7 +38,7 @@ External
 ## Prerequisites
 
 - Docker + Docker Compose (on the cloud server)
-- Node.js 20+ and npm (on the Windows machine, for the watcher)
+- Node.js 20+ and pnpm (on the Windows machine, for the watcher)
 - A [Neon](https://neon.tech) Postgres database
 - A [Groq](https://console.groq.com) API key (free tier)
 - YouTube Data API v3 credentials
@@ -213,8 +213,8 @@ API_KEY=same-value-as-WATCHER_API_KEY-in-cloud-env
 ### Run
 
 ```powershell
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 To run at Windows startup, create a scheduled task that runs:
