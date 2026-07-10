@@ -39,14 +39,12 @@ function AuthedLayout() {
     'account';
 
   const handleLogout = async () => {
-    // Proper OIDC end-session; fall back to a local clear + re-login if the
-    // instance has no post-logout redirect configured.
-    try {
-      await userManager.signoutRedirect();
-    } catch {
-      await userManager.removeUser();
-      void userManager.signinRedirect();
-    }
+    // Clear the local session and force the Zitadel login screen. We avoid the
+    // OIDC end-session endpoint — it requires a registered post_logout_redirect_uri
+    // (not configured), which dead-ends on a "Not Found". prompt=login makes this
+    // a real logout (re-auth / switch account) rather than a silent SSO bounce.
+    await userManager.removeUser();
+    await userManager.signinRedirect({ prompt: 'login' });
   };
 
   return (
