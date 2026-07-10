@@ -26,12 +26,20 @@ export default function PlatformSelector({ platforms, includeJingle, onChange, o
               type="button"
               onClick={() => toggle(p.id)}
               aria-pressed={on}
-              className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
                 on
                   ? 'border-accent bg-accent text-white'
                   : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink'
               }`}
             >
+              <span
+                aria-hidden
+                className={`flex h-4 w-4 items-center justify-center rounded-[3px] border text-[11px] font-bold leading-none ${
+                  on ? 'border-white bg-white text-accent' : 'border-line-strong text-transparent'
+                }`}
+              >
+                ✓
+              </span>
               {p.label}
             </button>
           );

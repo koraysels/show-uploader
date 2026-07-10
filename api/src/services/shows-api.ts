@@ -97,26 +97,47 @@ export type ArchivePatch = {
   mediaLinks?: MediaLink[];
 };
 
+// Merge incoming links into the existing ones by label: an incoming link
+// replaces a same-label entry and others are kept. So publishing MixCloud onto a
+// record that already has a YouTube link keeps both, rather than clobbering it.
+function mergeMediaLinks(existing: MediaLink[], incoming: MediaLink[]): MediaLink[] {
+  const byLabel = new Map(existing.map((l) => [l.label, l]));
+  for (const l of incoming) byLabel.set(l.label, l);
+  return [...byLabel.values()];
+}
+
 /**
  * Write the published result back onto a draft archive record: the platform
  * links (mediaLinks) plus any metadata the operator finalised (title, notes).
- * Deliberately never touches `status` — a human flips draft→published in the
- * agenda admin after reviewing. Uses the same superuser auth as listShows.
+ * mediaLinks are MERGED with whatever's already on the record (so you can add a
+ * second platform later); title/notes overwrite. Deliberately never touches
+ * `status` — a human flips draft→published in the agenda admin after reviewing.
+ * Uses the same superuser auth as listShows.
  */
 export async function updateArchiveRecord(id: string, patch: ArchivePatch): Promise<void> {
-  const body = JSON.stringify(patch);
-  const patchOnce = (token: string) =>
-    fetch(`${pbBase}/api/collections/archive/records/${id}`, {
+  const recUrl = `${pbBase}/api/collections/archive/records/${id}`;
+
+  const run = async (token: string): Promise<Response> => {
+    let mediaLinks = patch.mediaLinks;
+    if (mediaLinks && mediaLinks.length) {
+      const cur = await fetch(`${recUrl}?fields=mediaLinks`, { headers: { Authorization: token } });
+      if (cur.ok) {
+        const existing = (await cur.json()).mediaLinks as MediaLink[] | null;
+        mediaLinks = mergeMediaLinks(Array.isArray(existing) ? existing : [], mediaLinks);
+      }
+    }
+    return fetch(recUrl, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: token },
-      body,
+      body: JSON.stringify({ ...patch, ...(mediaLinks ? { mediaLinks } : {}) }),
     });
+  };
 
   let token = cachedToken ?? (await authenticate());
-  let res = await patchOnce(token);
+  let res = await run(token);
   if (res.status === 401 || res.status === 403) {
     token = await authenticate();
-    res = await patchOnce(token);
+    res = await run(token);
   }
   if (!res.ok) {
     throw new Error(`PocketBase archive update failed (${id}): ${res.status} ${await res.text()}`);
