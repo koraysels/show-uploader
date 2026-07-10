@@ -21,8 +21,8 @@ export async function setJobStatus(
 }
 
 export async function getPlatformJobsForUpload(uploadId: string) {
-  return db<{ id: string; platform: string; status: string }[]>`
-    SELECT id, platform, status FROM platform_jobs WHERE upload_id = ${uploadId}
+  return db<{ id: string; platform: string; status: string; result_url: string | null }[]>`
+    SELECT id, platform, status, result_url FROM platform_jobs WHERE upload_id = ${uploadId}
   `;
 }
 

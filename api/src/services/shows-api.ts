@@ -86,3 +86,39 @@ export async function listShows(): Promise<AgendaShow[]> {
   const body = (await res.json()) as { items: ArchiveItem[] };
   return body.items.map(toAgendaShow);
 }
+
+// One entry in the archive record's `mediaLinks` JSON array, matching the shape
+// the agenda site already stores/renders, e.g. { label:'YouTube', type:'video', url }.
+export type MediaLink = { label: string; type: string; url: string };
+
+export type ArchivePatch = {
+  title?: string;
+  notes?: string;
+  mediaLinks?: MediaLink[];
+};
+
+/**
+ * Write the published result back onto a draft archive record: the platform
+ * links (mediaLinks) plus any metadata the operator finalised (title, notes).
+ * Deliberately never touches `status` — a human flips draft→published in the
+ * agenda admin after reviewing. Uses the same superuser auth as listShows.
+ */
+export async function updateArchiveRecord(id: string, patch: ArchivePatch): Promise<void> {
+  const body = JSON.stringify(patch);
+  const patchOnce = (token: string) =>
+    fetch(`${pbBase}/api/collections/archive/records/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: token },
+      body,
+    });
+
+  let token = cachedToken ?? (await authenticate());
+  let res = await patchOnce(token);
+  if (res.status === 401 || res.status === 403) {
+    token = await authenticate();
+    res = await patchOnce(token);
+  }
+  if (!res.ok) {
+    throw new Error(`PocketBase archive update failed (${id}): ${res.status} ${await res.text()}`);
+  }
+}

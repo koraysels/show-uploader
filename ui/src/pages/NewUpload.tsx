@@ -9,6 +9,10 @@ import { useUpload } from '../upload/UploadProvider';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
 
+// The agenda site hosts the archive record's admin detail page at
+// `<base>/#/archive/<recordId>`, and the record id is the same id we use as showId.
+const AGENDA_BASE = import.meta.env.VITE_POCKETBASE_URL ?? 'https://agenda.coming-soon.space';
+
 function timeAgo(iso: string): string {
   const secs = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000));
   if (secs < 60) return 'just now';
@@ -166,9 +170,19 @@ export default function NewUpload() {
         <div>
           <Link to="/" className="text-sm lowercase text-muted hover:text-ink">← to process</Link>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{selectedShow.title}</h1>
-          <p className="mt-1 font-mono text-[13px] text-muted">
-            {selectedShow.date} · {selectedShow.startTime}–{selectedShow.endTime}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <p className="font-mono text-[13px] text-muted">
+              {selectedShow.date} · {selectedShow.startTime}–{selectedShow.endTime}
+            </p>
+            <a
+              href={`${AGENDA_BASE}/#/archive/${selectedShow.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-[13px] lowercase text-muted underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+            >
+              ↗ open in agenda
+            </a>
+          </div>
         </div>
 
         {pendingVideos.length > 0 && (

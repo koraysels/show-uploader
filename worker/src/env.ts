@@ -8,8 +8,11 @@ const schema = z.object({
   S3_SECRET_KEY: z.string().optional(),
   S3_BUCKET: z.string().optional(),
   S3_REGION: z.string().default('us-east-1'),
-  SHOWS_API_URL: z.string().url(),
-  SHOWS_API_KEY: z.string(),
+  // Our own api (same compose network) + its shared internal key, used to write
+  // the published result back onto the PocketBase archive record via the api's
+  // superuser. Defaults to the in-network service address.
+  INTERNAL_API_URL: z.string().url().default('http://api:3000/api'),
+  WATCHER_API_KEY: z.string().default('change-me'),
   YOUTUBE_CLIENT_ID: z.string().optional(),
   YOUTUBE_CLIENT_SECRET: z.string().optional(),
   YOUTUBE_REFRESH_TOKEN: z.string().optional(),

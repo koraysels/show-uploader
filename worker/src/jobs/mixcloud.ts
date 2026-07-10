@@ -3,9 +3,8 @@ import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
-import { writeBackUrls } from '../services/shows-api';
 import { extractAudio, prependJingle, makeTempPath, cleanup } from '../services/ffmpeg';
-import { setJobStatus, getUploadRow } from '../db';
+import { setJobStatus } from '../db';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
@@ -56,11 +55,7 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'done', { result_url: resultUrl, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 100 });
 
-    const row = await getUploadRow(uploadId);
-    if (row) {
-      await writeBackUrls(row.show_id, { mixcloud: resultUrl });
-    }
-
+    // Write-back to PocketBase happens once ALL platforms finish (in maybeEnqueueArchive).
     await maybeEnqueueArchive(job.data);
 
     return JSON.stringify({ uploadId, platform: 'mixcloud', url: resultUrl });

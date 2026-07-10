@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client';
 import { env } from '../env';
 import { requireAuth } from '../middleware/requireAuth';
+import { updateArchiveRecord } from '../services/shows-api';
 
 export const watcherRouter = Router();
 
@@ -55,4 +56,33 @@ watcherRouter.get('/pending', requireAuth, async (_req, res) => {
 watcherRouter.delete('/pending/:id', requireAuth, async (req, res) => {
   await db`UPDATE pending_videos SET claimed = true WHERE id = ${req.params.id}`;
   res.json({ ok: true });
+});
+
+const ArchivePatchSchema = z.object({
+  title: z.string().optional(),
+  notes: z.string().optional(),
+  mediaLinks: z
+    .array(z.object({ label: z.string(), type: z.string(), url: z.string().url() }))
+    .optional(),
+});
+
+// PATCH /api/watcher/shows/:id — the worker writes the published result (platform
+// links + finalised metadata) back onto the PocketBase archive record once all
+// uploads succeed. API-key gated (same shared internal secret as the watcher), so
+// PocketBase superuser creds stay in the api and never reach the worker.
+watcherRouter.patch('/shows/:id', async (req, res) => {
+  const token = (req.headers.authorization ?? '').replace('Bearer ', '');
+  if (token !== env.WATCHER_API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const parsed = ArchivePatchSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+
+  try {
+    await updateArchiveRecord(req.params.id, parsed.data);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Archive write-back failed:', err);
+    res.status(502).json({ error: 'Archive write-back failed' });
+  }
 });
