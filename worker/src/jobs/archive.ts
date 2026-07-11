@@ -1,7 +1,7 @@
 import type { Job } from 'bullmq';
 import path from 'path';
 import type { JobPayload } from '../types';
-import { downloadFromS3, uploadToS3, deleteFromS3 } from '../services/s3';
+import { downloadFromS3, uploadToS3 } from '../services/s3';
 import { transcodeToMp4, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import { setJobStatus, setArchiveKey, getPlatformJobsForUpload, createArchiveJobRecord, getUploadRow } from '../db';
 import { uploadQueue } from '../queue';
@@ -92,7 +92,8 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 95 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 95 });
 
-    await deleteFromS3(videoS3Key);
+    // Keep the original upload (full quality) on S3 — the MP4 is just a
+    // browser-viewable copy. The original stays referenced as video_s3_key.
     await setArchiveKey(uploadId, archiveKey);
 
     await setJobStatus(jobId, 'done', { result_url: archiveKey, progress_pct: 100 });
