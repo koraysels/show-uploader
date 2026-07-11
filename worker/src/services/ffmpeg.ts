@@ -160,6 +160,7 @@ export async function detectSilenceBounds(
     const silences: Silence[] = [];
     let duration = 0;
     ffmpeg(videoPath)
+      .noVideo() // decode audio only — otherwise ffmpeg decodes the whole video (minutes on a 2h file)
       .audioFilters(`silencedetect=noise=${noise}dB:d=${minSil}`)
       .format('null')
       .output(process.platform === 'win32' ? 'NUL' : '/dev/null')

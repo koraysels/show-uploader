@@ -20,6 +20,25 @@ const PLATFORM_LABELS: Record<string, string> = {
   archive: 'Archive',
 };
 
+// Human-readable phase, derived from the platform + progress checkpoints the
+// worker emits, so the operator sees what's happening (not just a number).
+function phaseLabel(platform: string, pct: number, status: string): string {
+  if (status === 'queued' || pct === 0) return 'queued';
+  if (platform === 'youtube') return pct < 20 ? 'downloading' : 'trimming + uploading to youtube';
+  if (platform === 'mixcloud') {
+    if (pct < 15) return 'downloading';
+    if (pct < 55) return 'extracting + trimming audio';
+    if (pct < 70) return 'prepending jingle';
+    return 'uploading to mixcloud';
+  }
+  if (platform === 'archive') {
+    if (pct < 15) return 'downloading';
+    if (pct < 95) return 'transcoding to mp4';
+    return 'storing archive';
+  }
+  return 'processing';
+}
+
 export default function JobProgress({ uploadId, jobs }: Props) {
   const { user } = useAuth();
   const [state, setState] = useState<Record<string, JobState>>(() =>
@@ -95,7 +114,9 @@ export default function JobProgress({ uploadId, jobs }: Props) {
               ) : s.status === 'failed' ? (
                 s.error ?? 'Failed'
               ) : (
-                `${s.pct}%`
+                <span className="lowercase">
+                  {phaseLabel(platform, s.pct, s.status)} · {s.pct}%
+                </span>
               )}
             </span>
           </div>
