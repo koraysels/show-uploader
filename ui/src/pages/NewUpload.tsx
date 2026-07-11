@@ -24,6 +24,13 @@ function timeAgo(iso: string): string {
   return `${Math.round(mins / 60)}h ago`;
 }
 
+// Published title convention: "<name> <DD.MM.YYYY> @ coming soon".
+function publishTitle(name: string, date: string): string {
+  const [y, m, d] = (date ?? '').split('-');
+  const dmy = d && m && y ? `${d}.${m}.${y}` : date;
+  return `${name} ${dmy} @ coming soon`;
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-t border-line pt-6">
@@ -89,7 +96,7 @@ export default function NewUpload() {
 
   useEffect(() => {
     if (!selectedShow) return;
-    setTitle(selectedShow.title);
+    setTitle(publishTitle(selectedShow.title, selectedShow.date));
     setDescription(selectedShow.description ?? '');
     setTags(selectedShow.tags ?? []);
     setImageUrl(selectedShow.imageUrl ?? '');
