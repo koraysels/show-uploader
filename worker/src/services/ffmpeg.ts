@@ -3,6 +3,22 @@ import fs from 'fs';
 import path from 'path';
 import { env } from '../env';
 
+// Apply an absolute [start, end] trim: seek to start (-ss input) and limit the
+// output to (end - start) via -t. Using a duration avoids the ambiguity of -to
+// with an input seek, so the end point is honoured correctly.
+function hms(s?: string): number {
+  if (!s) return 0;
+  const [h = '0', m = '0', sec = '0'] = s.split(':');
+  return Number(h) * 3600 + Number(m) * 60 + Number(sec);
+}
+function applyTrim(cmd: ffmpeg.FfmpegCommand, trimStart?: string | null, trimEnd?: string | null) {
+  if (trimStart) cmd.seekInput(trimStart);
+  if (trimEnd) {
+    const dur = hms(trimEnd) - hms(trimStart ?? '00:00:00');
+    if (dur > 0) cmd.outputOptions(['-t', String(dur)]);
+  }
+}
+
 export async function extractAudio(
   videoPath: string,
   outputPath: string,
@@ -14,8 +30,7 @@ export async function extractAudio(
       .audioCodec('aac')
       .audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
 
-    if (opts?.trimStart) cmd.seekInput(opts.trimStart);
-    if (opts?.trimEnd) cmd.outputOptions(['-to', opts.trimEnd]);
+    applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
 
     cmd.output(outputPath);
 
@@ -69,8 +84,7 @@ export async function transcodeToMp4(
       .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)
       .outputOptions(['-movflags', '+faststart']);
 
-    if (opts?.trimStart) cmd.seekInput(opts.trimStart);
-    if (opts?.trimEnd) cmd.outputOptions(['-to', opts.trimEnd]);
+    applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
 
     cmd.output(outputPath);
 
@@ -84,10 +98,23 @@ export async function transcodeToMp4(
   });
 }
 
-function hmsToSeconds(hms?: string): number {
-  if (!hms) return 0;
-  const [h = '0', m = '0', s = '0'] = hms.split(':');
-  return Number(h) * 3600 + Number(m) * 60 + Number(s);
+// Fast trim without re-encoding (stream copy). Keyframe-aligned start (may be a
+// second or two early) — fine for cutting dead air. Used for YouTube, which
+// otherwise uploads the raw recording untrimmed.
+export async function trimVideoCopy(
+  input: string,
+  output: string,
+  opts: { trimStart?: string | null; trimEnd?: string | null }
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const cmd = ffmpeg(input);
+    applyTrim(cmd, opts.trimStart, opts.trimEnd);
+    cmd.outputOptions(['-c', 'copy', '-map', '0'])
+      .output(output)
+      .on('end', () => resolve())
+      .on('error', reject)
+      .run();
+  });
 }
 
 function secondsToHms(total: number): string {
@@ -136,7 +163,7 @@ export async function detectSilenceBounds(
       .audioFilters(`silencedetect=noise=${noise}dB:d=${minSil}`)
       .format('null')
       .output(process.platform === 'win32' ? 'NUL' : '/dev/null')
-      .on('codecData', (d: { duration?: string }) => { duration = hmsToSeconds(d.duration); })
+      .on('codecData', (d: { duration?: string }) => { duration = hms(d.duration); })
       .on('stderr', (line: string) => {
         const s = line.match(/silence_start:\s*(-?[\d.]+)/);
         const e = line.match(/silence_end:\s*(-?[\d.]+)/);

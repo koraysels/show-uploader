@@ -52,7 +52,7 @@ export default function TrimFields({ autoTrimSilence, trimStart, trimEnd, onAuto
             </div>
           </div>
           <p className="mt-2 text-xs text-faint">
-            Format HH:MM:SS (e.g. 00:04:30). Overrides auto-trim. Applied to MixCloud and the archive.
+            Format HH:MM:SS (e.g. 00:04:30). Overrides auto-trim. Applied to YouTube, MixCloud and the archive.
           </p>
         </div>
       </details>
