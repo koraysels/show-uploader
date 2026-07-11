@@ -27,7 +27,7 @@ function splitDateTime(ts: string | undefined): { date: string; time: string } {
 type ArchiveItem = Pick<
   ArchiveRecord,
   'id' | 'title' | 'notes' | 'startTime' | 'endTime' | 'image' | 'genres' | 'mediaLinks'
-> & { collectionId: string };
+> & { collectionId: string; expand?: { genres?: { name: string }[] } };
 
 export function toAgendaShow(rec: ArchiveItem): AgendaShow {
   const start = splitDateTime(rec.startTime);
@@ -42,7 +42,8 @@ export function toAgendaShow(rec: ArchiveItem): AgendaShow {
     imageUrl: rec.image
       ? `${env.POCKETBASE_URL}/api/files/${rec.collectionId}/${rec.id}/${rec.image}`
       : null,
-    tags: rec.genres && rec.genres.length ? rec.genres : null,
+    // Genres are a relation; use the expanded names (not the raw record IDs).
+    tags: rec.expand?.genres?.length ? rec.expand.genres.map((g) => g.name).filter(Boolean) : null,
     mediaLinks: Array.isArray(rec.mediaLinks) ? (rec.mediaLinks as MediaLink[]) : [],
   };
 }
@@ -68,10 +69,10 @@ async function authenticate(): Promise<string> {
 
 async function fetchDrafts(token: string): Promise<Response> {
   const filter = `(status='draft')`;
-  const fields = 'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId';
+  const fields = 'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,expand.genres.name';
   const url =
     `${pbBase}/api/collections/archive/records` +
-    `?perPage=200&sort=-startTime&fields=${fields}&filter=${encodeURIComponent(filter)}`;
+    `?perPage=200&sort=-startTime&expand=genres&fields=${fields}&filter=${encodeURIComponent(filter)}`;
   return fetch(url, { headers: { Authorization: token } });
 }
 
