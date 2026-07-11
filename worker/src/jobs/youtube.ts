@@ -3,8 +3,9 @@ import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToYoutube } from '../services/youtube-client';
-import { setJobStatus } from '../db';
+import { setJobStatus, getUploadRow } from '../db';
 import { makeTempPath, cleanup, resolveTrim, trimVideoCopy } from '../services/ffmpeg';
+import { finalizeArchiveRecord } from '../services/shows-api';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processYoutube(job: Job<JobPayload>): Promise<string> {
@@ -44,7 +45,17 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'done', { result_url: resultUrl, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 100 });
 
-    // Write-back to PocketBase happens once ALL platforms finish (in maybeEnqueueArchive).
+    // Write this platform's link back to PocketBase immediately (merged), so the
+    // archive record is updated the moment YouTube is done — no waiting on MixCloud.
+    const row = await getUploadRow(uploadId);
+    if (row) {
+      await finalizeArchiveRecord(row.show_id, {
+        title,
+        notes: description,
+        mediaLinks: [{ label: 'YouTube', type: 'video', url: resultUrl }],
+      });
+    }
+
     await maybeEnqueueArchive(job.data);
 
     return JSON.stringify({ uploadId, platform: 'youtube', url: resultUrl });

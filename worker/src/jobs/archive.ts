@@ -3,17 +3,11 @@ import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3, uploadToS3 } from '../services/s3';
 import { transcodeToMp4, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
-import { setJobStatus, setArchiveKey, getPlatformJobsForUpload, createArchiveJobRecord, getUploadRow } from '../db';
+import { setJobStatus, setArchiveKey, getPlatformJobsForUpload, createArchiveJobRecord } from '../db';
 import { uploadQueue } from '../queue';
-import { finalizeArchiveRecord, type MediaLink } from '../services/shows-api';
 
-// Map a completed platform job to the archive record's mediaLinks shape.
-function toMediaLink(platform: string, url: string): MediaLink | null {
-  if (platform === 'youtube') return { label: 'YouTube', type: 'video', url };
-  if (platform === 'mixcloud') return { label: 'MixCloud', type: 'audio', url };
-  return null;
-}
-
+// PocketBase write-back now happens per-platform (in each job) the moment that
+// platform finishes — no waiting on the others. This only enqueues the archive.
 export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
   const { uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle, trimStart, trimEnd } = payload;
 
@@ -24,18 +18,8 @@ export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
 
   if (!allDone || archiveExists) return;
 
-  // All platforms published — write the links + finalised metadata back onto the
-  // PocketBase archive record (status stays draft; a human publishes in agenda).
-  const row = await getUploadRow(uploadId);
-  if (row) {
-    const mediaLinks = platformJobs
-      .map((j) => (j.result_url ? toMediaLink(j.platform, j.result_url) : null))
-      .filter((l): l is MediaLink => l !== null);
-    await finalizeArchiveRecord(row.show_id, { title, notes: description, mediaLinks });
-  }
-
   // Skip the archive transcode when the operator opted out (e.g. adding a second
-  // platform to a show that's already archived). PB write-back above still runs.
+  // platform to a show that's already archived).
   if (payload.includeArchive === false) return;
 
   const archiveJobId = await createArchiveJobRecord(uploadId);

@@ -4,7 +4,8 @@ import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
 import { extractAudio, prependJingle, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
-import { setJobStatus } from '../db';
+import { setJobStatus, getUploadRow } from '../db';
+import { finalizeArchiveRecord } from '../services/shows-api';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
@@ -57,7 +58,16 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'done', { result_url: resultUrl, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 100 });
 
-    // Write-back to PocketBase happens once ALL platforms finish (in maybeEnqueueArchive).
+    // Write MixCloud's link back immediately (merged with any existing links).
+    const row = await getUploadRow(uploadId);
+    if (row) {
+      await finalizeArchiveRecord(row.show_id, {
+        title,
+        notes: description,
+        mediaLinks: [{ label: 'MixCloud', type: 'audio', url: resultUrl }],
+      });
+    }
+
     await maybeEnqueueArchive(job.data);
 
     return JSON.stringify({ uploadId, platform: 'mixcloud', url: resultUrl });
