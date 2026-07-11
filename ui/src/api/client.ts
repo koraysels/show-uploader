@@ -143,6 +143,19 @@ export const api = {
 
   listUploads: () => apiFetch<UploadWithJobs[]>('/api/uploads'),
 
+  // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
+  getStaged: (showId: string) =>
+    apiFetch<{ show_id: string; s3_key: string; filename: string; size_bytes: number } | null>(
+      `/api/uploads/staged/${showId}`
+    ),
+  putStaged: (showId: string, body: { s3Key: string; filename: string; sizeBytes: number }) =>
+    apiFetch(`/api/uploads/staged/${showId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  deleteStaged: (showId: string) => apiFetch(`/api/uploads/staged/${showId}`, { method: 'DELETE' }),
+
   listPendingVideos: () =>
     apiFetch<{ id: string; s3_key: string; filename: string; size_bytes: number; created_at: string }[]>(
       '/api/watcher/pending'

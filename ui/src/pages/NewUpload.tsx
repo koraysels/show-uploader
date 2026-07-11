@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useShows, useGeneratedMeta, usePendingVideos, useClaimPending, useCreateUpload } from '../api/hooks';
+import { api } from '../api/client';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
@@ -52,6 +53,7 @@ export default function NewUpload() {
   const [tags, setTags] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState('');
   const [videoS3Key, setVideoS3Key] = useState('');
+  const [videoFilename, setVideoFilename] = useState('');
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
   const [includeArchive, setIncludeArchive] = useState(true);
@@ -87,7 +89,15 @@ export default function NewUpload() {
   useEffect(() => {
     if (upload.state.status === 'done' && upload.state.key) {
       setVideoS3Key(upload.state.key);
+      setVideoFilename(upload.state.filename);
       setSelectedPendingId(null);
+      if (showId) {
+        void api.putStaged(showId, {
+          s3Key: upload.state.key,
+          filename: upload.state.filename,
+          sizeBytes: upload.state.totalBytes,
+        }).catch(() => {});
+      }
     }
   }, [upload.state.status, upload.state.key]);
 
@@ -101,8 +111,11 @@ export default function NewUpload() {
     setDescription(selectedShow.description ?? '');
     setTags(selectedShow.tags ?? []);
     setImageUrl(selectedShow.imageUrl ?? '');
-    setVideoS3Key('');
     setSelectedPendingId(null);
+    // Restore a previously-completed upload for this show from the server (survives
+    // refresh and works on any machine).
+    setVideoS3Key('');
+    setVideoFilename('');
 
     // Re-publish smarts: pre-select only the platform(s) not yet up, and default
     // archiving OFF when the show already has links (likely already archived).
@@ -110,6 +123,21 @@ export default function NewUpload() {
     const missing = ALL_PLATFORMS.filter((p) => !already.includes(p));
     setPlatforms(missing.length ? missing : ALL_PLATFORMS);
     setIncludeArchive(already.length === 0);
+
+    const sid = selectedShow.id;
+    let cancelled = false;
+    void api
+      .getStaged(sid)
+      .then((v) => {
+        if (!cancelled && v && upload.state.status !== 'uploading') {
+          setVideoS3Key(v.s3_key);
+          setVideoFilename(v.filename);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, [selectedShow?.id]);
 
   // Seed the description from AI, but NOT tags — good tags need the audio
@@ -249,7 +277,25 @@ export default function NewUpload() {
 
         {!selectedPendingId && (
           <Section title="Video">
-            <UploadControl />
+            {videoS3Key && upload.state.status !== 'uploading' ? (
+              <div className="flex items-center justify-between border border-ok/40 bg-ok-soft px-4 py-3">
+                <span className="truncate text-sm text-ink">✓ {videoFilename || 'video ready'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVideoS3Key('');
+                    setVideoFilename('');
+                    upload.reset();
+                    if (showId) void api.deleteStaged(showId).catch(() => {});
+                  }}
+                  className="shrink-0 text-xs text-faint hover:text-danger"
+                >
+                  replace
+                </button>
+              </div>
+            ) : (
+              <UploadControl />
+            )}
           </Section>
         )}
 

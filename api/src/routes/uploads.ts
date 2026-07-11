@@ -1,7 +1,16 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/client';
-import { createUpload, createPlatformJob, listUploadsWithJobs, getUploadWithJobs, releaseClaimForShow } from '../db/queries';
+import {
+  createUpload,
+  createPlatformJob,
+  listUploadsWithJobs,
+  getUploadWithJobs,
+  releaseClaimForShow,
+  upsertStagedUpload,
+  getStagedUpload,
+  deleteStagedUpload,
+} from '../db/queries';
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
@@ -30,6 +39,36 @@ const CreateUploadSchema = z.object({
   autoTrimSilence: z.boolean().default(true),
   trimStart: TimeCode,
   trimEnd: TimeCode,
+});
+
+// Staged video (uploaded, not yet published) per show — survives refresh and is
+// visible on any machine, so an upload can be finished/published elsewhere.
+uploadsRouter.get('/staged/:showId', async (req, res) => {
+  try {
+    const staged = await getStagedUpload(db, req.params.showId);
+    res.json(staged);
+  } catch (err) {
+    console.error('Failed to read staged upload:', err);
+    res.status(500).json({ error: 'Failed to read staged upload' });
+  }
+});
+
+const StagedBody = z.object({ s3Key: z.string().min(1), filename: z.string().min(1), sizeBytes: z.number().default(0) });
+uploadsRouter.put('/staged/:showId', async (req, res) => {
+  const parsed = StagedBody.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+  try {
+    await upsertStagedUpload(db, req.params.showId, parsed.data.s3Key, parsed.data.filename, parsed.data.sizeBytes);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to save staged upload:', err);
+    res.status(500).json({ error: 'Failed to save staged upload' });
+  }
+});
+
+uploadsRouter.delete('/staged/:showId', async (req, res) => {
+  await deleteStagedUpload(db, req.params.showId).catch(() => {});
+  res.json({ ok: true });
 });
 
 uploadsRouter.post('/presign', async (req, res) => {
@@ -107,8 +146,9 @@ uploadsRouter.post('/', async (req, res) => {
     );
 
     // The show is now published — free its claim so it drops off everyone's
-    // "being processed" list immediately.
+    // "being processed" list immediately, and clear the staged upload.
     await releaseClaimForShow(db, data.showId);
+    await deleteStagedUpload(db, data.showId).catch(() => {});
     void presenceHub.broadcastClaims();
 
     res.status(201).json({

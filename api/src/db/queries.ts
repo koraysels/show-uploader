@@ -172,3 +172,38 @@ export function releaseStaleClaims(db: Sql, olderThanMs: number) {
 export function listClaims(db: Sql) {
   return db<ShowClaim[]>`SELECT * FROM show_claims`;
 }
+
+export type StagedUpload = {
+  show_id: string;
+  s3_key: string;
+  filename: string;
+  size_bytes: number;
+  created_at: Date;
+};
+
+// One staged (uploaded-but-unpublished) video per show; a new upload replaces it.
+export function upsertStagedUpload(
+  db: Sql,
+  showId: string,
+  s3Key: string,
+  filename: string,
+  sizeBytes: number
+) {
+  return db`
+    INSERT INTO staged_uploads (show_id, s3_key, filename, size_bytes, created_at)
+    VALUES (${showId}, ${s3Key}, ${filename}, ${sizeBytes}, NOW())
+    ON CONFLICT (show_id) DO UPDATE SET
+      s3_key = EXCLUDED.s3_key,
+      filename = EXCLUDED.filename,
+      size_bytes = EXCLUDED.size_bytes,
+      created_at = NOW()
+  `;
+}
+
+export function getStagedUpload(db: Sql, showId: string) {
+  return db<StagedUpload[]>`SELECT * FROM staged_uploads WHERE show_id = ${showId}`.then((r) => r[0] ?? null);
+}
+
+export function deleteStagedUpload(db: Sql, showId: string) {
+  return db`DELETE FROM staged_uploads WHERE show_id = ${showId}`;
+}
