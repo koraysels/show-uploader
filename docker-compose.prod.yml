@@ -77,7 +77,8 @@ services:
       - MINIO_ROOT_USER=${S3_ACCESS_KEY}
       - MINIO_ROOT_PASSWORD=${S3_SECRET_KEY}
     volumes:
-      - ./data/minio:/data
+      # Object data on the dedicated /dev/vda3 disk (mounted at /mnt/storage).
+      - /mnt/storage/minio:/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
