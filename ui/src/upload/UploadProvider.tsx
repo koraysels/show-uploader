@@ -9,6 +9,7 @@ type UploadState = {
   fraction: number;
   uploadedBytes: number;
   totalBytes: number;
+  bytesPerSec: number;
   key: string | null;
   error: string | null;
 };
@@ -26,6 +27,7 @@ const initial: UploadState = {
   fraction: 0,
   uploadedBytes: 0,
   totalBytes: 0,
+  bytesPerSec: 0,
   key: null,
   error: null,
 };
@@ -44,22 +46,34 @@ export function useUpload(): UploadContextValue {
 export function UploadProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<UploadState>(initial);
   const abortRef = useRef<AbortController | null>(null);
+  // Rolling sample to derive a smoothed upload speed from progress deltas.
+  const sampleRef = useRef<{ time: number; bytes: number; speed: number }>({ time: 0, bytes: 0, speed: 0 });
 
   const start = useCallback((file: File) => {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    sampleRef.current = { time: performance.now(), bytes: 0, speed: 0 };
 
     setState({ ...initial, status: 'uploading', filename: file.name, totalBytes: file.size });
 
     uploadFileResumable(file, {
       signal: controller.signal,
       onProgress: (p: UploadProgress) =>
-        setState((s) =>
-          s.status === 'uploading'
-            ? { ...s, fraction: p.fraction, uploadedBytes: p.uploadedBytes, totalBytes: p.totalBytes }
-            : s
-        ),
+        setState((s) => {
+          if (s.status !== 'uploading') return s;
+          // Sample ~every 0.4s and smooth (EMA) so the number doesn't jitter.
+          const now = performance.now();
+          const last = sampleRef.current;
+          const dt = (now - last.time) / 1000;
+          let bytesPerSec = last.speed;
+          if (dt >= 0.4 && p.uploadedBytes >= last.bytes) {
+            const inst = (p.uploadedBytes - last.bytes) / dt;
+            bytesPerSec = last.speed ? last.speed * 0.6 + inst * 0.4 : inst;
+            sampleRef.current = { time: now, bytes: p.uploadedBytes, speed: bytesPerSec };
+          }
+          return { ...s, fraction: p.fraction, uploadedBytes: p.uploadedBytes, totalBytes: p.totalBytes, bytesPerSec };
+        }),
     })
       .then(({ key }) => setState((s) => ({ ...s, status: 'done', key, fraction: 1 })))
       .catch((err: unknown) => {

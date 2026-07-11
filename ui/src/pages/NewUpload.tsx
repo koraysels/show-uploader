@@ -57,6 +57,7 @@ export default function NewUpload() {
   const [includeArchive, setIncludeArchive] = useState(true);
   const [trimStart, setTrimStart] = useState('');
   const [trimEnd, setTrimEnd] = useState('');
+  const [autoTrimSilence, setAutoTrimSilence] = useState(true);
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
 
   const meta = useGeneratedMeta(selectedShow?.title, selectedShow?.description);
@@ -137,6 +138,7 @@ export default function NewUpload() {
         platforms,
         includeJingle,
         includeArchive,
+        autoTrimSilence,
         trimStart: trimStart || null,
         trimEnd: trimEnd || null,
       },
@@ -253,8 +255,10 @@ export default function NewUpload() {
 
         <Section title="Trim">
           <TrimFields
+            autoTrimSilence={autoTrimSilence}
             trimStart={trimStart}
             trimEnd={trimEnd}
+            onAutoTrimChange={setAutoTrimSilence}
             onChange={(field, value) => {
               if (field === 'trimStart') setTrimStart(value);
               if (field === 'trimEnd') setTrimEnd(value);

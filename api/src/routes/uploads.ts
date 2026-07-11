@@ -25,6 +25,9 @@ const CreateUploadSchema = z.object({
   // Archive a transcoded MP4 copy to storage after publishing. Default on; turned
   // off when adding a platform to an already-archived show (skips the transcode).
   includeArchive: z.boolean().default(true),
+  // Auto-detect and cut leading/trailing silence (dead air) via ffmpeg. Manual
+  // trim below overrides it.
+  autoTrimSilence: z.boolean().default(true),
   trimStart: TimeCode,
   trimEnd: TimeCode,
 });
@@ -94,6 +97,7 @@ uploadsRouter.post('/', async (req, res) => {
             jingleS3Key,
             includeJingle: data.includeJingle,
             includeArchive: data.includeArchive,
+            autoTrimSilence: data.autoTrimSilence,
             trimStart: data.trimStart ?? null,
             trimEnd: data.trimEnd ?? null,
           },

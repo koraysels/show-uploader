@@ -2,7 +2,7 @@ import type { Job } from 'bullmq';
 import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3, uploadToS3, deleteFromS3 } from '../services/s3';
-import { transcodeToMp4, makeTempPath, cleanup } from '../services/ffmpeg';
+import { transcodeToMp4, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import { setJobStatus, setArchiveKey, getPlatformJobsForUpload, createArchiveJobRecord, getUploadRow } from '../db';
 import { uploadQueue } from '../queue';
 import { finalizeArchiveRecord, type MediaLink } from '../services/shows-api';
@@ -58,7 +58,7 @@ export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
 }
 
 export async function processArchive(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key, trimStart, trimEnd } = job.data;
+  const { jobId, uploadId, videoS3Key, trimStart, trimEnd, autoTrimSilence } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
@@ -74,9 +74,11 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 15 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 15 });
 
+    const trim = await resolveTrim(inputPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
+
     await transcodeToMp4(inputPath, outputPath, {
-      trimStart,
-      trimEnd,
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
       onProgress: async (pct) => {
         const adjusted = 15 + Math.round(pct * 0.7);
         await setJobStatus(jobId, 'processing', { progress_pct: adjusted });

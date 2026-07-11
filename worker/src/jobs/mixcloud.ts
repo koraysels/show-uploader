@@ -3,12 +3,12 @@ import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
-import { extractAudio, prependJingle, makeTempPath, cleanup } from '../services/ffmpeg';
+import { extractAudio, prependJingle, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import { setJobStatus } from '../db';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key, title, description, tags, jingleS3Key, includeJingle, trimStart, trimEnd } = job.data;
+  const { jobId, uploadId, videoS3Key, title, description, tags, jingleS3Key, includeJingle, trimStart, trimEnd, autoTrimSilence } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
@@ -24,9 +24,11 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 15 });
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 15 });
 
+    const trim = await resolveTrim(videoPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
+
     await extractAudio(videoPath, audioPath, {
-      trimStart,
-      trimEnd,
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
       onProgress: async (pct) => {
         const adjusted = 15 + Math.round(pct * 0.4);
         await setJobStatus(jobId, 'processing', { progress_pct: adjusted });

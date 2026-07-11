@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, type ReactNode } from 'react';
 import { useDropzone } from 'react-dropzone';
+import prettyBytes from 'pretty-bytes';
+import prettyMs from 'pretty-ms';
 import { useUpload } from '../upload/UploadProvider';
 
 const OpenContext = createContext<() => void>(() => {});
@@ -36,10 +38,15 @@ export function FullPageDropzone({ children }: { children: ReactNode }) {
   );
 }
 
-function fmtBytes(n: number): string {
-  if (n > 1e9) return `${(n / 1e9).toFixed(2)} GB`;
-  if (n > 1e6) return `${(n / 1e6).toFixed(0)} MB`;
-  return `${(n / 1e3).toFixed(0)} KB`;
+// Human-readable transfer stats via pretty-bytes / pretty-ms.
+function stats(uploadedBytes: number, totalBytes: number, bytesPerSec: number): string {
+  const parts = [`${prettyBytes(uploadedBytes)} / ${prettyBytes(totalBytes)}`];
+  if (bytesPerSec > 0) {
+    parts.push(`${prettyBytes(bytesPerSec)}/s`);
+    const remainingMs = ((totalBytes - uploadedBytes) / bytesPerSec) * 1000;
+    if (remainingMs > 0) parts.push(`${prettyMs(remainingMs, { compact: true })} left`);
+  }
+  return parts.join(' · ');
 }
 
 export function UploadControl() {
@@ -60,7 +67,7 @@ export function UploadControl() {
           <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
         </div>
         <p className="mt-2 text-xs text-muted">
-          {pct}% · {fmtBytes(state.uploadedBytes)} / {fmtBytes(state.totalBytes)} · resumable
+          {pct}% · {stats(state.uploadedBytes, state.totalBytes, state.bytesPerSec)} · resumable
         </p>
       </div>
     );

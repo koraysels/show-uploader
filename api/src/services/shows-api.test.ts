@@ -37,9 +37,10 @@ describe('toAgendaShow', () => {
     expect(withImg.imageUrl).toBe('https://pb.test/api/files/pbc_episodes/ep1/cover.jpg');
   });
 
-  it('maps non-empty genres to tags, empty to null', () => {
+  it('maps expanded genre names to tags, empty to null', () => {
     expect(toAgendaShow(base).tags).toBeNull();
-    expect(toAgendaShow({ ...base, genres: ['g1', 'g2'] }).tags).toEqual(['g1', 'g2']);
+    const withGenres = toAgendaShow({ ...base, expand: { genres: [{ name: 'house' }, { name: 'disco' }] } });
+    expect(withGenres.tags).toEqual(['house', 'disco']);
   });
 
   it('tolerates missing optional fields', () => {

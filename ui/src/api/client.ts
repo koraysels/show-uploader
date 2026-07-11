@@ -131,6 +131,7 @@ export const api = {
     platforms: string[];
     includeJingle: boolean;
     includeArchive: boolean;
+    autoTrimSilence: boolean;
     trimStart?: string | null;
     trimEnd?: string | null;
   }) =>
