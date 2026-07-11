@@ -156,6 +156,8 @@ export const api = {
     }),
   deleteStaged: (showId: string) => apiFetch(`/api/uploads/staged/${showId}`, { method: 'DELETE' }),
 
+  getJinglePreview: () => apiFetch<{ url: string; filename: string }>('/api/uploads/jingle-preview'),
+
   listPendingVideos: () =>
     apiFetch<{ id: string; s3_key: string; filename: string; size_bytes: number; created_at: string }[]>(
       '/api/watcher/pending'

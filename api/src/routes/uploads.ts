@@ -71,6 +71,18 @@ uploadsRouter.delete('/staged/:showId', async (req, res) => {
   res.json({ ok: true });
 });
 
+// Presigned URL to preview the configured jingle (so the operator hears what
+// gets prepended to the MixCloud audio). 404 when no jingle is set.
+uploadsRouter.get('/jingle-preview', async (_req, res) => {
+  if (!env.JINGLE_S3_KEY) return res.status(404).json({ error: 'No jingle configured' });
+  try {
+    const url = await createDownloadPresignedUrl(env.JINGLE_S3_KEY);
+    res.json({ url, filename: env.JINGLE_S3_KEY.split('/').pop() ?? 'jingle' });
+  } catch {
+    res.status(500).json({ error: 'Failed to sign jingle URL' });
+  }
+});
+
 uploadsRouter.post('/presign', async (req, res) => {
   const { filename, contentType } = req.body as { filename: string; contentType: string };
   if (!filename || !contentType) {

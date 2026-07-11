@@ -1,3 +1,56 @@
+import { useRef, useState } from 'react';
+import { api } from '../api/client';
+
+// Play button to preview the configured jingle (lazy-fetches a presigned URL).
+function JinglePreview() {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState(false);
+
+  const toggle = async () => {
+    const a = audioRef.current;
+    if (!a || err) return;
+    if (playing) {
+      a.pause();
+      return;
+    }
+    if (!a.src) {
+      setLoading(true);
+      try {
+        const { url } = await api.getJinglePreview();
+        a.src = url;
+      } catch {
+        setErr(true);
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+    }
+    await a.play().catch(() => setErr(true));
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={toggle}
+        disabled={err}
+        title={err ? 'no jingle configured' : 'preview jingle'}
+        className="inline-flex h-5 w-5 items-center justify-center border border-line text-[11px] leading-none text-muted hover:border-ink hover:text-ink disabled:opacity-40"
+      >
+        {err ? '—' : loading ? '…' : playing ? '⏸' : '▶'}
+      </button>
+      <audio
+        ref={audioRef}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
+      />
+    </>
+  );
+}
+
 type Props = {
   platforms: string[];
   includeJingle: boolean;
@@ -61,15 +114,18 @@ export default function PlatformSelector({
         })}
       </div>
       {platforms.includes('mixcloud') && (
-        <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={includeJingle}
-            onChange={(e) => onJingleChange(e.target.checked)}
-            className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
-          />
-          Prepend jingle to the MixCloud audio
-        </label>
+        <div className="flex items-center gap-2.5">
+          <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={includeJingle}
+              onChange={(e) => onJingleChange(e.target.checked)}
+              className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
+            />
+            Prepend jingle to the MixCloud audio
+          </label>
+          <JinglePreview />
+        </div>
       )}
       <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
         <input
