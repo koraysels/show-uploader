@@ -143,6 +143,9 @@ export const api = {
 
   listUploads: () => apiFetch<UploadWithJobs[]>('/api/uploads'),
 
+  retryJob: (uploadId: string, platform: string) =>
+    apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/jobs/${platform}/retry`, { method: 'POST' }),
+
   // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
   getStaged: (showId: string) =>
     apiFetch<{ show_id: string; s3_key: string; filename: string; size_bytes: number } | null>(

@@ -10,6 +10,7 @@ import {
   upsertStagedUpload,
   getStagedUpload,
   deleteStagedUpload,
+  resetPlatformJobForRetry,
 } from '../db/queries';
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
@@ -171,6 +172,44 @@ uploadsRouter.post('/', async (req, res) => {
   } catch (err) {
     console.error('Failed to create upload:', err);
     res.status(500).json({ error: 'Failed to create upload' });
+  }
+});
+
+// Re-run a single platform job that failed (or was interrupted by a worker
+// restart). Reconstructs the payload from the stored upload row and re-enqueues.
+uploadsRouter.post('/:uploadId/jobs/:platform/retry', async (req, res) => {
+  const { uploadId, platform } = req.params;
+  if (platform !== 'youtube' && platform !== 'mixcloud' && platform !== 'archive') {
+    return res.status(400).json({ error: 'Invalid platform' });
+  }
+  try {
+    const upload = await getUploadWithJobs(db, uploadId);
+    if (!upload) return res.status(404).json({ error: 'Upload not found' });
+    const job = upload.jobs.find((j) => j.platform === platform);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    if (job.status === 'processing') return res.status(409).json({ error: 'Job already running' });
+
+    await resetPlatformJobForRetry(db, job.id);
+    await uploadQueue.add(platform, {
+      jobId: job.id,
+      uploadId,
+      platform,
+      videoS3Key: upload.video_s3_key,
+      title: upload.title,
+      description: upload.description ?? '',
+      tags: upload.tags ?? [],
+      imageUrl: upload.image_url,
+      jingleS3Key: upload.jingle_s3_key,
+      includeJingle: !!upload.jingle_s3_key,
+      includeArchive: true,
+      autoTrimSilence: true,
+      trimStart: upload.trim_start,
+      trimEnd: upload.trim_end,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to retry job:', err);
+    res.status(500).json({ error: 'Failed to retry job' });
   }
 });
 

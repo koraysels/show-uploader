@@ -20,6 +20,22 @@ export async function setJobStatus(
   `;
 }
 
+// On worker boot no job is running yet, so any row still in 'processing' belongs
+// to a worker that died mid-run (redeploy/crash) — a permanent "processing"
+// ghost in the UI. Mark them failed (retryable) before the Worker starts picking
+// up new jobs, so nothing gets clobbered mid-flight.
+export async function reconcileStalledJobs() {
+  const rows = await db<{ id: string; platform: string; upload_id: string }[]>`
+    UPDATE platform_jobs
+    SET status = 'failed',
+        error = 'Interrupted — worker restarted. Press retry to resume.',
+        updated_at = NOW()
+    WHERE status = 'processing'
+    RETURNING id, platform, upload_id
+  `;
+  return rows;
+}
+
 export async function getPlatformJobsForUpload(uploadId: string) {
   return db<{ id: string; platform: string; status: string; result_url: string | null }[]>`
     SELECT id, platform, status, result_url FROM platform_jobs WHERE upload_id = ${uploadId}

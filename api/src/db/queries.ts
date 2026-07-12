@@ -114,6 +114,16 @@ export function getPlatformJobsForUpload(db: Sql, uploadId: string) {
   `;
 }
 
+// Clear a failed job back to a clean queued state so it can be re-enqueued.
+// Unlike updateJobStatus this explicitly nulls error/result_url (COALESCE can't).
+export function resetPlatformJobForRetry(db: Sql, jobId: string) {
+  return db`
+    UPDATE platform_jobs
+    SET status = 'queued', progress_pct = 0, error = NULL, result_url = NULL, updated_at = NOW()
+    WHERE id = ${jobId}
+  `;
+}
+
 export type ShowClaim = {
   show_id: string;
   user_sub: string;

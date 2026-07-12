@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/useAuth';
+import { useRetryJob } from '../api/hooks';
 import type { PlatformJob } from '../api/client';
 
 type Props = {
@@ -41,6 +42,7 @@ function phaseLabel(platform: string, pct: number, status: string): string {
 
 export default function JobProgress({ uploadId, jobs }: Props) {
   const { user } = useAuth();
+  const retry = useRetryJob(uploadId);
   const [state, setState] = useState<Record<string, JobState>>(() =>
     Object.fromEntries(
       jobs.map((j) => [
@@ -112,7 +114,17 @@ export default function JobProgress({ uploadId, jobs }: Props) {
               ) : s.status === 'done' ? (
                 'Done'
               ) : s.status === 'failed' ? (
-                s.error ?? 'Failed'
+                <span className="flex items-center gap-2">
+                  <span className="text-danger">{s.error ?? 'Failed'}</span>
+                  <button
+                    type="button"
+                    onClick={() => retry.mutate(platform)}
+                    disabled={retry.isPending}
+                    className="border border-line px-2 py-0.5 font-medium text-accent hover:bg-line disabled:opacity-50"
+                  >
+                    {retry.isPending ? 'retrying…' : 'retry'}
+                  </button>
+                </span>
               ) : (
                 <span className="lowercase">
                   {phaseLabel(platform, s.pct, s.status)} · {s.pct}%

@@ -47,6 +47,14 @@ export function useCreateUpload() {
   });
 }
 
+export function useRetryJob(uploadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (platform: string) => api.retryJob(uploadId, platform),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+  });
+}
+
 export function useClaimPending() {
   const qc = useQueryClient();
   return useMutation({
