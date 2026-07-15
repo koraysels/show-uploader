@@ -17,7 +17,7 @@ import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { getLiveState } from '../services/live-guard';
-import { updateArchiveRecord } from '../services/shows-api';
+import { updateArchiveRecord, resolveGenreIds } from '../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../services/platform-metadata';
 import { env } from '../env';
 
@@ -247,7 +247,10 @@ uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
     if (mc) sync.mixcloud = mcErr ?? 'ok';
 
     try {
-      await updateArchiveRecord(upload.show_id, { title: edit.title, notes: edit.description });
+      // Tags are the PocketBase genres relation (PB is master) — resolve the
+      // edited names to genre IDs (creating any new ones) and replace the relation.
+      const genres = await resolveGenreIds(edit.tags);
+      await updateArchiveRecord(upload.show_id, { title: edit.title, notes: edit.description, genres });
       sync.pocketbase = 'ok';
     } catch (err) {
       sync.pocketbase = err instanceof Error ? err.message : String(err);

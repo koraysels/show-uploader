@@ -86,6 +86,8 @@ export const api = {
 
   listShows: () => apiFetch<AgendaShow[]>('/api/shows'),
 
+  listGenres: () => apiFetch<string[]>('/api/shows/genres'),
+
   generateMeta: (title: string, description: string) =>
     apiFetch<GeneratedMeta>(
       `/api/shows/meta?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`

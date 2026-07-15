@@ -11,7 +11,7 @@ export type MediaLink = { label: string; type: string; url: string };
  */
 export async function finalizeArchiveRecord(
   showId: string,
-  patch: { title?: string; notes?: string; mediaLinks?: MediaLink[] }
+  patch: { title?: string; notes?: string; tags?: string[]; mediaLinks?: MediaLink[] }
 ): Promise<void> {
   try {
     const res = await fetch(`${env.INTERNAL_API_URL}/watcher/shows/${showId}`, {

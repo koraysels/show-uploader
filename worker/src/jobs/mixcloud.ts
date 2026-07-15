@@ -64,6 +64,7 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       await finalizeArchiveRecord(row.show_id, {
         title,
         notes: description,
+        tags,
         mediaLinks: [{ label: 'MixCloud', type: 'audio', url: resultUrl }],
       });
     }

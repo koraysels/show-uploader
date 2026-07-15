@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { useUploads, useUpdateMetadata } from '../api/hooks';
+import { useUploads, useUpdateMetadata, useGenres } from '../api/hooks';
+import TagInput from '../components/TagInput';
 import type { UploadWithJobs } from '../api/client';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -20,20 +21,37 @@ function DownloadLink({ url, label }: { url: string | null; label: string }) {
   );
 }
 
+function Spinner() {
+  return <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />;
+}
+
+// The audio archive is produced by the 'archive' job — reflect its live state
+// so the operator sees it being extracted, not just a dash.
+function AudioCell({ upload }: { upload: UploadWithJobs }) {
+  if (upload.audio_url) return <DownloadLink url={upload.audio_url} label="Audio" />;
+  const job = upload.jobs.find((j) => j.platform === 'archive');
+  if (job?.status === 'processing' || job?.status === 'queued')
+    return (
+      <span className="inline-flex items-center gap-1.5 text-muted">
+        <Spinner /> Audio {job.progress_pct}%
+      </span>
+    );
+  if (job?.status === 'failed')
+    return (
+      <span className="text-danger" title={job.error ?? undefined}>
+        Audio ✕
+      </span>
+    );
+  return <span className="text-faint">Audio —</span>;
+}
+
 // Edit title/description/tags and push the change to every platform + PocketBase.
 function EditPanel({ upload }: { upload: UploadWithJobs }) {
   const update = useUpdateMetadata(upload.id);
+  const { data: genres = [] } = useGenres();
   const [title, setTitle] = useState(upload.title);
   const [description, setDescription] = useState(upload.description ?? '');
   const [tags, setTags] = useState<string[]>(upload.tags ?? []);
-  const [tagInput, setTagInput] = useState('');
-
-  const addTag = (raw: string) => {
-    const t = raw.trim().replace(/,+$/, '');
-    if (t && !tags.includes(t)) setTags([...tags, t]);
-    setTagInput('');
-  };
-  const removeTag = (t: string) => setTags(tags.filter((x) => x !== t));
 
   const dirty =
     title !== upload.title ||
@@ -53,31 +71,7 @@ function EditPanel({ upload }: { upload: UploadWithJobs }) {
       </div>
       <div>
         <label className="label">Tags</label>
-        <div className="flex flex-wrap items-center gap-1.5 border border-line bg-paper px-2 py-2">
-          {tags.map((t) => (
-            <span key={t} className="inline-flex items-center gap-1 border border-line bg-surface px-2 py-0.5 text-xs text-ink">
-              {t}
-              <button type="button" onClick={() => removeTag(t)} aria-label={`remove ${t}`} className="text-faint hover:text-danger">
-                ×
-              </button>
-            </span>
-          ))}
-          <input
-            className="min-w-24 flex-1 bg-transparent text-sm outline-none"
-            value={tagInput}
-            placeholder={tags.length ? 'add another…' : 'type a tag, press enter'}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ',') {
-                e.preventDefault();
-                addTag(tagInput);
-              } else if (e.key === 'Backspace' && !tagInput && tags.length) {
-                removeTag(tags[tags.length - 1]);
-              }
-            }}
-            onBlur={() => tagInput.trim() && addTag(tagInput)}
-          />
-        </div>
+        <TagInput tags={tags} suggestions={genres} onChange={setTags} />
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -127,7 +121,7 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
         ))}
         <span className="text-line" aria-hidden>|</span>
         <DownloadLink url={upload.video_url} label="Video" />
-        <DownloadLink url={upload.audio_url} label="Audio" />
+        <AudioCell upload={upload} />
         <button
           type="button"
           onClick={() => setEditing((v) => !v)}

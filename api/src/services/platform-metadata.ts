@@ -1,4 +1,5 @@
 import { env } from '../env';
+import { appendHashtags } from './format';
 
 // Edit already-published metadata (title/description/tags) in place on each
 // platform — no re-upload. Called when an operator changes an archive record.
@@ -56,7 +57,12 @@ export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         id,
-        snippet: { title: edit.title, description: edit.description, tags: edit.tags, categoryId: '10' },
+        snippet: {
+          title: edit.title,
+          description: appendHashtags(edit.description, edit.tags),
+          tags: edit.tags,
+          categoryId: '10',
+        },
       }),
     });
     if (!res.ok) return `YouTube update ${res.status}: ${await res.text()}`;

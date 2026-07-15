@@ -100,7 +100,75 @@ export type ArchivePatch = {
   title?: string;
   notes?: string;
   mediaLinks?: MediaLink[];
+  // Genre record IDs — the archive record's tag relation. Resolve free-text tag
+  // names to IDs with resolveGenreIds() before passing them here.
+  genres?: string[];
 };
+
+function slugify(s: string): string {
+  return s
+    .toLowerCase()
+    .trim()
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+async function pbFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = (token: string) => ({ ...(init?.headers ?? {}), Authorization: token });
+  let token = cachedToken ?? (await authenticate());
+  let res = await fetch(`${pbBase}${path}`, { ...init, headers: headers(token) });
+  if (res.status === 401 || res.status === 403) {
+    token = await authenticate();
+    res = await fetch(`${pbBase}${path}`, { ...init, headers: headers(token) });
+  }
+  return res;
+}
+
+// All genre names, for tag autocomplete in the UI.
+export async function listGenres(): Promise<string[]> {
+  const res = await pbFetch(`/api/collections/genres/records?perPage=500&sort=name&fields=name`);
+  if (!res.ok) throw new Error(`PocketBase genres error: ${res.status}`);
+  const body = (await res.json()) as { items: { name: string }[] };
+  return body.items.map((g) => g.name).filter(Boolean);
+}
+
+// Map free-text tag names to genre record IDs so the archive's `genres` relation
+// mirrors the tags exactly. PocketBase is the master list: unknown tags become
+// new genre records. Matching is case-insensitive on name; a failed create is
+// logged and skipped (never aborts the surrounding write-back).
+export async function resolveGenreIds(names: string[]): Promise<string[]> {
+  const wanted = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  if (!wanted.length) return [];
+
+  const listRes = await pbFetch(`/api/collections/genres/records?perPage=500&fields=id,name`);
+  const byName = new Map<string, string>();
+  if (listRes.ok) {
+    const body = (await listRes.json()) as { items: { id: string; name: string }[] };
+    for (const g of body.items) byName.set(g.name.toLowerCase(), g.id);
+  }
+
+  const ids: string[] = [];
+  for (const name of wanted) {
+    const key = name.toLowerCase();
+    let id = byName.get(key);
+    if (!id) {
+      const res = await pbFetch(`/api/collections/genres/records`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, slug: slugify(name) }),
+      });
+      if (res.ok) {
+        id = ((await res.json()) as { id: string }).id;
+        byName.set(key, id);
+      } else {
+        console.error(`Failed to create genre "${name}": ${res.status} ${await res.text()}`);
+        continue;
+      }
+    }
+    ids.push(id);
+  }
+  return ids;
+}
 
 // Merge incoming links into the existing ones by label: an incoming link
 // replaces a same-label entry and others are kept. So publishing MixCloud onto a

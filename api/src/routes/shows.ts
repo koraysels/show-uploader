@@ -1,8 +1,18 @@
 import { Router } from 'express';
-import { listShows } from '../services/shows-api';
+import { listShows, listGenres } from '../services/shows-api';
 import { generateMeta } from '../services/groq';
 
 export const showsRouter = Router();
+
+// Full genre vocabulary for tag autocomplete (PocketBase is the master list).
+showsRouter.get('/genres', async (_req, res) => {
+  try {
+    res.json(await listGenres());
+  } catch (err) {
+    console.error('Failed to fetch genres:', err);
+    res.status(502).json({ error: 'Failed to fetch genres' });
+  }
+});
 
 showsRouter.get('/', async (_req, res) => {
   try {

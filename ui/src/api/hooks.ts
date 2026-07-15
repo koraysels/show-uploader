@@ -7,6 +7,10 @@ export function useShows() {
   return useQuery({ queryKey: ['shows'], queryFn: api.listShows, staleTime: 60_000 });
 }
 
+export function useGenres() {
+  return useQuery({ queryKey: ['genres'], queryFn: api.listGenres, staleTime: 300_000 });
+}
+
 export function useAuthCheck(enabled: boolean) {
   return useQuery({ queryKey: ['auth-me'], queryFn: api.checkAuth, enabled, retry: false });
 }

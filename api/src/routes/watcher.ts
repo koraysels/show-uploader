@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../db/client';
 import { env } from '../env';
 import { requireAuth } from '../middleware/requireAuth';
-import { updateArchiveRecord } from '../services/shows-api';
+import { updateArchiveRecord, resolveGenreIds } from '../services/shows-api';
 
 export const watcherRouter = Router();
 
@@ -61,6 +61,8 @@ watcherRouter.delete('/pending/:id', requireAuth, async (req, res) => {
 const ArchivePatchSchema = z.object({
   title: z.string().optional(),
   notes: z.string().optional(),
+  // Free-text tag names — resolved to genre record IDs (PB is the master list).
+  tags: z.array(z.string()).optional(),
   mediaLinks: z
     .array(z.object({ label: z.string(), type: z.string(), url: z.string().url() }))
     .optional(),
@@ -79,7 +81,9 @@ watcherRouter.patch('/shows/:id', async (req, res) => {
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
 
   try {
-    await updateArchiveRecord(req.params.id, parsed.data);
+    const { tags, ...rest } = parsed.data;
+    const genres = tags ? await resolveGenreIds(tags) : undefined;
+    await updateArchiveRecord(req.params.id, { ...rest, ...(genres ? { genres } : {}) });
     res.json({ ok: true });
   } catch (err) {
     console.error('Archive write-back failed:', err);

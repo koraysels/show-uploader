@@ -52,6 +52,7 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
       await finalizeArchiveRecord(row.show_id, {
         title,
         notes: description,
+        tags,
         mediaLinks: [{ label: 'YouTube', type: 'video', url: resultUrl }],
       });
     }
