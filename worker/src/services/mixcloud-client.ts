@@ -5,6 +5,7 @@ import { shouldDryRun, simulateUpload } from './dry-run';
 
 type MixcloudResponse = {
   key?: string;
+  result?: { key?: string; success?: boolean; message?: string };
   error?: { message: string };
 };
 
@@ -30,23 +31,37 @@ export async function uploadToMixcloud(params: {
     form.append('picture', fs.createReadStream(params.imagePath));
   }
 
-  const res = await fetch(
-    `https://api.mixcloud.com/me/cloudcast/?access_token=${env.MIXCLOUD_ACCESS_TOKEN}`,
-    {
-      method: 'POST',
-      body: form as unknown as BodyInit,
-      headers: form.getHeaders() as Record<string, string>,
-    }
-  );
+  const token = env.MIXCLOUD_ACCESS_TOKEN;
+  // The upload endpoint is /upload/ — /me/cloudcast/ is retired and returns 405.
+  const res = await fetch(`https://api.mixcloud.com/upload/?access_token=${token}`, {
+    method: 'POST',
+    body: form as unknown as BodyInit,
+    headers: form.getHeaders() as Record<string, string>,
+  });
 
   if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`MixCloud upload failed: ${res.status} ${text}`);
+    throw new Error(`MixCloud upload failed: ${res.status} ${await res.text()}`);
   }
 
   const data = (await res.json()) as MixcloudResponse;
   if (data.error) throw new Error(`MixCloud error: ${data.error.message}`);
-  if (!data.key) throw new Error('MixCloud returned no key');
 
-  return `https://www.mixcloud.com${data.key}`;
+  const key = data.key ?? data.result?.key;
+  if (key) return `https://www.mixcloud.com${key}`;
+
+  // A successful upload often returns just {result:{success:true}} without the
+  // new cloudcast's key — look up the most recent cloudcast to get its URL.
+  try {
+    const meRes = await fetch(`https://api.mixcloud.com/me/cloudcasts/?limit=1&access_token=${token}`);
+    if (meRes.ok) {
+      const me = (await meRes.json()) as { data?: { url?: string; key?: string }[] };
+      const c = me.data?.[0];
+      if (c?.url) return c.url;
+      if (c?.key) return `https://www.mixcloud.com${c.key}`;
+    }
+  } catch {
+    /* fall through to the account URL */
+  }
+
+  return 'https://www.mixcloud.com/';
 }
