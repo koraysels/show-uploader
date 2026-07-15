@@ -40,9 +40,18 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     let finalAudioPath = audioPath;
 
     if (includeJingle && jingleS3Key) {
-      await downloadFromS3(jingleS3Key, jinglePath);
-      await prependJingle(jinglePath, audioPath, mergedPath);
-      finalAudioPath = mergedPath;
+      // A missing/misconfigured jingle must not fail the whole upload — publish
+      // the audio as-is and warn instead.
+      try {
+        await downloadFromS3(jingleS3Key, jinglePath);
+        await prependJingle(jinglePath, audioPath, mergedPath);
+        finalAudioPath = mergedPath;
+      } catch (err) {
+        console.warn(
+          `Jingle "${jingleS3Key}" unavailable — publishing without it:`,
+          err instanceof Error ? err.message : err
+        );
+      }
     }
 
     await setJobStatus(jobId, 'processing', { progress_pct: 70 });
