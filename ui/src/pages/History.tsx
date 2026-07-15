@@ -70,7 +70,7 @@ export default function History() {
       )}
 
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">history</h1>
+        <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">done</h1>
         {done.length === 0 ? (
           <p className="text-sm text-muted">
             {active.length > 0 ? 'nothing finished yet.' : 'no uploads yet. pick a show to get started.'}

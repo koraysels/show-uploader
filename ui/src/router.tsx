@@ -69,7 +69,7 @@ function AuthedLayout() {
               upload
             </Link>
             <Link to="/history" className={navLink} activeProps={{ className: navActive }}>
-              history
+              jobs queue
             </Link>
             <Link to="/archive" className={navLink} activeProps={{ className: navActive }}>
               archive

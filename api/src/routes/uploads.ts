@@ -11,11 +11,14 @@ import {
   getStagedUpload,
   deleteStagedUpload,
   resetPlatformJobForRetry,
+  updateUploadMetadata,
 } from '../db/queries';
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { getLiveState } from '../services/live-guard';
+import { updateArchiveRecord } from '../services/shows-api';
+import { syncYoutubeMetadata, syncMixcloudMetadata } from '../services/platform-metadata';
 import { env } from '../env';
 
 export const uploadsRouter = Router();
@@ -213,14 +216,66 @@ uploadsRouter.post('/:uploadId/jobs/:platform/retry', async (req, res) => {
   }
 });
 
+// Edit published metadata (title/description/tags) and push it to every place
+// the show lives: the local DB, each published platform, and the PocketBase
+// archive record. Platform failures are reported per-target, not fatal — the DB
+// always updates so the operator's edit isn't lost.
+const MetadataSchema = z.object({
+  title: z.string().min(1),
+  description: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+});
+uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
+  const parsed = MetadataSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const edit = parsed.data;
+  try {
+    const upload = await getUploadWithJobs(db, req.params.uploadId);
+    if (!upload) return res.status(404).json({ error: 'Upload not found' });
+
+    await updateUploadMetadata(db, upload.id, edit);
+
+    const sync: Record<string, 'ok' | string> = {};
+    const yt = upload.jobs.find((j) => j.platform === 'youtube' && j.status === 'done' && j.result_url);
+    const mc = upload.jobs.find((j) => j.platform === 'mixcloud' && j.status === 'done' && j.result_url);
+
+    const [ytErr, mcErr] = await Promise.all([
+      yt ? syncYoutubeMetadata(yt.result_url!, edit) : Promise.resolve<string | null>(null),
+      mc ? syncMixcloudMetadata(mc.result_url!, edit) : Promise.resolve<string | null>(null),
+    ]);
+    if (yt) sync.youtube = ytErr ?? 'ok';
+    if (mc) sync.mixcloud = mcErr ?? 'ok';
+
+    try {
+      await updateArchiveRecord(upload.show_id, { title: edit.title, notes: edit.description });
+      sync.pocketbase = 'ok';
+    } catch (err) {
+      sync.pocketbase = err instanceof Error ? err.message : String(err);
+    }
+
+    res.json({ ok: true, sync });
+  } catch (err) {
+    console.error('Failed to update metadata:', err);
+    res.status(500).json({ error: 'Failed to update metadata' });
+  }
+});
+
 // Replace private S3 keys with browser-reachable presigned download URLs so the
-// UI can open the archived MP4 (bucket stays private).
-async function withDownloadUrls<T extends { archive_s3_key: string | null; jobs: { platform: string; result_url: string | null }[] }>(
-  upload: T
-): Promise<T & { archive_url: string | null }> {
-  const archive_url = upload.archive_s3_key
-    ? await createDownloadPresignedUrl(upload.archive_s3_key)
-    : null;
+// UI can download the original video (any format) and the extracted audio
+// independently — the bucket itself stays private.
+async function withDownloadUrls<
+  T extends {
+    video_s3_key: string;
+    audio_s3_key: string | null;
+    archive_s3_key: string | null;
+    jobs: { platform: string; result_url: string | null }[];
+  }
+>(upload: T): Promise<T & { video_url: string; audio_url: string | null; archive_url: string | null }> {
+  const [video_url, audio_url, archive_url] = await Promise.all([
+    createDownloadPresignedUrl(upload.video_s3_key),
+    upload.audio_s3_key ? createDownloadPresignedUrl(upload.audio_s3_key) : Promise.resolve(null),
+    upload.archive_s3_key ? createDownloadPresignedUrl(upload.archive_s3_key) : Promise.resolve(null),
+  ]);
   const jobs = await Promise.all(
     upload.jobs.map(async (j) =>
       j.platform === 'archive' && j.result_url
@@ -228,7 +283,7 @@ async function withDownloadUrls<T extends { archive_s3_key: string | null; jobs:
         : j
     )
   );
-  return { ...upload, archive_url, jobs };
+  return { ...upload, video_url, audio_url, archive_url, jobs };
 }
 
 uploadsRouter.get('/', async (_req, res) => {

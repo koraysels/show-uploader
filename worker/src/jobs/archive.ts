@@ -2,8 +2,8 @@ import type { Job } from 'bullmq';
 import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3, uploadToS3 } from '../services/s3';
-import { transcodeToMp4, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
-import { setJobStatus, setArchiveKey, getPlatformJobsForUpload, createArchiveJobRecord } from '../db';
+import { extractAudio, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
+import { setJobStatus, setAudioKey, getPlatformJobsForUpload, createArchiveJobRecord } from '../db';
 import { uploadQueue } from '../queue';
 
 // PocketBase write-back now happens per-platform (in each job) the moment that
@@ -49,46 +49,47 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
   const ext = path.extname(videoS3Key) || '.mkv';
   const base = path.basename(videoS3Key, ext);
   const inputPath = makeTempPath(`input${ext}`);
-  const outputPath = makeTempPath('archive.mp4');
+  const audioPath = makeTempPath('archive.m4a');
 
   try {
     await job.updateProgress({ uploadId, platform: 'archive', pct: 5 });
     await downloadFromS3(videoS3Key, inputPath);
 
-    await setJobStatus(jobId, 'processing', { progress_pct: 15 });
-    await job.updateProgress({ uploadId, platform: 'archive', pct: 15 });
+    await setJobStatus(jobId, 'processing', { progress_pct: 20 });
+    await job.updateProgress({ uploadId, platform: 'archive', pct: 20 });
 
+    // The original upload (any format, incl. MKV) is the video archive and
+    // stays on S3 as video_s3_key. Here we produce the separate audio archive:
+    // a trimmed m4a the operator can download on its own.
     const trim = await resolveTrim(inputPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
 
-    await transcodeToMp4(inputPath, outputPath, {
+    await extractAudio(inputPath, audioPath, {
       trimStart: trim.trimStart,
       trimEnd: trim.trimEnd,
       onProgress: async (pct) => {
-        const adjusted = 15 + Math.round(pct * 0.7);
+        const adjusted = 20 + Math.round(pct * 0.65);
         await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
         await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
       },
     });
 
-    const archiveKey = `archive/${base}.mp4`;
-    await uploadToS3(outputPath, archiveKey, 'video/mp4');
+    const audioKey = `archive/${base}.m4a`;
+    await uploadToS3(audioPath, audioKey, 'audio/mp4');
 
     await setJobStatus(jobId, 'processing', { progress_pct: 95 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 95 });
 
-    // Keep the original upload (full quality) on S3 — the MP4 is just a
-    // browser-viewable copy. The original stays referenced as video_s3_key.
-    await setArchiveKey(uploadId, archiveKey);
+    await setAudioKey(uploadId, audioKey);
 
-    await setJobStatus(jobId, 'done', { result_url: archiveKey, progress_pct: 100 });
+    await setJobStatus(jobId, 'done', { result_url: audioKey, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 100 });
 
-    return JSON.stringify({ uploadId, platform: 'archive', key: archiveKey });
+    return JSON.stringify({ uploadId, platform: 'archive', key: audioKey });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await setJobStatus(jobId, 'failed', { error: msg });
     throw err;
   } finally {
-    cleanup(inputPath, outputPath);
+    cleanup(inputPath, audioPath);
   }
 }

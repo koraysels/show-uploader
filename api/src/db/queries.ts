@@ -9,6 +9,7 @@ export type ShowUpload = {
   image_url: string | null;
   video_s3_key: string;
   archive_s3_key: string | null;
+  audio_s3_key: string | null;
   jingle_s3_key: string | null;
   trim_start: string | null;
   trim_end: string | null;
@@ -111,6 +112,19 @@ export function updateArchiveKey(db: Sql, uploadId: string, archiveS3Key: string
 export function getPlatformJobsForUpload(db: Sql, uploadId: string) {
   return db<PlatformJob[]>`
     SELECT * FROM platform_jobs WHERE upload_id = ${uploadId}
+  `;
+}
+
+// Operator-edited archive metadata, kept in sync with the published platforms.
+export function updateUploadMetadata(
+  db: Sql,
+  uploadId: string,
+  data: { title: string; description: string; tags: string[] }
+) {
+  return db`
+    UPDATE show_uploads
+    SET title = ${data.title}, description = ${data.description}, tags = ${db.array(data.tags)}
+    WHERE id = ${uploadId}
   `;
 }
 

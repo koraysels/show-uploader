@@ -55,6 +55,15 @@ export function useRetryJob(uploadId: string) {
   });
 }
 
+export function useUpdateMetadata(uploadId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { title: string; description: string; tags: string[] }) =>
+      api.updateMetadata(uploadId, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+  });
+}
+
 export function useClaimPending() {
   const qc = useQueryClient();
   return useMutation({

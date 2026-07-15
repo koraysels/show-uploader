@@ -53,6 +53,10 @@ export async function setArchiveKey(uploadId: string, key: string) {
   await db`UPDATE show_uploads SET archive_s3_key = ${key} WHERE id = ${uploadId}`;
 }
 
+export async function setAudioKey(uploadId: string, key: string) {
+  await db`UPDATE show_uploads SET audio_s3_key = ${key} WHERE id = ${uploadId}`;
+}
+
 export async function createArchiveJobRecord(uploadId: string): Promise<string | null> {
   const rows = await db<{ id: string }[]>`
     INSERT INTO platform_jobs (upload_id, platform)

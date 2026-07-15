@@ -39,10 +39,15 @@ export type UploadWithJobs = {
   tags: string[];
   video_s3_key: string;
   archive_s3_key: string | null;
+  audio_s3_key: string | null;
+  video_url: string;
+  audio_url: string | null;
   archive_url: string | null;
   created_at: string;
   jobs: PlatformJob[];
 };
+
+export type MetadataSync = { ok: boolean; sync: Record<string, string> };
 
 async function requestWith<T>(path: string, token: string | undefined, options?: RequestInit): Promise<Response> {
   const headers: Record<string, string> = { ...(options?.headers as Record<string, string>) };
@@ -145,6 +150,13 @@ export const api = {
 
   retryJob: (uploadId: string, platform: string) =>
     apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/jobs/${platform}/retry`, { method: 'POST' }),
+
+  updateMetadata: (uploadId: string, body: { title: string; description: string; tags: string[] }) =>
+    apiFetch<MetadataSync>(`/api/uploads/${uploadId}/metadata`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 
   // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
   getStaged: (showId: string) =>

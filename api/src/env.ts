@@ -15,6 +15,12 @@ const schema = z.object({
   SHOWS_API_KEY: z.string(),
   GROQ_API_KEY: z.string(),
   JINGLE_S3_KEY: z.string().optional(),
+  // Platform creds — the api edits published metadata (title/desc/tags) in place
+  // when an archive record is changed, so it needs the same tokens as the worker.
+  YOUTUBE_CLIENT_ID: z.string().optional(),
+  YOUTUBE_CLIENT_SECRET: z.string().optional(),
+  YOUTUBE_REFRESH_TOKEN: z.string().optional(),
+  MIXCLOUD_ACCESS_TOKEN: z.string().optional(),
   WATCHER_API_KEY: z.string().default('change-me'),
   ZITADEL_DOMAIN: z.string(),
   ZITADEL_CLIENT_ID: z.string(),
