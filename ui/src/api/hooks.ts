@@ -68,6 +68,10 @@ export function useUpdateMetadata(uploadId: string) {
   });
 }
 
+export function usePublishRecord() {
+  return useMutation({ mutationFn: (uploadId: string) => api.publishRecord(uploadId) });
+}
+
 export function useClaimPending() {
   const qc = useQueryClient();
   return useMutation({

@@ -227,6 +227,21 @@ uploadsRouter.post('/:uploadId/jobs/:platform/retry', async (req, res) => {
   }
 });
 
+// Flip the PocketBase archive record to "published" — the explicit, separate
+// step that makes the show live on the agenda site (distinct from uploading to
+// the platforms). Everywhere else deliberately never touches `status`.
+uploadsRouter.post('/:uploadId/publish', async (req, res) => {
+  try {
+    const upload = await getUploadWithJobs(db, req.params.uploadId);
+    if (!upload) return res.status(404).json({ error: 'Upload not found' });
+    await updateArchiveRecord(upload.show_id, { status: 'published' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to publish archive record:', err);
+    res.status(502).json({ error: 'Failed to publish archive record' });
+  }
+});
+
 // Edit published metadata (title/description/tags) and push it to every place
 // the show lives: the local DB, each published platform, and the PocketBase
 // archive record. Platform failures are reported per-target, not fatal — the DB

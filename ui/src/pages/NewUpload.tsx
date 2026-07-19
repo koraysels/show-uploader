@@ -356,11 +356,13 @@ export default function NewUpload() {
 
         <div className="border-t border-line pt-6">
           <button onClick={handleSubmit} disabled={!canSubmit} className="btn-primary w-full py-3 text-[15px]">
-            {createUpload.isPending ? 'Publishing…' : 'Publish'}
+            {createUpload.isPending ? 'starting…' : 'save & start platform uploads'}
           </button>
-          {!videoS3Key && (
-            <p className="mt-2 text-center text-xs text-faint">Add a video to publish.</p>
-          )}
+          <p className="mt-2 text-center text-xs text-faint">
+            {!videoS3Key
+              ? 'add a video to start.'
+              : 'uploads to youtube/mixcloud + syncs the draft. publishing the agenda record is a separate step (archive page).'}
+          </p>
         </div>
       </div>
     </FullPageDropzone>

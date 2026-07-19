@@ -159,6 +159,10 @@ export const api = {
       body: JSON.stringify(body),
     }),
 
+  // Flip the PocketBase archive record to published (live on the agenda site).
+  publishRecord: (uploadId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/publish`, { method: 'POST' }),
+
   // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
   getStaged: (showId: string) =>
     apiFetch<{ show_id: string; s3_key: string; filename: string; size_bytes: number } | null>(

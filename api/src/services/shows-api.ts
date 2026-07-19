@@ -116,6 +116,8 @@ export type ArchivePatch = {
   // Genre record IDs — the archive record's tag relation. Resolve free-text tag
   // names to IDs with resolveGenreIds() before passing them here.
   genres?: string[];
+  // draft | published — only set by the explicit "publish to agenda" action.
+  status?: string;
 };
 
 function slugify(s: string): string {

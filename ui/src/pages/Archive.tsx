@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useUploads, useUpdateMetadata, useGenres } from '../api/hooks';
+import { useUploads, useUpdateMetadata, useGenres, usePublishRecord } from '../api/hooks';
 import TagInput from '../components/TagInput';
 import type { UploadWithJobs } from '../api/client';
 
@@ -104,6 +104,7 @@ function EditPanel({ upload }: { upload: UploadWithJobs }) {
 
 function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
   const [editing, setEditing] = useState(false);
+  const publish = usePublishRecord();
   const pub = publishedJobs(upload);
 
   return (
@@ -122,13 +123,28 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
         <span className="text-line" aria-hidden>|</span>
         <DownloadLink url={upload.video_url} label="Video" />
         <AudioCell upload={upload} />
-        <button
-          type="button"
-          onClick={() => setEditing((v) => !v)}
-          className="ml-auto text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
-        >
-          {editing ? 'close' : 'edit'}
-        </button>
+        <span className="ml-auto flex items-center gap-4">
+          {publish.isSuccess ? (
+            <span className="text-xs lowercase text-ok">✓ published on agenda</span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => publish.mutate(upload.id)}
+              disabled={publish.isPending}
+              className="text-xs lowercase text-accent hover:underline disabled:opacity-50"
+              title="set the agenda record to published (live on the site)"
+            >
+              {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to agenda ↑'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setEditing((v) => !v)}
+            className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+          >
+            {editing ? 'close' : 'edit'}
+          </button>
+        </span>
       </div>
 
       {editing && <EditPanel upload={upload} />}
