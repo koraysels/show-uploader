@@ -101,13 +101,13 @@ export const api = {
     }),
 
   // Resumable multipart upload
-  mpCreate: (filename: string, contentType: string, size: number) =>
+  mpCreate: (filename: string, contentType: string, size: number, showId: string) =>
     apiFetch<{ sessionId: string; key: string; partSize: number; partCount: number }>(
       '/api/uploads/multipart/create',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename, contentType, size }),
+        body: JSON.stringify({ filename, contentType, size, showId }),
       }
     ),
   mpStatus: (sessionId: string) =>
@@ -172,6 +172,8 @@ export const api = {
   // on publish; this restores the published recording into the form).
   getShowVideo: (showId: string) =>
     apiFetch<{ videoS3Key: string; filename: string } | null>(`/api/uploads/for-show/${showId}`),
+  // show_ids that already have a staged (uploaded, not-yet-published) video.
+  getStagedShowIds: () => apiFetch<string[]>('/api/uploads/staged'),
   putStaged: (showId: string, body: { s3Key: string; filename: string; sizeBytes: number }) =>
     apiFetch(`/api/uploads/staged/${showId}`, {
       method: 'PUT',

@@ -9,14 +9,35 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { useShows } from '../api/hooks';
+import { useShows, useStagedShowIds } from '../api/hooks';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
+import { useUpload, type UploadItem } from '../upload/UploadProvider';
 import { shortName } from '../components/PresenceRoster';
 
 const col = createColumnHelper<AgendaShow>();
 
 const SHORT: Record<string, string> = { YouTube: 'YT', MixCloud: 'MC' };
+
+// Per-show video state in the table: live upload progress, or a ✓ when a
+// recording is already staged/uploaded, else nothing.
+function VideoCell({ showId, uploads, staged }: { showId: string; uploads: Record<string, UploadItem>; staged: Set<string> }) {
+  const item = uploads[showId];
+  if (item?.status === 'uploading') {
+    const pct = Math.round(item.fraction * 100);
+    return (
+      <span className="inline-flex items-center gap-1.5 text-accent">
+        <span className="h-1 w-10 overflow-hidden rounded-full bg-line">
+          <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+        </span>
+        <span className="text-[11px] tabular-nums">{pct}%</span>
+      </span>
+    );
+  }
+  if (item?.status === 'error') return <span className="text-danger" title={item.error ?? undefined}>✕</span>;
+  if (item?.status === 'done' || staged.has(showId)) return <span className="text-ok" title="recording ready">✓</span>;
+  return <span className="text-faint">—</span>;
+}
 
 function LinksCell({ show }: { show: AgendaShow }) {
   const links = show.mediaLinks ?? [];
@@ -54,6 +75,9 @@ export default function Shows() {
   const navigate = useNavigate();
   const { data: shows = [], isLoading, isError } = useShows();
   const { claims, myUserId } = usePresence();
+  const { uploads } = useUpload();
+  const { data: stagedIds = [] } = useStagedShowIds();
+  const staged = useMemo(() => new Set(stagedIds), [stagedIds]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [filter, setFilter] = useState('');
 
@@ -65,6 +89,14 @@ export default function Shows() {
         header: 'Show',
         cell: (c) => <span className="font-medium text-ink">{c.getValue()}</span>,
       }),
+      col.accessor(
+        (s) => (uploads[s.id]?.status === 'uploading' ? 2 : uploads[s.id]?.status === 'done' || staged.has(s.id) ? 1 : 0),
+        {
+          id: 'video',
+          header: 'Video',
+          cell: (c) => <VideoCell showId={c.row.original.id} uploads={uploads} staged={staged} />,
+        }
+      ),
       col.accessor((s) => s.mediaLinks?.length ?? 0, {
         id: 'links',
         header: 'Links',
@@ -84,7 +116,7 @@ export default function Shows() {
         },
       }),
     ],
-    [claims, myUserId]
+    [claims, myUserId, uploads, staged]
   );
 
   const table = useReactTable({

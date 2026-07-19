@@ -13,6 +13,7 @@ import {
   resetPlatformJobForRetry,
   updateUploadMetadata,
   getLatestUploadForShow,
+  listStagedShowIds,
 } from '../db/queries';
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
@@ -72,6 +73,16 @@ uploadsRouter.put('/staged/:showId', async (req, res) => {
 uploadsRouter.delete('/staged/:showId', async (req, res) => {
   await deleteStagedUpload(db, req.params.showId).catch(() => {});
   res.json({ ok: true });
+});
+
+// show_ids that already have a staged (uploaded, not-yet-published) video — for
+// the "to process" table to flag which shows have a recording ready.
+uploadsRouter.get('/staged', async (_req, res) => {
+  try {
+    res.json(await listStagedShowIds(db));
+  } catch {
+    res.status(500).json({ error: 'Failed to list staged shows' });
+  }
 });
 
 // The most recent completed upload's video for a show — restores a published

@@ -11,6 +11,19 @@ export function useGenres() {
   return useQuery({ queryKey: ['genres'], queryFn: api.listGenres, staleTime: 300_000 });
 }
 
+export function useStagedShowIds() {
+  return useQuery({ queryKey: ['staged-shows'], queryFn: api.getStagedShowIds, refetchInterval: 15_000 });
+}
+
+export function useStaged(showId: string | undefined) {
+  return useQuery({
+    queryKey: ['staged', showId],
+    queryFn: () => api.getStaged(showId!),
+    enabled: !!showId,
+    refetchInterval: 10_000,
+  });
+}
+
 export function useAuthCheck(enabled: boolean) {
   return useQuery({ queryKey: ['auth-me'], queryFn: api.checkAuth, enabled, retry: false });
 }

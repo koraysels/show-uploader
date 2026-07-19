@@ -19,6 +19,9 @@ export type UploadProgress = {
 };
 
 export type UploadOptions = {
+  // The show this upload belongs to — bound at session creation so the server
+  // records the staged video against it on completion.
+  showId: string;
   concurrency?: number;
   maxRetries?: number;
   onProgress?: (p: UploadProgress) => void;
@@ -96,7 +99,7 @@ async function runPool<T>(items: T[], concurrency: number, worker: (item: T) => 
  * one exists. Returns the final object key. Reliability: per-part retry with
  * backoff, bounded concurrency, server-authoritative resume, abort support.
  */
-export async function uploadFileResumable(file: File, opts: UploadOptions = {}): Promise<{ key: string }> {
+export async function uploadFileResumable(file: File, opts: UploadOptions): Promise<{ key: string }> {
   const concurrency = opts.concurrency ?? 4;
   const maxRetries = opts.maxRetries ?? 5;
   const controller = new AbortController();
@@ -121,7 +124,7 @@ export async function uploadFileResumable(file: File, opts: UploadOptions = {}):
     }
   }
   if (!session) {
-    const created = await api.mpCreate(file.name, contentType, file.size);
+    const created = await api.mpCreate(file.name, contentType, file.size, opts.showId);
     session = { sessionId: created.sessionId, key: created.key, partSize: created.partSize };
     saveSession(fp, session);
     uploaded = [];

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
-import { useShows, useGeneratedMeta, usePendingVideos, useClaimPending, useCreateUpload } from '../api/hooks';
+import { useShows, useGeneratedMeta, usePendingVideos, useClaimPending, useCreateUpload, useStaged } from '../api/hooks';
 import { api } from '../api/client';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import TrimFields from '../components/TrimFields';
 import { useUpload } from '../upload/UploadProvider';
+import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
 
@@ -58,22 +60,35 @@ export default function NewUpload() {
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
   const [imageUrl, setImageUrl] = useState('');
-  const [videoS3Key, setVideoS3Key] = useState('');
-  const [videoFilename, setVideoFilename] = useState('');
+  // A hand-picked drop-folder file (not a staged upload). Everything else about
+  // "does this show have a video" is DERIVED, never stored — see resolveVideo.
+  const [pickedVideo, setPickedVideo] = useState<StagedVideo | null>(null);
+  const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
   const [trimStart, setTrimStart] = useState('');
   const [trimEnd, setTrimEnd] = useState('');
   const [autoTrimSilence, setAutoTrimSilence] = useState(true);
-  const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
 
+  const qc = useQueryClient();
   const meta = useGeneratedMeta(selectedShow?.title, selectedShow?.description);
   const pending = usePendingVideos();
   const claim = useClaimPending();
   const createUpload = useCreateUpload();
   const upload = useUpload();
   const activeUpload = showId ? upload.get(showId) : undefined;
+  const stagedQ = useStaged(showId);
   const presence = usePresence();
+
+  // THE single source of truth for the form's video, derived from the live
+  // upload + the server-staged video + a hand-picked drop-folder file.
+  const video = resolveVideo({
+    live: activeUpload ?? null,
+    staged: stagedQ.data ? { s3_key: stagedQ.data.s3_key, filename: stagedQ.data.filename } : null,
+    pending: pickedVideo,
+  });
+  const videoS3Key = video.state === 'ready' ? video.key : '';
+  const videoFilename = video.state === 'ready' || video.state === 'uploading' || video.state === 'error' ? video.filename : '';
 
   // Soft claim: opening auto-claims the show, unless someone else holds it — then
   // we show an interstitial and only claim (steal) once the user opts to open anyway.
@@ -92,68 +107,38 @@ export default function NewUpload() {
     return () => presence.unhold(showId);
   }, [showId, proceeding]);
 
+  // When a live upload finishes, the server has already recorded the staged
+  // video (in the multipart 'complete' step) — just refetch so the ready state
+  // is durable across navigation. A fresh upload supersedes a drop-folder pick.
   useEffect(() => {
-    if (activeUpload?.status === 'done' && activeUpload.key) {
-      setVideoS3Key(activeUpload.key);
-      setVideoFilename(activeUpload.filename);
+    if (activeUpload?.status === 'done') {
+      setPickedVideo(null);
       setSelectedPendingId(null);
-      if (showId) {
-        void api.putStaged(showId, {
-          s3Key: activeUpload.key,
-          filename: activeUpload.filename,
-          sizeBytes: activeUpload.totalBytes,
-        }).catch(() => {});
-      }
+      void qc.invalidateQueries({ queryKey: ['staged', showId] });
+      void qc.invalidateQueries({ queryKey: ['staged-shows'] });
     }
-  }, [activeUpload?.status, activeUpload?.key]);
+  }, [activeUpload?.status, showId, qc]);
 
   // Platforms already published on this record (YouTube/MixCloud), from mediaLinks.
   const existingLinks = selectedShow?.mediaLinks ?? [];
   const existingPlatforms = existingLinks.map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
 
+  // On show change, reset the editable fields + drop-folder pick. The video
+  // itself is DERIVED (staged query + live upload, both keyed by showId), so
+  // there's nothing to reset or race here.
   useEffect(() => {
     if (!selectedShow) return;
     setTitle(publishTitle(selectedShow.title, selectedShow.date));
     setDescription(selectedShow.description ?? '');
     setTags(selectedShow.tags ?? []);
     setImageUrl(selectedShow.imageUrl ?? '');
+    setPickedVideo(null);
     setSelectedPendingId(null);
-    // Restore a previously-completed upload for this show from the server (survives
-    // refresh and works on any machine).
-    setVideoS3Key('');
-    setVideoFilename('');
 
     // Re-publish smarts: pre-select only the platform(s) not yet up. If both are
-    // already published, select NONE (never re-publish onto them — that would
-    // duplicate the video/cloudcast).
+    // already published, select NONE (never re-publish → duplicate).
     const already = (selectedShow.mediaLinks ?? []).map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
-    const missing = ALL_PLATFORMS.filter((p) => !already.includes(p));
-    setPlatforms(missing);
-
-    const sid = selectedShow.id;
-    let cancelled = false;
-    void api
-      .getStaged(sid)
-      .then(async (v) => {
-        if (cancelled || upload.get(sid)?.status === 'uploading') return;
-        if (v) {
-          setVideoS3Key(v.s3_key);
-          setVideoFilename(v.filename);
-          return;
-        }
-        // No pending staged video — fall back to a previously PUBLISHED upload for
-        // this show (its staged row was cleared on publish) so the recording isn't
-        // "lost" from the form.
-        const done = await api.getShowVideo(sid).catch(() => null);
-        if (!cancelled && done?.videoS3Key) {
-          setVideoS3Key(done.videoS3Key);
-          setVideoFilename(done.filename);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
+    setPlatforms(ALL_PLATFORMS.filter((p) => !already.includes(p)));
   }, [selectedShow?.id]);
 
   // Seed the description from AI, but NOT tags — good tags need the audio
@@ -167,6 +152,19 @@ export default function NewUpload() {
     if (field === 'description') setDescription(value as string);
     if (field === 'tags') setTags(value as string[]);
     if (field === 'imageUrl') setImageUrl(value as string);
+  };
+
+  // Discard this show's video: clear the pick, cancel/forget any live upload, and
+  // remove the server-staged record. The derived `video` then falls back to none.
+  const handleReplace = () => {
+    setPickedVideo(null);
+    setSelectedPendingId(null);
+    if (showId) {
+      upload.reset(showId);
+      void api.deleteStaged(showId).catch(() => {});
+      void qc.invalidateQueries({ queryKey: ['staged', showId] });
+      void qc.invalidateQueries({ queryKey: ['staged-shows'] });
+    }
   };
 
   const handleSubmit = () => {
@@ -188,6 +186,9 @@ export default function NewUpload() {
       {
         onSuccess: async ({ uploadId }) => {
           if (selectedPendingId) await claim.mutateAsync(selectedPendingId).catch(() => {});
+          // Publishing clears the staged row server-side — reflect that.
+          qc.invalidateQueries({ queryKey: ['staged', showId] });
+          qc.invalidateQueries({ queryKey: ['staged-shows'] });
           void navigate({ to: '/history', search: { highlight: uploadId } });
         },
       }
@@ -261,7 +262,7 @@ export default function NewUpload() {
                   key={v.id}
                   type="button"
                   onClick={() => {
-                    setVideoS3Key(v.s3_key);
+                    setPickedVideo({ s3_key: v.s3_key, filename: v.filename });
                     setSelectedPendingId(v.id);
                   }}
                   className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-sm transition-colors ${
@@ -290,29 +291,22 @@ export default function NewUpload() {
           />
         </Section>
 
-        {!selectedPendingId && (
-          <Section title="Video">
-            {videoS3Key && activeUpload?.status !== 'uploading' ? (
-              <div className="flex items-center justify-between border border-ok/40 bg-ok-soft px-4 py-3">
-                <span className="truncate text-sm text-ink">✓ {videoFilename || 'video ready'}</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setVideoS3Key('');
-                    setVideoFilename('');
-                    if (showId) upload.reset(showId);
-                    if (showId) void api.deleteStaged(showId).catch(() => {});
-                  }}
-                  className="shrink-0 text-xs text-faint hover:text-danger"
-                >
-                  replace
-                </button>
-              </div>
-            ) : (
-              showId && <UploadControl showId={showId} />
-            )}
-          </Section>
-        )}
+        <Section title="Video">
+          {video.state === 'ready' ? (
+            <div className="flex items-center justify-between border border-ok/40 bg-ok-soft px-4 py-3">
+              <span className="truncate text-sm text-ink">✓ {videoFilename || 'video ready'}</span>
+              <button
+                type="button"
+                onClick={handleReplace}
+                className="shrink-0 text-xs text-faint hover:text-danger"
+              >
+                replace
+              </button>
+            </div>
+          ) : (
+            showId && <UploadControl showId={showId} />
+          )}
+        </Section>
 
         <Section title="Trim">
           <TrimFields

@@ -115,6 +115,12 @@ export function getPlatformJobsForUpload(db: Sql, uploadId: string) {
   `;
 }
 
+// All show_ids that currently have a staged (uploaded-but-unpublished) video —
+// so the "to process" table can flag which shows already have a recording.
+export function listStagedShowIds(db: Sql) {
+  return db<{ show_id: string }[]>`SELECT show_id FROM staged_uploads`.then((r) => r.map((x) => x.show_id));
+}
+
 // Most recent upload for a show — used to restore its (published) video into the
 // form after the staged row has been cleared.
 export function getLatestUploadForShow(db: Sql, showId: string) {

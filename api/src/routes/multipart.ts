@@ -8,6 +8,7 @@ import {
   completeMultipart,
   abortMultipart,
 } from '../services/s3';
+import { upsertStagedUpload } from '../db/queries';
 
 export const multipartRouter = Router();
 
@@ -17,6 +18,7 @@ export const PART_SIZE = 16 * 1024 * 1024;
 
 type Session = {
   id: string;
+  show_id: string | null;
   s3_key: string;
   s3_upload_id: string;
   filename: string;
@@ -35,19 +37,22 @@ const CreateSchema = z.object({
   filename: z.string().min(1),
   contentType: z.string().min(1),
   size: z.number().int().positive(),
+  // The show this upload belongs to — bound from the start so completion can
+  // record the staged video server-side.
+  showId: z.string().min(1),
 });
 
 // Start a session: create the S3 multipart upload and persist it.
 multipartRouter.post('/create', async (req, res) => {
   const parsed = CreateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
-  const { filename, contentType, size } = parsed.data;
+  const { filename, contentType, size, showId } = parsed.data;
   const key = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   try {
     const uploadId = await createMultipart(key, contentType);
     const rows = await db<{ id: string }[]>`
-      INSERT INTO multipart_uploads (s3_key, s3_upload_id, filename, size_bytes, content_type, part_size)
-      VALUES (${key}, ${uploadId}, ${filename}, ${size}, ${contentType}, ${PART_SIZE})
+      INSERT INTO multipart_uploads (show_id, s3_key, s3_upload_id, filename, size_bytes, content_type, part_size)
+      VALUES (${showId}, ${key}, ${uploadId}, ${filename}, ${size}, ${contentType}, ${PART_SIZE})
       RETURNING id
     `;
     res.status(201).json({
@@ -101,7 +106,10 @@ multipartRouter.post('/:sessionId/part/:n', async (req, res) => {
   }
 });
 
-// Finish: server gathers ETags via ListParts and completes the object.
+// Finish: server gathers ETags via ListParts, completes the object, and — the
+// key robustness point — records the staged video against the show ATOMICALLY
+// here. The show record therefore always knows it has a video the instant the
+// upload finishes, independent of the client (navigation, refresh, a crash).
 multipartRouter.post('/:sessionId/complete', async (req, res) => {
   const s = await getSession(req.params.sessionId);
   if (!s) return res.status(404).json({ error: 'Unknown session' });
@@ -109,6 +117,9 @@ multipartRouter.post('/:sessionId/complete', async (req, res) => {
   try {
     await completeMultipart(s.s3_key, s.s3_upload_id);
     await db`UPDATE multipart_uploads SET status = 'completed', completed_at = now() WHERE id = ${s.id}`;
+    if (s.show_id) {
+      await upsertStagedUpload(db, s.show_id, s.s3_key, s.filename, Number(s.size_bytes));
+    }
     res.json({ key: s.s3_key });
   } catch (err) {
     console.error('multipart complete failed:', err);

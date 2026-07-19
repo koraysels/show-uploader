@@ -75,6 +75,7 @@ export function UploadProvider({ children }: { children: ReactNode }) {
       }));
 
       uploadFileResumable(file, {
+        showId,
         signal: controller.signal,
         onProgress: (p: UploadProgress) =>
           setUploads((prev) => {
