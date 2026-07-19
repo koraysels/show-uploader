@@ -29,7 +29,13 @@ function timeAgo(iso: string): string {
 function publishTitle(name: string, date: string): string {
   const [y, m, d] = (date ?? '').split('-');
   const dmy = d && m && y ? `${d}.${m}.${y}` : date;
-  return `${name} ${dmy} @ coming soon`;
+  // Strip an existing "<date> @ coming soon" suffix first so a show title that
+  // already follows the convention doesn't get the date/tag appended twice.
+  const base = (name ?? '')
+    .replace(/\s*@\s*coming soon\s*$/i, '')
+    .replace(/\s*\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*$/, '')
+    .trim();
+  return `${base} ${dmy} @ coming soon`;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

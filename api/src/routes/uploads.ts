@@ -250,7 +250,17 @@ uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
       // Tags are the PocketBase genres relation (PB is master) — resolve the
       // edited names to genre IDs (creating any new ones) and replace the relation.
       const genres = await resolveGenreIds(edit.tags);
-      await updateArchiveRecord(upload.show_id, { title: edit.title, notes: edit.description, genres });
+      // Re-assert the published platform links too, so an edit fully re-syncs the
+      // archive record (e.g. after a write-back that failed at publish time).
+      const mediaLinks: { label: string; type: string; url: string }[] = [];
+      if (yt) mediaLinks.push({ label: 'YouTube', type: 'video', url: yt.result_url! });
+      if (mc) mediaLinks.push({ label: 'MixCloud', type: 'audio', url: mc.result_url! });
+      await updateArchiveRecord(upload.show_id, {
+        title: edit.title,
+        notes: edit.description,
+        genres,
+        ...(mediaLinks.length ? { mediaLinks } : {}),
+      });
       sync.pocketbase = 'ok';
     } catch (err) {
       sync.pocketbase = err instanceof Error ? err.message : String(err);
