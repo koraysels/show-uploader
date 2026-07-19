@@ -53,7 +53,7 @@ multipartRouter.post('/create', async (req, res) => {
     const uploadId = await createMultipart(key, contentType);
     const rows = await db<{ id: string }[]>`
       INSERT INTO multipart_uploads (show_id, s3_key, s3_upload_id, filename, size_bytes, content_type, part_size)
-      VALUES (${showId}, ${key}, ${uploadId}, ${filename}, ${size}, ${contentType}, ${PART_SIZE})
+      VALUES (${showId ?? null}, ${key}, ${uploadId}, ${filename}, ${size}, ${contentType}, ${PART_SIZE})
       RETURNING id
     `;
     res.status(201).json({
