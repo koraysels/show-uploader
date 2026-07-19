@@ -37,7 +37,8 @@ const HEARTBEAT_MS = 60_000;
 export function PresenceProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const upload = useUpload();
-  const uploading = upload.state.status === 'uploading';
+  // Any upload in progress keeps the last-held show's claim alive after navigation.
+  const uploading = Object.values(upload.uploads).some((u) => u.status === 'uploading');
   const myUserId = (user?.profile.sub as string | undefined) ?? null;
 
   const [online, setOnline] = useState<OnlineUser[]>([]);

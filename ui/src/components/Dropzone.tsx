@@ -1,18 +1,19 @@
-import { createContext, useCallback, useContext, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { useDropzone } from 'react-dropzone';
+import { Link } from '@tanstack/react-router';
 import prettyBytes from 'pretty-bytes';
 import prettyMs from 'pretty-ms';
-import { useUpload } from '../upload/UploadProvider';
+import { useUpload, type UploadItem } from '../upload/UploadProvider';
 
 const OpenContext = createContext<() => void>(() => {});
 
-export function FullPageDropzone({ children }: { children: ReactNode }) {
+export function FullPageDropzone({ children, showId }: { children: ReactNode; showId: string }) {
   const { start } = useUpload();
   const onDrop = useCallback(
     (accepted: File[]) => {
-      if (accepted[0]) start(accepted[0]);
+      if (accepted[0]) start(accepted[0], showId);
     },
-    [start]
+    [start, showId]
   );
   const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
     onDrop,
@@ -49,17 +50,18 @@ function stats(uploadedBytes: number, totalBytes: number, bytesPerSec: number): 
   return parts.join(' · ');
 }
 
-export function UploadControl() {
+export function UploadControl({ showId }: { showId: string }) {
   const open = useContext(OpenContext);
-  const { state, cancel } = useUpload();
-  const pct = Math.round(state.fraction * 100);
+  const { get, cancel } = useUpload();
+  const item = get(showId);
+  const pct = Math.round((item?.fraction ?? 0) * 100);
 
-  if (state.status === 'uploading') {
+  if (item?.status === 'uploading') {
     return (
       <div className="rounded-xl border border-line bg-surface p-5">
         <div className="flex items-center justify-between gap-3">
-          <span className="truncate text-sm text-ink">{state.filename}</span>
-          <button type="button" onClick={cancel} className="shrink-0 text-xs text-faint hover:text-danger">
+          <span className="truncate text-sm text-ink">{item.filename}</span>
+          <button type="button" onClick={() => cancel(showId)} className="shrink-0 text-xs text-faint hover:text-danger">
             Cancel
           </button>
         </div>
@@ -67,16 +69,16 @@ export function UploadControl() {
           <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
         </div>
         <p className="mt-2 text-xs text-muted">
-          {pct}% · {stats(state.uploadedBytes, state.totalBytes, state.bytesPerSec)} · resumable
+          {pct}% · {stats(item.uploadedBytes, item.totalBytes, item.bytesPerSec)} · resumable
         </p>
       </div>
     );
   }
 
-  if (state.status === 'done') {
+  if (item?.status === 'done') {
     return (
       <div className="flex items-center justify-between rounded-xl border border-ok/40 bg-ok-soft px-5 py-4">
-        <span className="truncate text-sm text-ink">{state.filename}</span>
+        <span className="truncate text-sm text-ink">{item.filename}</span>
         <span className="shrink-0 text-sm font-medium text-ok">✓ ready</span>
       </div>
     );
@@ -87,13 +89,13 @@ export function UploadControl() {
       type="button"
       onClick={open}
       className={`w-full rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-        state.status === 'error' ? 'border-danger/50 bg-danger-soft' : 'border-line hover:border-accent hover:bg-accent-soft/40'
+        item?.status === 'error' ? 'border-danger/50 bg-danger-soft' : 'border-line hover:border-accent hover:bg-accent-soft/40'
       }`}
     >
-      {state.status === 'error' ? (
+      {item?.status === 'error' ? (
         <>
           <p className="text-sm font-medium text-danger">Upload failed</p>
-          <p className="mt-1 text-xs text-muted">{state.error}</p>
+          <p className="mt-1 text-xs text-muted">{item.error}</p>
           <p className="mt-2 text-xs text-faint">Click to choose a file and retry</p>
         </>
       ) : (
@@ -106,17 +108,51 @@ export function UploadControl() {
   );
 }
 
-export function UploadIndicator() {
-  const { state } = useUpload();
-  if (state.status !== 'uploading') return null;
-  const pct = Math.round(state.fraction * 100);
+// One row in the header queue: clickable, jumps to that show's upload page.
+function IndicatorRow({ item, compact }: { item: UploadItem; compact?: boolean }) {
+  const pct = Math.round(item.fraction * 100);
   return (
-    <div className="flex items-center gap-2 text-xs text-muted">
-      <span className="max-w-[140px] truncate">{state.filename}</span>
-      <span className="h-1 w-20 overflow-hidden rounded-full bg-line">
+    <Link
+      to="/upload/$showId"
+      params={{ showId: item.showId }}
+      className={`flex items-center gap-2 text-xs text-muted hover:text-ink ${compact ? '' : 'w-full px-1 py-1'}`}
+    >
+      <span className="max-w-[140px] truncate">{item.filename}</span>
+      <span className="h-1 w-20 shrink-0 overflow-hidden rounded-full bg-line">
         <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
       </span>
-      <span className="tabular-nums">{pct}%</span>
+      <span className="shrink-0 tabular-nums">{pct}%</span>
+    </Link>
+  );
+}
+
+export function UploadIndicator() {
+  const { uploads } = useUpload();
+  const [open, setOpen] = useState(false);
+  const active = Object.values(uploads).filter((u) => u.status === 'uploading');
+
+  if (active.length === 0) return null;
+  if (active.length === 1) return <IndicatorRow item={active[0]} compact />;
+
+  const avg = Math.round((active.reduce((s, u) => s + u.fraction, 0) / active.length) * 100);
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 text-xs text-muted hover:text-ink"
+      >
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden />
+        {active.length} uploading · {avg}%
+        <span className="text-[9px]">{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div className="absolute right-0 top-full z-50 mt-2 w-72 space-y-0.5 border border-line bg-surface p-2 shadow-md">
+          {active.map((u) => (
+            <IndicatorRow key={u.showId} item={u} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

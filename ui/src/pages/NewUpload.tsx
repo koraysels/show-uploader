@@ -72,6 +72,7 @@ export default function NewUpload() {
   const claim = useClaimPending();
   const createUpload = useCreateUpload();
   const upload = useUpload();
+  const activeUpload = showId ? upload.get(showId) : undefined;
   const presence = usePresence();
 
   // Soft claim: opening auto-claims the show, unless someone else holds it — then
@@ -92,19 +93,19 @@ export default function NewUpload() {
   }, [showId, proceeding]);
 
   useEffect(() => {
-    if (upload.state.status === 'done' && upload.state.key) {
-      setVideoS3Key(upload.state.key);
-      setVideoFilename(upload.state.filename);
+    if (activeUpload?.status === 'done' && activeUpload.key) {
+      setVideoS3Key(activeUpload.key);
+      setVideoFilename(activeUpload.filename);
       setSelectedPendingId(null);
       if (showId) {
         void api.putStaged(showId, {
-          s3Key: upload.state.key,
-          filename: upload.state.filename,
-          sizeBytes: upload.state.totalBytes,
+          s3Key: activeUpload.key,
+          filename: activeUpload.filename,
+          sizeBytes: activeUpload.totalBytes,
         }).catch(() => {});
       }
     }
-  }, [upload.state.status, upload.state.key]);
+  }, [activeUpload?.status, activeUpload?.key]);
 
   // Platforms already published on this record (YouTube/MixCloud), from mediaLinks.
   const existingLinks = selectedShow?.mediaLinks ?? [];
@@ -134,7 +135,7 @@ export default function NewUpload() {
     void api
       .getStaged(sid)
       .then(async (v) => {
-        if (cancelled || upload.state.status === 'uploading') return;
+        if (cancelled || upload.get(sid)?.status === 'uploading') return;
         if (v) {
           setVideoS3Key(v.s3_key);
           setVideoFilename(v.filename);
@@ -227,7 +228,7 @@ export default function NewUpload() {
   }
 
   return (
-    <FullPageDropzone>
+    <FullPageDropzone showId={selectedShow.id}>
       <div className="mx-auto max-w-xl space-y-8">
         {existingClaim && existingClaim.userSub === presence.myUserId && ackSteal && (
           <p className="border border-ink bg-paper px-3 py-2 text-xs lowercase text-muted">
@@ -291,7 +292,7 @@ export default function NewUpload() {
 
         {!selectedPendingId && (
           <Section title="Video">
-            {videoS3Key && upload.state.status !== 'uploading' ? (
+            {videoS3Key && activeUpload?.status !== 'uploading' ? (
               <div className="flex items-center justify-between border border-ok/40 bg-ok-soft px-4 py-3">
                 <span className="truncate text-sm text-ink">✓ {videoFilename || 'video ready'}</span>
                 <button
@@ -299,7 +300,7 @@ export default function NewUpload() {
                   onClick={() => {
                     setVideoS3Key('');
                     setVideoFilename('');
-                    upload.reset();
+                    if (showId) upload.reset(showId);
                     if (showId) void api.deleteStaged(showId).catch(() => {});
                   }}
                   className="shrink-0 text-xs text-faint hover:text-danger"
@@ -308,7 +309,7 @@ export default function NewUpload() {
                 </button>
               </div>
             ) : (
-              <UploadControl />
+              showId && <UploadControl showId={showId} />
             )}
           </Section>
         )}

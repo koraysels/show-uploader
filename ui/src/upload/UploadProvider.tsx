@@ -1,9 +1,12 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { uploadFileResumable, type UploadProgress } from './multipartUpload';
 
-export type UploadStatus = 'idle' | 'uploading' | 'done' | 'error';
+export type UploadStatus = 'uploading' | 'done' | 'error';
 
-type UploadState = {
+// One upload, tied to the show it belongs to. Several can run at once (one per
+// show), so an upload's progress/result only ever shows on its own show's form.
+export type UploadItem = {
+  showId: string;
   status: UploadStatus;
   filename: string;
   fraction: number;
@@ -15,21 +18,11 @@ type UploadState = {
 };
 
 type UploadContextValue = {
-  state: UploadState;
-  start: (file: File) => void;
-  cancel: () => void;
-  reset: () => void;
-};
-
-const initial: UploadState = {
-  status: 'idle',
-  filename: '',
-  fraction: 0,
-  uploadedBytes: 0,
-  totalBytes: 0,
-  bytesPerSec: 0,
-  key: null,
-  error: null,
+  uploads: Record<string, UploadItem>;
+  get: (showId: string) => UploadItem | undefined;
+  start: (file: File, showId: string) => void;
+  cancel: (showId: string) => void;
+  reset: (showId: string) => void;
 };
 
 const UploadContext = createContext<UploadContextValue | null>(null);
@@ -40,54 +33,95 @@ export function useUpload(): UploadContextValue {
   return ctx;
 }
 
-// Lives above the router so an in-progress upload survives route navigation
+type Sample = { time: number; bytes: number; speed: number };
+
+// Lives above the router so in-progress uploads survive route navigation
 // (YouTube-Studio style). A hard reload stops JS; the engine resumes from the
 // server's recorded parts when the same file is re-selected.
 export function UploadProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<UploadState>(initial);
-  const abortRef = useRef<AbortController | null>(null);
-  // Rolling sample to derive a smoothed upload speed from progress deltas.
-  const sampleRef = useRef<{ time: number; bytes: number; speed: number }>({ time: 0, bytes: 0, speed: 0 });
+  const [uploads, setUploads] = useState<Record<string, UploadItem>>({});
+  const abortRefs = useRef<Map<string, AbortController>>(new Map());
+  const sampleRefs = useRef<Map<string, Sample>>(new Map());
 
-  const start = useCallback((file: File) => {
-    abortRef.current?.abort();
-    const controller = new AbortController();
-    abortRef.current = controller;
-    sampleRef.current = { time: performance.now(), bytes: 0, speed: 0 };
-
-    setState({ ...initial, status: 'uploading', filename: file.name, totalBytes: file.size });
-
-    uploadFileResumable(file, {
-      signal: controller.signal,
-      onProgress: (p: UploadProgress) =>
-        setState((s) => {
-          if (s.status !== 'uploading') return s;
-          // Sample ~every 0.4s and smooth (EMA) so the number doesn't jitter.
-          const now = performance.now();
-          const last = sampleRef.current;
-          const dt = (now - last.time) / 1000;
-          let bytesPerSec = last.speed;
-          if (dt >= 0.4 && p.uploadedBytes >= last.bytes) {
-            const inst = (p.uploadedBytes - last.bytes) / dt;
-            bytesPerSec = last.speed ? last.speed * 0.6 + inst * 0.4 : inst;
-            sampleRef.current = { time: now, bytes: p.uploadedBytes, speed: bytesPerSec };
-          }
-          return { ...s, fraction: p.fraction, uploadedBytes: p.uploadedBytes, totalBytes: p.totalBytes, bytesPerSec };
-        }),
-    })
-      .then(({ key }) => setState((s) => ({ ...s, status: 'done', key, fraction: 1 })))
-      .catch((err: unknown) => {
-        if (controller.signal.aborted) return; // cancelled — leave as idle-ish
-        setState((s) => ({ ...s, status: 'error', error: err instanceof Error ? err.message : 'Upload failed' }));
-      });
+  const patch = useCallback((showId: string, next: Partial<UploadItem>) => {
+    setUploads((prev) => {
+      const cur = prev[showId];
+      if (!cur) return prev;
+      return { ...prev, [showId]: { ...cur, ...next } };
+    });
   }, []);
 
-  const cancel = useCallback(() => {
-    abortRef.current?.abort();
-    setState(initial);
+  const start = useCallback(
+    (file: File, showId: string) => {
+      // Replace any prior upload for THIS show (keep other shows' uploads running).
+      abortRefs.current.get(showId)?.abort();
+      const controller = new AbortController();
+      abortRefs.current.set(showId, controller);
+      sampleRefs.current.set(showId, { time: performance.now(), bytes: 0, speed: 0 });
+
+      setUploads((prev) => ({
+        ...prev,
+        [showId]: {
+          showId,
+          status: 'uploading',
+          filename: file.name,
+          fraction: 0,
+          uploadedBytes: 0,
+          totalBytes: file.size,
+          bytesPerSec: 0,
+          key: null,
+          error: null,
+        },
+      }));
+
+      uploadFileResumable(file, {
+        signal: controller.signal,
+        onProgress: (p: UploadProgress) =>
+          setUploads((prev) => {
+            const cur = prev[showId];
+            if (!cur || cur.status !== 'uploading') return prev;
+            // Sample ~every 0.4s and smooth (EMA) so the speed doesn't jitter.
+            const now = performance.now();
+            const last = sampleRefs.current.get(showId) ?? { time: now, bytes: 0, speed: 0 };
+            const dt = (now - last.time) / 1000;
+            let bytesPerSec = last.speed;
+            if (dt >= 0.4 && p.uploadedBytes >= last.bytes) {
+              const inst = (p.uploadedBytes - last.bytes) / dt;
+              bytesPerSec = last.speed ? last.speed * 0.6 + inst * 0.4 : inst;
+              sampleRefs.current.set(showId, { time: now, bytes: p.uploadedBytes, speed: bytesPerSec });
+            }
+            return {
+              ...prev,
+              [showId]: { ...cur, fraction: p.fraction, uploadedBytes: p.uploadedBytes, totalBytes: p.totalBytes, bytesPerSec },
+            };
+          }),
+      })
+        .then(({ key }) => patch(showId, { status: 'done', key, fraction: 1 }))
+        .catch((err: unknown) => {
+          if (controller.signal.aborted) return; // cancelled
+          patch(showId, { status: 'error', error: err instanceof Error ? err.message : 'Upload failed' });
+        });
+    },
+    [patch]
+  );
+
+  const remove = useCallback((showId: string) => {
+    abortRefs.current.get(showId)?.abort();
+    abortRefs.current.delete(showId);
+    sampleRefs.current.delete(showId);
+    setUploads((prev) => {
+      if (!(showId in prev)) return prev;
+      const next = { ...prev };
+      delete next[showId];
+      return next;
+    });
   }, []);
 
-  const reset = useCallback(() => setState(initial), []);
+  const get = useCallback((showId: string) => uploads[showId], [uploads]);
 
-  return <UploadContext.Provider value={{ state, start, cancel, reset }}>{children}</UploadContext.Provider>;
+  return (
+    <UploadContext.Provider value={{ uploads, get, start, cancel: remove, reset: remove }}>
+      {children}
+    </UploadContext.Provider>
+  );
 }
