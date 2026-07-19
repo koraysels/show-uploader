@@ -108,21 +108,29 @@ export function UploadControl({ showId }: { showId: string }) {
   );
 }
 
-// One row in the header queue: clickable, jumps to that show's upload page.
+// One row in the header queue: clickable (jumps to that show), with a cancel ✕
+// so a wrong file can be stopped from anywhere (aborts the S3 multipart too).
 function IndicatorRow({ item, compact }: { item: UploadItem; compact?: boolean }) {
+  const { cancel } = useUpload();
   const pct = Math.round(item.fraction * 100);
   return (
-    <Link
-      to="/upload/$showId"
-      params={{ showId: item.showId }}
-      className={`flex items-center gap-2 text-xs text-muted hover:text-ink ${compact ? '' : 'w-full px-1 py-1'}`}
-    >
-      <span className="max-w-[140px] truncate">{item.filename}</span>
-      <span className="h-1 w-20 shrink-0 overflow-hidden rounded-full bg-line">
-        <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-      </span>
-      <span className="shrink-0 tabular-nums">{pct}%</span>
-    </Link>
+    <span className={`flex items-center gap-2 text-xs text-muted ${compact ? '' : 'w-full px-1 py-1'}`}>
+      <Link to="/upload/$showId" params={{ showId: item.showId }} className="flex min-w-0 items-center gap-2 hover:text-ink">
+        <span className="max-w-[140px] truncate">{item.filename}</span>
+        <span className="h-1 w-20 shrink-0 overflow-hidden rounded-full bg-line">
+          <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+        </span>
+        <span className="shrink-0 tabular-nums">{pct}%</span>
+      </Link>
+      <button
+        type="button"
+        onClick={() => cancel(item.showId)}
+        title="cancel upload"
+        className="shrink-0 text-faint hover:text-danger"
+      >
+        ✕
+      </button>
+    </span>
   );
 }
 
