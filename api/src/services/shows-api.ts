@@ -51,6 +51,18 @@ export function toAgendaShow(rec: ArchiveItem): AgendaShow {
 // Draft archive records are gated behind superuser auth, so we hold a token and
 // re-authenticate on demand (and once on a 401).
 let cachedToken: string | null = null;
+let cachedTokenAt = 0;
+// Re-auth well within PocketBase's token lifetime. Crucially, an EXPIRED token is
+// treated by PB as anonymous — draft reads/writes then come back 404/400 (not
+// 401/403), so the "retry on 401/403" path never fires and a long-lived process
+// would stay stuck as anonymous. A short TTL sidesteps that entirely.
+const TOKEN_TTL_MS = 15 * 60 * 1000;
+
+// Fresh cached token, or a newly authenticated one.
+async function getToken(): Promise<string> {
+  if (cachedToken && Date.now() - cachedTokenAt < TOKEN_TTL_MS) return cachedToken;
+  return authenticate();
+}
 
 async function authenticate(): Promise<string> {
   if (!env.PB_SERVICE_EMAIL || !env.PB_SERVICE_PASSWORD) {
@@ -64,6 +76,7 @@ async function authenticate(): Promise<string> {
   if (!res.ok) throw new Error(`PocketBase auth failed: ${res.status}`);
   const { token } = (await res.json()) as { token: string };
   cachedToken = token;
+  cachedTokenAt = Date.now();
   return token;
 }
 
@@ -81,7 +94,7 @@ async function fetchDrafts(token: string): Promise<Response> {
  * past shows whose recording still needs uploading. Requires superuser auth.
  */
 export async function listShows(): Promise<AgendaShow[]> {
-  let token = cachedToken ?? (await authenticate());
+  let token = await getToken();
   let res = await fetchDrafts(token);
   if (res.status === 401 || res.status === 403) {
     token = await authenticate();
@@ -115,7 +128,7 @@ function slugify(s: string): string {
 
 async function pbFetch(path: string, init?: RequestInit): Promise<Response> {
   const headers = (token: string) => ({ ...(init?.headers ?? {}), Authorization: token });
-  let token = cachedToken ?? (await authenticate());
+  let token = await getToken();
   let res = await fetch(`${pbBase}${path}`, { ...init, headers: headers(token) });
   if (res.status === 401 || res.status === 403) {
     token = await authenticate();
@@ -206,7 +219,7 @@ export async function updateArchiveRecord(id: string, patch: ArchivePatch): Prom
     });
   };
 
-  let token = cachedToken ?? (await authenticate());
+  let token = await getToken();
   let res = await run(token);
   if (res.status === 401 || res.status === 403) {
     token = await authenticate();
