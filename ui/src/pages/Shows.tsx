@@ -6,6 +6,7 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   getFilteredRowModel,
+  getPaginationRowModel,
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
@@ -136,14 +137,18 @@ export default function Shows() {
     data: shows,
     columns,
     state: { sorting, globalFilter: filter },
+    initialState: { pagination: { pageSize: 25 } },
     onSortingChange: setSorting,
     onGlobalFilterChange: setFilter,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
   const rows = table.getRowModel().rows;
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageCount = table.getPageCount();
 
   return (
     <div className="space-y-6">
@@ -213,9 +218,34 @@ export default function Shows() {
         </div>
       )}
       {!isLoading && !isError && (
-        <p className="text-xs text-faint">
-          {rows.length} of {shows.length} shows
-        </p>
+        <div className="flex items-center justify-between text-xs text-faint">
+          <span>
+            {table.getFilteredRowModel().rows.length} of {shows.length} shows
+          </span>
+          {pageCount > 1 && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+                className="lowercase hover:text-ink disabled:opacity-40"
+              >
+                ← prev
+              </button>
+              <span className="tabular-nums">
+                {pageIndex + 1} / {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+                className="lowercase hover:text-ink disabled:opacity-40"
+              >
+                next →
+              </button>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -3,6 +3,7 @@ import { useSearch } from '@tanstack/react-router';
 import { useUploads } from '../api/hooks';
 import type { UploadWithJobs } from '../api/client';
 import JobProgress from '../components/JobProgress';
+import { usePaged, Pager } from '../components/Pager';
 
 const isSettled = (u: UploadWithJobs) =>
   u.jobs.length > 0 && u.jobs.every((j) => j.status === 'done' || j.status === 'failed');
@@ -44,6 +45,10 @@ export default function History() {
   const { highlight } = useSearch({ strict: false }) as { highlight?: string };
   const highlightRef = useRef<HTMLDivElement>(null);
 
+  const active = uploads.filter((u) => !isSettled(u));
+  const done = uploads.filter(isSettled);
+  const paged = usePaged(done, (u) => u.title);
+
   useEffect(() => {
     if (highlight && highlightRef.current) {
       highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -51,9 +56,6 @@ export default function History() {
   }, [highlight, uploads]);
 
   if (isPending) return <p className="text-sm text-muted">Loading…</p>;
-
-  const active = uploads.filter((u) => !isSettled(u));
-  const done = uploads.filter(isSettled);
 
   return (
     <div className="space-y-8">
@@ -70,15 +72,28 @@ export default function History() {
       )}
 
       <section className="space-y-3">
-        <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">done</h1>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">done</h1>
+          {done.length > 0 && (
+            <input
+              value={paged.query}
+              onChange={(e) => paged.setQuery(e.target.value)}
+              placeholder="Filter done…"
+              className="field w-full sm:w-64"
+            />
+          )}
+        </div>
         {done.length === 0 ? (
           <p className="text-sm text-muted">
             {active.length > 0 ? 'nothing finished yet.' : 'no uploads yet. pick a show to get started.'}
           </p>
         ) : (
-          done.map((upload) => (
-            <UploadCard key={upload.id} upload={upload} highlight={highlight} highlightRef={highlightRef} />
-          ))
+          <>
+            {paged.slice.map((upload) => (
+              <UploadCard key={upload.id} upload={upload} highlight={highlight} highlightRef={highlightRef} />
+            ))}
+            <Pager page={paged.page} pageCount={paged.pageCount} total={paged.total} setPage={paged.setPage} unit="done" />
+          </>
         )}
       </section>
     </div>

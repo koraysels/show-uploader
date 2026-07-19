@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useUploads, useUpdateMetadata, useGenres, usePublishRecord, useGenerateAudio } from '../api/hooks';
 import TagInput from '../components/TagInput';
+import { usePaged, Pager } from '../components/Pager';
 import type { UploadWithJobs } from '../api/client';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -173,24 +174,35 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
 
 export default function Archive() {
   const { data: uploads = [], isPending } = useUploads();
-
-  if (isPending) return <p className="text-sm text-muted">Loading…</p>;
-
   const archived = uploads
     .filter((u) => publishedJobs(u).length > 0)
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
+  const paged = usePaged(archived, (u) => u.title);
+
+  if (isPending) return <p className="text-sm text-muted">Loading…</p>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">archive</h1>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">archive</h1>
+        <input
+          value={paged.query}
+          onChange={(e) => paged.setQuery(e.target.value)}
+          placeholder="Filter archive…"
+          className="field w-full sm:w-64"
+        />
+      </header>
       {archived.length === 0 ? (
         <p className="text-sm text-muted">no published shows yet.</p>
       ) : (
-        <div className="space-y-3">
-          {archived.map((u) => (
-            <ArchiveCard key={u.id} upload={u} />
-          ))}
-        </div>
+        <>
+          <div className="space-y-3">
+            {paged.slice.map((u) => (
+              <ArchiveCard key={u.id} upload={u} />
+            ))}
+          </div>
+          <Pager page={paged.page} pageCount={paged.pageCount} total={paged.total} setPage={paged.setPage} unit="shows" />
+        </>
       )}
     </div>
   );
