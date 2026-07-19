@@ -6,6 +6,7 @@ import { uploadToMixcloud } from '../services/mixcloud-client';
 import { extractAudio, prependJingle, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import { setJobStatus, getUploadRow } from '../db';
 import { finalizeArchiveRecord } from '../services/shows-api';
+import { baseTitle } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
@@ -71,7 +72,7 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     const row = await getUploadRow(uploadId);
     if (row) {
       await finalizeArchiveRecord(row.show_id, {
-        title,
+        title: baseTitle(title),
         notes: description,
         tags,
         mediaLinks: [{ label: 'MixCloud', type: 'audio', url: resultUrl }],

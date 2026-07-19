@@ -19,6 +19,7 @@ import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../service
 import { getLiveState } from '../services/live-guard';
 import { updateArchiveRecord, resolveGenreIds } from '../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../services/platform-metadata';
+import { baseTitle } from '../services/format';
 import { env } from '../env';
 
 export const uploadsRouter = Router();
@@ -256,7 +257,9 @@ uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
       if (yt) mediaLinks.push({ label: 'YouTube', type: 'video', url: yt.result_url! });
       if (mc) mediaLinks.push({ label: 'MixCloud', type: 'audio', url: mc.result_url! });
       await updateArchiveRecord(upload.show_id, {
-        title: edit.title,
+        // The archive record keeps the plain title; the date/@coming-soon suffix
+        // is only for the platform titles.
+        title: baseTitle(edit.title),
         notes: edit.description,
         genres,
         ...(mediaLinks.length ? { mediaLinks } : {}),

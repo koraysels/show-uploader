@@ -6,6 +6,7 @@ import { uploadToYoutube } from '../services/youtube-client';
 import { setJobStatus, getUploadRow } from '../db';
 import { makeTempPath, cleanup, resolveTrim, trimVideoCopy } from '../services/ffmpeg';
 import { finalizeArchiveRecord } from '../services/shows-api';
+import { baseTitle } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processYoutube(job: Job<JobPayload>): Promise<string> {
@@ -50,7 +51,7 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     const row = await getUploadRow(uploadId);
     if (row) {
       await finalizeArchiveRecord(row.show_id, {
-        title,
+        title: baseTitle(title),
         notes: description,
         tags,
         mediaLinks: [{ label: 'YouTube', type: 'video', url: resultUrl }],

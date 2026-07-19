@@ -14,3 +14,13 @@ export function appendHashtags(description: string, tags: string[]): string {
   if (!tail) return description;
   return description ? `${description}\n\n${tail}` : tail;
 }
+
+// Strip the "<DD.MM.YYYY> @ coming soon" convention suffix so PocketBase keeps
+// the plain show title — that suffix belongs only on the platform (YT/MixCloud)
+// titles, not on the archive record.
+export function baseTitle(title: string): string {
+  return (title ?? '')
+    .replace(/\s*@\s*coming soon\s*$/i, '')
+    .replace(/\s*\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*$/, '')
+    .trim();
+}
