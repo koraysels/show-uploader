@@ -17,6 +17,9 @@ export async function setJobStatus(
       progress_pct = COALESCE(${extra.progress_pct ?? null}, progress_pct),
       updated_at = NOW()
     WHERE id = ${jobId}
+      -- Never move a finished job back to processing/queued: a late upload
+      -- progress callback firing after 'done' must not un-finish the job.
+      AND (status NOT IN ('done', 'failed') OR ${status} IN ('done', 'failed'))
   `;
 }
 
