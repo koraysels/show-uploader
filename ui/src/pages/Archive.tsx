@@ -77,11 +77,11 @@ function EditPanel({ upload }: { upload: UploadWithJobs }) {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={!dirty || !title.trim() || update.isPending}
+          disabled={!title.trim() || update.isPending}
           onClick={() => update.mutate({ title: title.trim(), description, tags })}
           className="bg-ink px-4 py-2 text-sm font-medium lowercase text-paper hover:opacity-90 disabled:opacity-40"
         >
-          {update.isPending ? 'syncing…' : 'save & sync'}
+          {update.isPending ? 'syncing…' : dirty ? 'save & sync' : 're-sync'}
         </button>
         {update.isError && <span className="text-xs text-danger">save failed — try again</span>}
         {sync && (
