@@ -38,8 +38,9 @@ const CreateSchema = z.object({
   contentType: z.string().min(1),
   size: z.number().int().positive(),
   // The show this upload belongs to — bound from the start so completion can
-  // record the staged video server-side.
-  showId: z.string().min(1),
+  // record the staged video server-side. Optional so a stale (pre-deploy) client
+  // that doesn't send it still uploads instead of hard-failing with 400.
+  showId: z.string().min(1).optional(),
 });
 
 // Start a session: create the S3 multipart upload and persist it.
