@@ -25,13 +25,15 @@ export async function extractAudio(
   opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    // Direct AAC stream copy out of the MKV — no re-encode, so no quality loss.
+    // (OBS records AAC; the .m4a container just rewraps the same audio stream.)
     const cmd = ffmpeg(videoPath)
       .noVideo()
-      .audioCodec('aac')
-      .audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
+      .audioCodec('copy');
 
     applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
 
+    cmd.outputOptions('-movflags', '+faststart');
     cmd.output(outputPath);
 
     if (opts?.onProgress) {
@@ -44,29 +46,28 @@ export async function extractAudio(
   });
 }
 
+// Prepend a jingle to the (stream-copied) show audio. Uses the concat FILTER,
+// not the demuxer: the show audio is now a raw copy of the MKV's AAC (arbitrary
+// sample rate / channels), so a jingle with different params must be resampled
+// through the filtergraph. This re-encodes the result — unavoidable when gluing
+// two differently-encoded clips, and only happens when a jingle is actually set.
 export async function prependJingle(
   jinglePath: string,
   audioPath: string,
   outputPath: string
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    const listFile = `${outputPath}.concat.txt`;
-    fs.writeFileSync(listFile, `file '${jinglePath}'\nfile '${audioPath}'\n`);
-
     ffmpeg()
-      .input(listFile)
-      .inputOptions(['-f', 'concat', '-safe', '0'])
+      .input(jinglePath)
+      .input(audioPath)
+      .complexFilter(['[0:a][1:a]concat=n=2:v=0:a=1[out]'])
+      .outputOptions(['-map', '[out]'])
       .audioCodec('aac')
       .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)
+      .outputOptions(['-movflags', '+faststart'])
       .output(outputPath)
-      .on('end', () => {
-        try { fs.unlinkSync(listFile); } catch { /* ignore */ }
-        resolve();
-      })
-      .on('error', (err: Error) => {
-        try { fs.unlinkSync(listFile); } catch { /* ignore */ }
-        reject(err);
-      })
+      .on('end', () => resolve())
+      .on('error', reject)
       .run();
   });
 }
