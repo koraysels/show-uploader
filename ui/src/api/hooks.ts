@@ -85,6 +85,14 @@ export function usePublishRecord() {
   return useMutation({ mutationFn: (uploadId: string) => api.publishRecord(uploadId) });
 }
 
+export function useGenerateAudio() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (uploadId: string) => api.generateAudio(uploadId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+  });
+}
+
 export function useClaimPending() {
   const qc = useQueryClient();
   return useMutation({

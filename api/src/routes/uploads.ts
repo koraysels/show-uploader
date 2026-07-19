@@ -238,6 +238,39 @@ uploadsRouter.post('/:uploadId/jobs/:platform/retry', async (req, res) => {
   }
 });
 
+// (Re)generate the downloadable audio archive (m4a) for a completed upload —
+// used when the archive job didn't run (e.g. a platform was marked done out of
+// band). Reuses or creates the 'archive' job and enqueues the extraction.
+uploadsRouter.post('/:uploadId/archive', async (req, res) => {
+  try {
+    const upload = await getUploadWithJobs(db, req.params.uploadId);
+    if (!upload) return res.status(404).json({ error: 'Upload not found' });
+    let job = upload.jobs.find((j) => j.platform === 'archive');
+    if (job?.status === 'processing') return res.status(409).json({ error: 'Already generating' });
+    if (!job) job = await createPlatformJob(db, { upload_id: upload.id, platform: 'archive' });
+    else await resetPlatformJobForRetry(db, job.id);
+    await uploadQueue.add('archive', {
+      jobId: job.id,
+      uploadId: upload.id,
+      platform: 'archive',
+      videoS3Key: upload.video_s3_key,
+      title: upload.title,
+      description: upload.description ?? '',
+      tags: upload.tags ?? [],
+      imageUrl: upload.image_url,
+      jingleS3Key: upload.jingle_s3_key,
+      includeJingle: false,
+      autoTrimSilence: true,
+      trimStart: upload.trim_start,
+      trimEnd: upload.trim_end,
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to enqueue audio archive:', err);
+    res.status(500).json({ error: 'Failed to generate audio' });
+  }
+});
+
 // Flip the PocketBase archive record to "published" — the explicit, separate
 // step that makes the show live on the agenda site (distinct from uploading to
 // the platforms). Everywhere else deliberately never touches `status`.

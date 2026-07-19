@@ -37,6 +37,7 @@ export type UploadWithJobs = {
   title: string;
   description: string | null;
   tags: string[];
+  image_url: string | null;
   video_s3_key: string;
   archive_s3_key: string | null;
   audio_s3_key: string | null;
@@ -162,6 +163,10 @@ export const api = {
   // Flip the PocketBase archive record to published (live on the agenda site).
   publishRecord: (uploadId: string) =>
     apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/publish`, { method: 'POST' }),
+
+  // (Re)generate the downloadable audio archive (m4a) for an upload.
+  generateAudio: (uploadId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/archive`, { method: 'POST' }),
 
   // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
   getStaged: (showId: string) =>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useUploads, useUpdateMetadata, useGenres, usePublishRecord } from '../api/hooks';
+import { useUploads, useUpdateMetadata, useGenres, usePublishRecord, useGenerateAudio } from '../api/hooks';
 import TagInput from '../components/TagInput';
 import type { UploadWithJobs } from '../api/client';
 
@@ -28,21 +28,26 @@ function Spinner() {
 // The audio archive is produced by the 'archive' job — reflect its live state
 // so the operator sees it being extracted, not just a dash.
 function AudioCell({ upload }: { upload: UploadWithJobs }) {
+  const gen = useGenerateAudio();
   if (upload.audio_url) return <DownloadLink url={upload.audio_url} label="Audio" />;
   const job = upload.jobs.find((j) => j.platform === 'archive');
-  if (job?.status === 'processing' || job?.status === 'queued')
+  if (gen.isPending || job?.status === 'processing' || job?.status === 'queued')
     return (
       <span className="inline-flex items-center gap-1.5 text-muted">
-        <Spinner /> Audio {job.progress_pct}%
+        <Spinner /> Audio {job?.progress_pct ?? 0}%
       </span>
     );
-  if (job?.status === 'failed')
-    return (
-      <span className="text-danger" title={job.error ?? undefined}>
-        Audio ✕
-      </span>
-    );
-  return <span className="text-faint">Audio —</span>;
+  // No audio yet — offer to (re)generate it.
+  return (
+    <button
+      type="button"
+      onClick={() => gen.mutate(upload.id)}
+      className="font-medium text-accent hover:underline"
+      title={job?.status === 'failed' ? job.error ?? 'retry' : 'extract the downloadable audio'}
+    >
+      {job?.status === 'failed' ? 'retry audio' : 'generate audio'}
+    </button>
+  );
 }
 
 // Edit title/description/tags and push the change to every platform + PocketBase.
@@ -109,42 +114,56 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
 
   return (
     <div className="border border-line bg-surface p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="font-medium text-ink">{upload.title}</p>
-        <p className="shrink-0 font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
-      </div>
+      <div className="flex gap-4">
+        {upload.image_url && (
+          <img
+            src={upload.image_url}
+            alt=""
+            className="h-16 w-16 shrink-0 border border-line object-cover"
+            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <p className="font-medium text-ink">{upload.title}</p>
+            <p className="shrink-0 font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
+          </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-        {pub.map((j) => (
-          <a key={j.platform} href={j.result_url!} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
-            {PLATFORM_LABELS[j.platform]} ↗
-          </a>
-        ))}
-        <span className="text-line" aria-hidden>|</span>
-        <DownloadLink url={upload.video_url} label="Video" />
-        <AudioCell upload={upload} />
-        <span className="ml-auto flex items-center gap-4">
-          {publish.isSuccess ? (
-            <span className="text-xs lowercase text-ok">✓ published on agenda</span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => publish.mutate(upload.id)}
-              disabled={publish.isPending}
-              className="text-xs lowercase text-accent hover:underline disabled:opacity-50"
-              title="set the agenda record to published (live on the site)"
-            >
-              {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to agenda ↑'}
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setEditing((v) => !v)}
-            className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
-          >
-            {editing ? 'close' : 'edit'}
-          </button>
-        </span>
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            {pub.map((j) => (
+              <a key={j.platform} href={j.result_url!} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+                {PLATFORM_LABELS[j.platform]} ↗
+              </a>
+            ))}
+            <span className="text-line" aria-hidden>|</span>
+            <DownloadLink url={upload.video_url} label="Video" />
+            <AudioCell upload={upload} />
+            <span className="ml-auto flex items-center gap-3">
+              {publish.isSuccess ? (
+                <span className="rounded-full border border-ok/40 bg-ok-soft px-3 py-1 text-xs font-medium lowercase text-ok">
+                  ✓ on main website
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => publish.mutate(upload.id)}
+                  disabled={publish.isPending}
+                  className="rounded-full bg-ink px-3.5 py-1 text-xs font-medium lowercase text-paper hover:opacity-90 disabled:opacity-50"
+                  title="set the agenda record to published — makes it live on the main website"
+                >
+                  {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setEditing((v) => !v)}
+                className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+              >
+                {editing ? 'close' : 'edit'}
+              </button>
+            </span>
+          </div>
+        </div>
       </div>
 
       {editing && <EditPanel upload={upload} />}
