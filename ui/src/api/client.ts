@@ -137,7 +137,6 @@ export const api = {
     videoS3Key: string;
     platforms: string[];
     includeJingle: boolean;
-    includeArchive: boolean;
     autoTrimSilence: boolean;
     trimStart?: string | null;
     trimEnd?: string | null;
@@ -165,6 +164,10 @@ export const api = {
     apiFetch<{ show_id: string; s3_key: string; filename: string; size_bytes: number } | null>(
       `/api/uploads/staged/${showId}`
     ),
+  // The most recent COMPLETED upload's video for a show (staged rows are cleared
+  // on publish; this restores the published recording into the form).
+  getShowVideo: (showId: string) =>
+    apiFetch<{ videoS3Key: string; filename: string } | null>(`/api/uploads/for-show/${showId}`),
   putStaged: (showId: string, body: { s3Key: string; filename: string; sizeBytes: number }) =>
     apiFetch(`/api/uploads/staged/${showId}`, {
       method: 'PUT',

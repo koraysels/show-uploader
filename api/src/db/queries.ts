@@ -115,6 +115,14 @@ export function getPlatformJobsForUpload(db: Sql, uploadId: string) {
   `;
 }
 
+// Most recent upload for a show — used to restore its (published) video into the
+// form after the staged row has been cleared.
+export function getLatestUploadForShow(db: Sql, showId: string) {
+  return db<{ video_s3_key: string }[]>`
+    SELECT video_s3_key FROM show_uploads WHERE show_id = ${showId} ORDER BY created_at DESC LIMIT 1
+  `.then((rows) => rows[0] ?? null);
+}
+
 // Operator-edited archive metadata, kept in sync with the published platforms.
 export function updateUploadMetadata(
   db: Sql,

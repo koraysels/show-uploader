@@ -12,6 +12,7 @@ import {
   deleteStagedUpload,
   resetPlatformJobForRetry,
   updateUploadMetadata,
+  getLatestUploadForShow,
 } from '../db/queries';
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
@@ -36,9 +37,6 @@ const CreateUploadSchema = z.object({
   videoS3Key: z.string().min(1),
   platforms: z.array(z.enum(['youtube', 'mixcloud'])).min(1),
   includeJingle: z.boolean().default(true),
-  // Archive a transcoded MP4 copy to storage after publishing. Default on; turned
-  // off when adding a platform to an already-archived show (skips the transcode).
-  includeArchive: z.boolean().default(true),
   // Auto-detect and cut leading/trailing silence (dead air) via ffmpeg. Manual
   // trim below overrides it.
   autoTrimSilence: z.boolean().default(true),
@@ -74,6 +72,20 @@ uploadsRouter.put('/staged/:showId', async (req, res) => {
 uploadsRouter.delete('/staged/:showId', async (req, res) => {
   await deleteStagedUpload(db, req.params.showId).catch(() => {});
   res.json({ ok: true });
+});
+
+// The most recent completed upload's video for a show — restores a published
+// recording into the form (staged rows are cleared on publish). null if none.
+uploadsRouter.get('/for-show/:showId', async (req, res) => {
+  try {
+    const row = await getLatestUploadForShow(db, req.params.showId);
+    if (!row) return res.json(null);
+    const filename = (row.video_s3_key.split('/').pop() ?? '').replace(/^\d+-/, '');
+    res.json({ videoS3Key: row.video_s3_key, filename });
+  } catch (err) {
+    console.error('Failed to get show video:', err);
+    res.status(500).json({ error: 'Failed to get show video' });
+  }
 });
 
 // Presigned URL to preview the configured jingle (so the operator hears what
@@ -152,7 +164,6 @@ uploadsRouter.post('/', async (req, res) => {
             imageUrl: data.imageUrl,
             jingleS3Key,
             includeJingle: data.includeJingle,
-            includeArchive: data.includeArchive,
             autoTrimSilence: data.autoTrimSilence,
             trimStart: data.trimStart ?? null,
             trimEnd: data.trimEnd ?? null,
@@ -205,7 +216,6 @@ uploadsRouter.post('/:uploadId/jobs/:platform/retry', async (req, res) => {
       imageUrl: upload.image_url,
       jingleS3Key: upload.jingle_s3_key,
       includeJingle: !!upload.jingle_s3_key,
-      includeArchive: true,
       autoTrimSilence: true,
       trimStart: upload.trim_start,
       trimEnd: upload.trim_end,
@@ -249,8 +259,9 @@ uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
 
     try {
       // Tags are the PocketBase genres relation (PB is master) — resolve the
-      // edited names to genre IDs (creating any new ones) and replace the relation.
-      const genres = await resolveGenreIds(edit.tags);
+      // edited names to genre IDs (creating any new ones). Only write the relation
+      // when tags are present, so clearing tags never wipes curated genres.
+      const genres = edit.tags.length ? await resolveGenreIds(edit.tags) : [];
       // Re-assert the published platform links too, so an edit fully re-syncs the
       // archive record (e.g. after a write-back that failed at publish time).
       const mediaLinks: { label: string; type: string; url: string }[] = [];
@@ -261,7 +272,7 @@ uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
         // is only for the platform titles.
         title: baseTitle(edit.title),
         notes: edit.description,
-        genres,
+        ...(genres.length ? { genres } : {}),
         ...(mediaLinks.length ? { mediaLinks } : {}),
       });
       sync.pocketbase = 'ok';

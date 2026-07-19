@@ -19,8 +19,10 @@ export function appendHashtags(description: string, tags: string[]): string {
 // the plain show title — that suffix belongs only on the platform (YT/MixCloud)
 // titles, not on the archive record.
 export function baseTitle(title: string): string {
+  // Strip the convention suffix as ONE unit: an optional "<date>" immediately
+  // before "@ coming soon". Never strips a bare trailing date (a show literally
+  // named "... 31.12.2025" keeps its name).
   return (title ?? '')
-    .replace(/\s*@\s*coming soon\s*$/i, '')
-    .replace(/\s*\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*$/, '')
+    .replace(/\s*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*)?@\s*coming soon\s*$/i, '')
     .trim();
 }

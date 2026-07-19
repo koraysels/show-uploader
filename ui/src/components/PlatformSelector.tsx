@@ -54,11 +54,9 @@ function JinglePreview() {
 type Props = {
   platforms: string[];
   includeJingle: boolean;
-  includeArchive: boolean;
   existingPlatforms: string[];
   onChange: (platforms: string[]) => void;
   onJingleChange: (v: boolean) => void;
-  onArchiveChange: (v: boolean) => void;
 };
 
 const PLATFORMS = [
@@ -69,13 +67,14 @@ const PLATFORMS = [
 export default function PlatformSelector({
   platforms,
   includeJingle,
-  includeArchive,
   existingPlatforms,
   onChange,
   onJingleChange,
-  onArchiveChange,
 }: Props) {
   const toggle = (id: string) => {
+    // Already-published platforms can't be re-selected — re-publishing would
+    // create a duplicate video / cloudcast.
+    if (existingPlatforms.includes(id)) return;
     onChange(platforms.includes(id) ? platforms.filter((p) => p !== id) : [...platforms, id]);
   };
 
@@ -90,9 +89,12 @@ export default function PlatformSelector({
               key={p.id}
               type="button"
               onClick={() => toggle(p.id)}
+              disabled={already}
               aria-pressed={on}
               className={`inline-flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                on
+                already
+                  ? 'cursor-not-allowed border-line bg-surface text-faint opacity-60'
+                  : on
                   ? 'border-accent bg-accent text-white'
                   : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink'
               }`}
@@ -127,16 +129,6 @@ export default function PlatformSelector({
           <JinglePreview />
         </div>
       )}
-      <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
-        <input
-          type="checkbox"
-          checked={includeArchive}
-          onChange={(e) => onArchiveChange(e.target.checked)}
-          className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
-        />
-        Archive an MP4 copy to storage
-        <span className="text-xs text-faint">— off when the show is already archived</span>
-      </label>
     </div>
   );
 }

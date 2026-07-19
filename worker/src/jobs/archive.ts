@@ -16,11 +16,10 @@ export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
   const allDone = platformJobs.length > 0 && platformJobs.every((j) => j.status === 'done');
   const archiveExists = jobs.some((j) => j.platform === 'archive');
 
+  // Once every platform is done, always extract the downloadable audio archive
+  // (the original upload is already the video archive on S3). Runs once per
+  // upload — archiveExists guards re-runs when a platform is added later.
   if (!allDone || archiveExists) return;
-
-  // Skip the archive transcode when the operator opted out (e.g. adding a second
-  // platform to a show that's already archived).
-  if (payload.includeArchive === false) return;
 
   const archiveJobId = await createArchiveJobRecord(uploadId);
   if (!archiveJobId) return;

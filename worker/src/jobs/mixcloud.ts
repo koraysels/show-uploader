@@ -1,9 +1,10 @@
 import type { Job } from 'bullmq';
 import path from 'path';
+import fs from 'fs';
 import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
-import { extractAudio, prependJingle, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
+import { extractAudio, prependJingle, captureSquareFrame, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import { setJobStatus, getUploadRow } from '../db';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle } from '../services/format';
@@ -18,6 +19,7 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
   const audioPath = makeTempPath('audio.m4a');
   const jinglePath = makeTempPath('jingle.m4a');
   const mergedPath = makeTempPath('merged.m4a');
+  const thumbPath = makeTempPath('cover.jpg');
 
   try {
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 5 });
@@ -55,6 +57,11 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       }
     }
 
+    // Cover art = a square frame grabbed 20s into the video. Non-fatal.
+    await captureSquareFrame(videoPath, thumbPath, 20).catch((err) =>
+      console.warn('Cover frame capture failed:', err instanceof Error ? err.message : err)
+    );
+
     await setJobStatus(jobId, 'processing', { progress_pct: 70 });
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 70 });
 
@@ -63,6 +70,7 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       title,
       description,
       tags,
+      imagePath: fs.existsSync(thumbPath) ? thumbPath : undefined,
     });
 
     await setJobStatus(jobId, 'done', { result_url: resultUrl, progress_pct: 100 });
@@ -87,6 +95,6 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'failed', { error: msg });
     throw err;
   } finally {
-    cleanup(videoPath, audioPath, jinglePath, mergedPath);
+    cleanup(videoPath, audioPath, jinglePath, mergedPath, thumbPath);
   }
 }

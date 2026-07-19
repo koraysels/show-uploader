@@ -1,10 +1,11 @@
 import type { Job } from 'bullmq';
 import path from 'path';
+import fs from 'fs';
 import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
-import { uploadToYoutube } from '../services/youtube-client';
+import { uploadToYoutube, setYoutubeThumbnail } from '../services/youtube-client';
 import { setJobStatus, getUploadRow } from '../db';
-import { makeTempPath, cleanup, resolveTrim, trimVideoCopy } from '../services/ffmpeg';
+import { makeTempPath, cleanup, resolveTrim, trimVideoCopy, captureSquareFrame } from '../services/ffmpeg';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
@@ -16,6 +17,7 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
 
   const videoPath = makeTempPath(path.basename(videoS3Key));
   const trimmedPath = makeTempPath(`yt-trimmed${path.extname(videoS3Key) || '.mkv'}`);
+  const thumbPath = makeTempPath('cover.jpg');
   try {
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 5 });
     await downloadFromS3(videoS3Key, videoPath);
@@ -43,6 +45,18 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
       },
     });
 
+    // Custom thumbnail = a square frame 20s into the (trimmed) video. Non-fatal:
+    // needs a channel enabled for custom thumbnails, so never fail the upload on it.
+    const videoId = new URL(resultUrl).searchParams.get('v');
+    if (videoId) {
+      try {
+        await captureSquareFrame(uploadPath, thumbPath, 20);
+        if (fs.existsSync(thumbPath)) await setYoutubeThumbnail(videoId, thumbPath);
+      } catch (err) {
+        console.warn('YouTube thumbnail failed:', err instanceof Error ? err.message : err);
+      }
+    }
+
     await setJobStatus(jobId, 'done', { result_url: resultUrl, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 100 });
 
@@ -66,6 +80,6 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'failed', { error: msg });
     throw err;
   } finally {
-    cleanup(videoPath, trimmedPath);
+    cleanup(videoPath, trimmedPath, thumbPath);
   }
 }

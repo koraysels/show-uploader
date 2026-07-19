@@ -63,3 +63,14 @@ export async function uploadToYoutube(params: {
 
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
+
+// Set a custom thumbnail on an uploaded video. Requires a channel enabled for
+// custom thumbnails — callers should treat a failure as non-fatal.
+export async function setYoutubeThumbnail(videoId: string, imagePath: string): Promise<void> {
+  if (shouldDryRun([env.YOUTUBE_CLIENT_ID, env.YOUTUBE_CLIENT_SECRET, env.YOUTUBE_REFRESH_TOKEN])) return;
+  const youtube = getYouTubeClient();
+  await youtube.thumbnails.set({
+    videoId,
+    media: { mimeType: 'image/jpeg', body: fs.createReadStream(imagePath) },
+  });
+}

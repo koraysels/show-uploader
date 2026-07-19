@@ -51,6 +51,26 @@ export async function extractAudio(
 // sample rate / channels), so a jingle with different params must be resampled
 // through the filtergraph. This re-encodes the result — unavoidable when gluing
 // two differently-encoded clips, and only happens when a jingle is actually set.
+// Grab a single frame `atSeconds` into the video and centre-crop it to a square
+// (no letterbox — the sides are cropped away, not padded), scaled to 1080². Used
+// as the cover art for the MixCloud/YouTube upload. Assumes a landscape source
+// (OBS recordings), so the square side is the frame height.
+export async function captureSquareFrame(
+  videoPath: string,
+  outputPath: string,
+  atSeconds = 20
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    ffmpeg(videoPath)
+      .seekInput(atSeconds)
+      .outputOptions(['-frames:v', '1', '-vf', 'crop=ih:ih,scale=1080:1080', '-q:v', '2'])
+      .output(outputPath)
+      .on('end', () => resolve())
+      .on('error', reject)
+      .run();
+  });
+}
+
 export async function prependJingle(
   jinglePath: string,
   audioPath: string,
@@ -60,7 +80,14 @@ export async function prependJingle(
     ffmpeg()
       .input(jinglePath)
       .input(audioPath)
-      .complexFilter(['[0:a][1:a]concat=n=2:v=0:a=1[out]'])
+      // concat requires identical sample rate / layout / format across inputs, so
+      // normalise BOTH to 48k stereo fltp first — otherwise a jingle recorded at a
+      // different rate/channels makes the merge error out and the jingle is dropped.
+      .complexFilter([
+        '[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[j]',
+        '[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[s]',
+        '[j][s]concat=n=2:v=0:a=1[out]',
+      ])
       .outputOptions(['-map', '[out]'])
       .audioCodec('aac')
       .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)

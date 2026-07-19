@@ -150,7 +150,16 @@ export async function listGenres(): Promise<string[]> {
 // new genre records. Matching is case-insensitive on name; a failed create is
 // logged and skipped (never aborts the surrounding write-back).
 export async function resolveGenreIds(names: string[]): Promise<string[]> {
-  const wanted = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  // Dedup case-insensitively (matching below is case-insensitive too), so "House"
+  // and "house" don't resolve to the same genre id twice.
+  const seen = new Set<string>();
+  const wanted: string[] = [];
+  for (const raw of names) {
+    const n = raw.trim();
+    if (!n || seen.has(n.toLowerCase())) continue;
+    seen.add(n.toLowerCase());
+    wanted.push(n);
+  }
   if (!wanted.length) return [];
 
   const listRes = await pbFetch(`/api/collections/genres/records?perPage=500&fields=id,name`);
@@ -180,7 +189,7 @@ export async function resolveGenreIds(names: string[]): Promise<string[]> {
     }
     ids.push(id);
   }
-  return ids;
+  return [...new Set(ids)];
 }
 
 // Merge incoming links into the existing ones by label: an incoming link

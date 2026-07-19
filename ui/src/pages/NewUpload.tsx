@@ -29,11 +29,11 @@ function timeAgo(iso: string): string {
 function publishTitle(name: string, date: string): string {
   const [y, m, d] = (date ?? '').split('-');
   const dmy = d && m && y ? `${d}.${m}.${y}` : date;
-  // Strip an existing "<date> @ coming soon" suffix first so a show title that
-  // already follows the convention doesn't get the date/tag appended twice.
+  // Strip an existing "<date> @ coming soon" suffix (as one unit) first so a
+  // show title that already follows the convention doesn't get it appended
+  // twice — without touching a bare trailing date that's part of the real name.
   const base = (name ?? '')
-    .replace(/\s*@\s*coming soon\s*$/i, '')
-    .replace(/\s*\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*$/, '')
+    .replace(/\s*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*)?@\s*coming soon\s*$/i, '')
     .trim();
   return `${base} ${dmy} @ coming soon`;
 }
@@ -62,7 +62,6 @@ export default function NewUpload() {
   const [videoFilename, setVideoFilename] = useState('');
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
-  const [includeArchive, setIncludeArchive] = useState(true);
   const [trimStart, setTrimStart] = useState('');
   const [trimEnd, setTrimEnd] = useState('');
   const [autoTrimSilence, setAutoTrimSilence] = useState(true);
@@ -123,21 +122,31 @@ export default function NewUpload() {
     setVideoS3Key('');
     setVideoFilename('');
 
-    // Re-publish smarts: pre-select only the platform(s) not yet up, and default
-    // archiving OFF when the show already has links (likely already archived).
+    // Re-publish smarts: pre-select only the platform(s) not yet up. If both are
+    // already published, select NONE (never re-publish onto them — that would
+    // duplicate the video/cloudcast).
     const already = (selectedShow.mediaLinks ?? []).map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
     const missing = ALL_PLATFORMS.filter((p) => !already.includes(p));
-    setPlatforms(missing.length ? missing : ALL_PLATFORMS);
-    setIncludeArchive(already.length === 0);
+    setPlatforms(missing);
 
     const sid = selectedShow.id;
     let cancelled = false;
     void api
       .getStaged(sid)
-      .then((v) => {
-        if (!cancelled && v && upload.state.status !== 'uploading') {
+      .then(async (v) => {
+        if (cancelled || upload.state.status === 'uploading') return;
+        if (v) {
           setVideoS3Key(v.s3_key);
           setVideoFilename(v.filename);
+          return;
+        }
+        // No pending staged video — fall back to a previously PUBLISHED upload for
+        // this show (its staged row was cleared on publish) so the recording isn't
+        // "lost" from the form.
+        const done = await api.getShowVideo(sid).catch(() => null);
+        if (!cancelled && done?.videoS3Key) {
+          setVideoS3Key(done.videoS3Key);
+          setVideoFilename(done.filename);
         }
       })
       .catch(() => {});
@@ -171,7 +180,6 @@ export default function NewUpload() {
         videoS3Key,
         platforms,
         includeJingle,
-        includeArchive,
         autoTrimSilence,
         trimStart: trimStart || null,
         trimEnd: trimEnd || null,
@@ -333,17 +341,15 @@ export default function NewUpload() {
                   {l.label} ↗
                 </a>
               ))}
-              <span className="text-faint">— pre-selected the missing platform, archiving off.</span>
+              <span className="text-faint">— already-published platforms are locked to avoid duplicates.</span>
             </p>
           )}
           <PlatformSelector
             platforms={platforms}
             includeJingle={includeJingle}
-            includeArchive={includeArchive}
             existingPlatforms={existingPlatforms}
             onChange={setPlatforms}
             onJingleChange={setIncludeJingle}
-            onArchiveChange={setIncludeArchive}
           />
         </Section>
 

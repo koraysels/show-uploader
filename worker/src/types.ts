@@ -9,7 +9,6 @@ export type JobPayload = {
   imageUrl: string | null;
   jingleS3Key: string | null;
   includeJingle: boolean;
-  includeArchive?: boolean;
   autoTrimSilence?: boolean;
   trimStart: string | null;
   trimEnd: string | null;

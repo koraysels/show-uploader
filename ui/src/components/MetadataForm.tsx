@@ -57,14 +57,29 @@ export default function MetadataForm({ title, description, tags, imageUrl, gener
       </div>
       <div>
         <label className="label">
-          Cover image URL <span className="lowercase tracking-normal text-faint">optional</span>
+          Cover image <span className="lowercase tracking-normal text-faint">from agenda · optional</span>
         </label>
-        <input
-          className="field"
-          placeholder="https://…"
-          value={imageUrl}
-          onChange={(e) => onChange('imageUrl', e.target.value)}
-        />
+        <div className="flex items-start gap-3">
+          {imageUrl && (
+            <img
+              src={imageUrl}
+              alt="cover"
+              className="h-16 w-16 shrink-0 border border-line object-cover"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              }}
+            />
+          )}
+          <input
+            className="field"
+            placeholder="https://…"
+            value={imageUrl}
+            onChange={(e) => onChange('imageUrl', e.target.value)}
+          />
+        </div>
+        <p className="mt-1 text-[11px] lowercase text-faint">
+          youtube/mixcloud covers auto-use a square frame from ~20s into the video.
+        </p>
       </div>
     </div>
   );

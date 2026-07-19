@@ -82,8 +82,10 @@ watcherRouter.patch('/shows/:id', async (req, res) => {
 
   try {
     const { tags, ...rest } = parsed.data;
-    const genres = tags ? await resolveGenreIds(tags) : undefined;
-    await updateArchiveRecord(req.params.id, { ...rest, ...(genres ? { genres } : {}) });
+    // Only touch the genres relation when tags were actually provided — an empty
+    // array must NOT clear the record's curated genres (PocketBase is master).
+    const genres = tags && tags.length ? await resolveGenreIds(tags) : [];
+    await updateArchiveRecord(req.params.id, { ...rest, ...(genres.length ? { genres } : {}) });
     res.json({ ok: true });
   } catch (err) {
     console.error('Archive write-back failed:', err);
