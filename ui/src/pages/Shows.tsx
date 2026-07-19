@@ -26,17 +26,30 @@ function VideoCell({ showId, uploads, staged }: { showId: string; uploads: Recor
   if (item?.status === 'uploading') {
     const pct = Math.round(item.fraction * 100);
     return (
-      <span className="inline-flex items-center gap-1.5 text-accent">
-        <span className="h-1 w-10 overflow-hidden rounded-full bg-line">
-          <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+      <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft/50 px-2 py-0.5 text-accent">
+        <span className="h-1.5 w-12 overflow-hidden rounded-full bg-line">
+          <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
         </span>
-        <span className="text-[11px] tabular-nums">{pct}%</span>
+        <span className="text-[11px] font-semibold tabular-nums">{pct}%</span>
       </span>
     );
   }
-  if (item?.status === 'error') return <span className="text-danger" title={item.error ?? undefined}>✕</span>;
-  if (item?.status === 'done' || staged.has(showId)) return <span className="text-ok" title="recording ready">✓</span>;
-  return <span className="text-faint">—</span>;
+  if (item?.status === 'error') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger-soft px-2 py-0.5 text-xs font-medium lowercase text-danger" title={item.error ?? undefined}>
+        ✕ failed
+      </span>
+    );
+  }
+  if (item?.status === 'done' || staged.has(showId)) {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-ok/40 bg-ok-soft px-2.5 py-0.5 text-xs font-semibold lowercase text-ok" title="recording ready to publish">
+        <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
+        ready
+      </span>
+    );
+  }
+  return <span className="text-faint">— no video</span>;
 }
 
 function LinksCell({ show }: { show: AgendaShow }) {
