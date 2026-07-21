@@ -1,6 +1,4 @@
-import { useState } from 'react';
-import { useUploads, useShows, useUpdateMetadata, useGenres, usePublishRecord, useGenerateAudio, useYoutubeStatus } from '../api/hooks';
-import TagInput from '../components/TagInput';
+import { useUploads, useCovers, usePublishRecord, useGenerateAudio, useYoutubeStatus } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import type { UploadWithJobs } from '../api/client';
 
@@ -73,69 +71,14 @@ function AudioCell({ upload }: { upload: UploadWithJobs }) {
   );
 }
 
-// Edit title/description/tags and push the change to every platform + PocketBase.
-function EditPanel({ upload }: { upload: UploadWithJobs }) {
-  const update = useUpdateMetadata(upload.id);
-  const { data: genres = [] } = useGenres();
-  const [title, setTitle] = useState(upload.title);
-  const [description, setDescription] = useState(upload.description ?? '');
-  const [tags, setTags] = useState<string[]>(upload.tags ?? []);
-
-  const dirty =
-    title !== upload.title ||
-    description !== (upload.description ?? '') ||
-    tags.join('\0') !== (upload.tags ?? []).join('\0');
-  const sync = update.data?.sync;
-
-  return (
-    <div className="mt-4 space-y-4 border-t border-line pt-4">
-      <div>
-        <label className="label">Title</label>
-        <input className="field" value={title} onChange={(e) => setTitle(e.target.value)} />
-      </div>
-      <div>
-        <label className="label">Description</label>
-        <textarea className="field min-h-24" value={description} onChange={(e) => setDescription(e.target.value)} />
-      </div>
-      <div>
-        <label className="label">Tags</label>
-        <TagInput tags={tags} suggestions={genres} onChange={setTags} />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          disabled={!title.trim() || update.isPending}
-          onClick={() => update.mutate({ title: title.trim(), description, tags })}
-          className="bg-ink px-4 py-2 text-sm font-medium lowercase text-paper hover:opacity-90 disabled:opacity-40"
-        >
-          {update.isPending ? 'syncing…' : dirty ? 'save & sync' : 're-sync'}
-        </button>
-        {update.isError && <span className="text-xs text-danger">save failed — try again</span>}
-        {sync && (
-          <span className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {Object.entries(sync).map(([target, result]) => (
-              <span
-                key={target}
-                className={result === 'ok' ? 'text-ok' : 'text-danger'}
-                title={result === 'ok' ? undefined : result}
-              >
-                {result === 'ok' ? '✓' : '✕'} {PLATFORM_LABELS[target] ?? target}
-              </span>
-            ))}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // coverUrl comes from the PocketBase record (the master), not the stored
 // upload.image_url snapshot — so the thumbnail is always the current agenda image.
 function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: string | null }) {
-  const [editing, setEditing] = useState(false);
   const publish = usePublishRecord();
   const pub = publishedJobs(upload);
+  // Editing happens in the PocketBase agenda admin — the master record. There's
+  // no duplicate record here, so the "edit" action just opens it there.
+  const agendaUrl = `${AGENDA_BASE}/#/archive/${upload.show_id}`;
 
   return (
     <div className="border border-line bg-surface p-5">
@@ -151,17 +94,7 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <p className="font-medium text-ink">{upload.title}</p>
-            <div className="flex shrink-0 items-baseline gap-3">
-              <a
-                href={`${AGENDA_BASE}/#/archive/${upload.show_id}`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-[13px] lowercase text-muted underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
-              >
-                ↗ agenda
-              </a>
-              <p className="font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
-            </div>
+            <p className="shrink-0 font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -187,28 +120,27 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
                   {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setEditing((v) => !v)}
+              <a
+                href={agendaUrl}
+                target="_blank"
+                rel="noreferrer"
+                title="edit this record in the agenda (PocketBase is the master)"
                 className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
               >
-                {editing ? 'close' : 'edit'}
-              </button>
+                edit ↗
+              </a>
             </span>
           </div>
         </div>
       </div>
-
-      {editing && <EditPanel upload={upload} />}
     </div>
   );
 }
 
 export default function Archive() {
   const { data: uploads = [], isPending } = useUploads();
-  const { data: shows = [] } = useShows();
-  // Cover per show from the PocketBase record (master), keyed by show_id.
-  const coverByShow = new Map(shows.map((s) => [s.id, s.imageUrl]));
+  // Cover per show from PocketBase (all statuses), keyed by show_id — polled live.
+  const { data: covers = {} } = useCovers();
   const archived = uploads
     .filter((u) => publishedJobs(u).length > 0)
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
@@ -233,7 +165,7 @@ export default function Archive() {
         <>
           <div className="space-y-3">
             {paged.slice.map((u) => (
-              <ArchiveCard key={u.id} upload={u} coverUrl={coverByShow.get(u.show_id) ?? null} />
+              <ArchiveCard key={u.id} upload={u} coverUrl={covers[u.show_id] ?? null} />
             ))}
           </div>
           <Pager page={paged.page} pageCount={paged.pageCount} total={paged.total} setPage={paged.setPage} unit="shows" />

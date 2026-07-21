@@ -11,6 +11,12 @@ export function useGenres() {
   return useQuery({ queryKey: ['genres'], queryFn: api.listGenres, staleTime: 300_000 });
 }
 
+// Cover URLs per show from PocketBase (the master). Polls so a cover changed in
+// the agenda admin shows up here within ~15s without a manual refresh.
+export function useCovers() {
+  return useQuery({ queryKey: ['covers'], queryFn: api.listCovers, refetchInterval: 15_000, staleTime: 10_000 });
+}
+
 export function useStagedShowIds() {
   return useQuery({ queryKey: ['staged-shows'], queryFn: api.getStagedShowIds, refetchInterval: 15_000 });
 }
@@ -115,8 +121,14 @@ export function useClearCover(showId: string | undefined) {
 // (a message on failure). remove un-links from the archive record → refetch shows.
 export function usePlatformUpdate() {
   return useMutation({
-    mutationFn: (body: { platform: string; url: string; title: string; description: string; tags: string[] }) =>
-      api.platformUpdate(body),
+    mutationFn: (body: {
+      platform: string;
+      url: string;
+      title: string;
+      description: string;
+      tags: string[];
+      imageUrl: string | null;
+    }) => api.platformUpdate(body),
   });
 }
 

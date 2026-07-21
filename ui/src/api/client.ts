@@ -89,6 +89,9 @@ export const api = {
 
   listGenres: () => apiFetch<string[]>('/api/shows/genres'),
 
+  // Cover URL per archive record (all statuses), keyed by show_id — for thumbnails.
+  listCovers: () => apiFetch<Record<string, string>>('/api/shows/covers'),
+
   generateMeta: (title: string, description: string) =>
     apiFetch<GeneratedMeta>(
       `/api/shows/meta?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`
@@ -186,6 +189,7 @@ export const api = {
     title: string;
     description: string;
     tags: string[];
+    imageUrl: string | null;
   }) =>
     apiFetch<{ error: string | null }>('/api/uploads/platform/update', {
       method: 'POST',

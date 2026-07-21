@@ -1,8 +1,18 @@
 import { Router, raw } from 'express';
-import { listShows, listGenres, uploadArchiveImage, clearArchiveImage } from '../services/shows-api';
+import { listShows, listGenres, uploadArchiveImage, clearArchiveImage, listArchiveCovers } from '../services/shows-api';
 import { generateMeta } from '../services/groq';
 
 export const showsRouter = Router();
+
+// Cover URL per archive record (all statuses) for thumbnails — keyed by show_id.
+showsRouter.get('/covers', async (_req, res) => {
+  try {
+    res.json(await listArchiveCovers());
+  } catch (err) {
+    console.error('Failed to fetch covers:', err);
+    res.status(502).json({ error: 'Failed to fetch covers' });
+  }
+});
 
 // Cover image = the archive record's `image` field in PocketBase (the master).
 // The browser can't hold PB creds, so it POSTs the raw image bytes here and the

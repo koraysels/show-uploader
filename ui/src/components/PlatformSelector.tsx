@@ -53,7 +53,7 @@ function JinglePreview() {
 }
 
 export type PlatformLink = { label: string; url: string };
-export type PlatformMeta = { title: string; description: string; tags: string[] };
+export type PlatformMeta = { title: string; description: string; tags: string[]; imageUrl: string | null };
 
 type Props = {
   platforms: string[];
@@ -114,7 +114,11 @@ function PublishedPlatform({
           disabled={update.isPending}
           onClick={() => update.mutate({ platform: id, url, ...meta })}
           className={btn}
-          title="push the current title / description / tags to this platform"
+          title={
+            id === 'mixcloud'
+              ? 'push the current title / description / tags + cover to MixCloud'
+              : 'push the current title / description / tags to this platform'
+          }
         >
           {update.isPending ? 'updating…' : 'update'}
         </button>

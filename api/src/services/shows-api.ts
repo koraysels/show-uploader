@@ -105,6 +105,23 @@ export async function listShows(): Promise<AgendaShow[]> {
   return body.items.map(toAgendaShow);
 }
 
+/**
+ * Cover image URL per archive record, for ALL statuses (draft AND published) —
+ * unlike listShows (drafts only), so the archive/history thumbnails resolve for
+ * shows that have since been published. Keyed by record id (= show_id).
+ */
+export async function listArchiveCovers(): Promise<Record<string, string>> {
+  const path =
+    `/api/collections/archive/records` +
+    `?perPage=500&fields=id,image,collectionId&filter=${encodeURIComponent("image!=''")}`;
+  const res = await pbFetch(path);
+  if (!res.ok) throw new Error(`PocketBase covers error: ${res.status}`);
+  const body = (await res.json()) as { items: { id: string; image: string; collectionId: string }[] };
+  const out: Record<string, string> = {};
+  for (const r of body.items) if (r.image) out[r.id] = imageFileUrl(r.collectionId, r.id, r.image);
+  return out;
+}
+
 // One entry in the archive record's `mediaLinks` JSON array, matching the shape
 // the agenda site already stores/renders, e.g. { label:'YouTube', type:'video', url }.
 export type MediaLink = { label: string; type: string; url: string };

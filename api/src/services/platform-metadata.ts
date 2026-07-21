@@ -119,18 +119,38 @@ export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<
   }
 }
 
-export async function syncMixcloudMetadata(url: string, edit: MetaEdit): Promise<string | null> {
+// imageUrl (the PocketBase record cover) is optional: when given, the cover is
+// re-uploaded to MixCloud too (via multipart), so changing the agenda cover and
+// hitting "update" re-syncs the artwork. Without it, only the text is edited.
+export async function syncMixcloudMetadata(
+  url: string,
+  edit: MetaEdit,
+  imageUrl?: string | null
+): Promise<string | null> {
   if (!env.MIXCLOUD_ACCESS_TOKEN) return 'MixCloud not configured';
   const key = mixcloudKey(url);
   if (!key) return `couldn't parse cloudcast key from ${url}`;
   try {
     // POST /upload/<user>/<slug>/edit/ — tags are all-or-nothing, so re-send them.
-    const body = new URLSearchParams({ name: edit.title, description: edit.description });
-    edit.tags.slice(0, 5).forEach((tag, i) => body.append(`tags-${i}-tag`, tag));
-    const res = await fetch(
-      `https://api.mixcloud.com/upload${key}edit/?access_token=${encodeURIComponent(env.MIXCLOUD_ACCESS_TOKEN)}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body }
-    );
+    const endpoint = `https://api.mixcloud.com/upload${key}edit/?access_token=${encodeURIComponent(env.MIXCLOUD_ACCESS_TOKEN)}`;
+    let res: Response;
+    if (imageUrl) {
+      // Multipart so the cover picture rides along with the metadata.
+      const img = await fetch(imageUrl);
+      if (!img.ok) return `MixCloud cover fetch ${img.status}`;
+      const ct = img.headers.get('content-type') ?? 'image/jpeg';
+      const buf = Buffer.from(await img.arrayBuffer());
+      const form = new FormData();
+      form.append('name', edit.title);
+      form.append('description', edit.description);
+      edit.tags.slice(0, 5).forEach((tag, i) => form.append(`tags-${i}-tag`, tag));
+      form.append('picture', new Blob([new Uint8Array(buf)], { type: ct }), `cover.${ct.split('/')[1]?.split(';')[0] || 'jpg'}`);
+      res = await fetch(endpoint, { method: 'POST', body: form });
+    } else {
+      const body = new URLSearchParams({ name: edit.title, description: edit.description });
+      edit.tags.slice(0, 5).forEach((tag, i) => body.append(`tags-${i}-tag`, tag));
+      res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+    }
     if (!res.ok) return `MixCloud edit ${res.status}: ${await res.text()}`;
     const data = (await res.json()) as { error?: { message: string } };
     if (data.error) return `MixCloud: ${data.error.message}`;

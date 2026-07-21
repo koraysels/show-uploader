@@ -327,7 +327,7 @@ export default function NewUpload() {
             includeJingle={includeJingle}
             showId={selectedShow.id}
             existingLinks={existingLinks}
-            meta={{ title, description, tags }}
+            meta={{ title, description, tags, imageUrl: imageUrl || null }}
             onChange={setPlatforms}
             onJingleChange={setIncludeJingle}
           />

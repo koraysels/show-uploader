@@ -358,14 +358,18 @@ const PlatformUpdateSchema = z.object({
   title: z.string().min(1),
   description: z.string().default(''),
   tags: z.array(z.string()).default([]),
+  // The current PocketBase cover — re-synced to MixCloud's artwork when present.
+  imageUrl: z.string().url().nullable().default(null),
 });
 uploadsRouter.post('/platform/update', async (req, res) => {
   const parsed = PlatformUpdateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
-  const { platform, url, ...edit } = parsed.data;
+  const { platform, url, imageUrl, ...edit } = parsed.data;
   try {
     const error =
-      platform === 'youtube' ? await syncYoutubeMetadata(url, edit) : await syncMixcloudMetadata(url, edit);
+      platform === 'youtube'
+        ? await syncYoutubeMetadata(url, edit)
+        : await syncMixcloudMetadata(url, edit, imageUrl);
     res.json({ error });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
