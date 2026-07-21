@@ -1,5 +1,7 @@
 import { env } from '../env';
 import type { ArchiveRecord } from '../pocketbase-types';
+import { platformTitle } from './format';
+import { syncYoutubeMetadata, syncMixcloudMetadata } from './platform-metadata';
 
 // Server-side calls prefer the internal host (no NAT hairpin on a single box).
 const pbBase = env.POCKETBASE_INTERNAL_URL ?? env.POCKETBASE_URL;
@@ -114,6 +116,36 @@ export async function getArchiveShow(id: string): Promise<AgendaShow | null> {
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`PocketBase archive get error (${id}): ${res.status}`);
   return toAgendaShow((await res.json()) as ArchiveItem);
+}
+
+/**
+ * Re-sync a published show's PocketBase metadata (title/description/tags, plus
+ * the cover to MixCloud) to its linked platforms. `only` narrows which platforms
+ * (undefined/null = all linked). Returns { youtube?, mixcloud? } — 'ok' or an
+ * error string per platform. Returns null if the show doesn't exist. Shared by
+ * the REST route and the tRPC procedure so both behave identically.
+ */
+export async function syncShowToPlatforms(
+  id: string,
+  only?: string[] | null
+): Promise<Record<string, string> | null> {
+  const show = await getArchiveShow(id);
+  if (!show) return null;
+  const edit = {
+    title: platformTitle(show.title, show.date),
+    description: show.description ?? '',
+    tags: show.tags ?? [],
+  };
+  const results: Record<string, string> = {};
+  for (const link of show.mediaLinks) {
+    const p = link.label === 'YouTube' ? 'youtube' : link.label === 'MixCloud' ? 'mixcloud' : null;
+    if (!p || (only && !only.includes(p))) continue;
+    results[p] =
+      (p === 'youtube'
+        ? await syncYoutubeMetadata(link.url, edit)
+        : await syncMixcloudMetadata(link.url, edit, show.imageUrl)) ?? 'ok';
+  }
+  return results;
 }
 
 /**

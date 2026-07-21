@@ -1,8 +1,13 @@
 import { router } from './trpc';
+import { showsRouter } from './routers/shows';
 
-// Empty root for now. Sub-routers (shows, uploads, presence, watcher) get added
-// in the next phase — tRPC lives ALONGSIDE the existing Express REST routes so
-// the client can adopt it incrementally.
-export const appRouter = router({});
+// tRPC lives ALONGSIDE the Express REST routes so the client adopts it
+// incrementally. `shows` is the first fully-migrated domain (list/genres/meta/
+// covers/get/sync-platforms). The uploads/multipart/watcher scaffolds + the
+// SSE streams (events, presence) are migrated in later phases — file-upload +
+// SSE endpoints stay REST where they don't fit tRPC's batch link.
+export const appRouter = router({
+  shows: showsRouter,
+});
 
 export type AppRouter = typeof appRouter;

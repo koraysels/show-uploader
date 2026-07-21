@@ -1,7 +1,13 @@
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
-import { listShows, listGenres } from '../../services/shows-api';
+import {
+  listShows,
+  listGenres,
+  listArchiveCovers,
+  getArchiveShow,
+  syncShowToPlatforms,
+} from '../../services/shows-api';
 import { generateMeta } from '../../services/groq';
 
 // tRPC mirror of the plain request/response endpoints in routes/shows.ts. The SSE
@@ -62,6 +68,47 @@ export const showsRouter = router({
           mixcloudDescription: description || title || '',
           tags: [] as string[],
         };
+      }
+    }),
+
+  // GET /api/shows/covers — cover URL per archive record (all statuses), keyed
+  // by show_id, for thumbnails.
+  listCovers: protectedProcedure.query(async () => {
+    try {
+      return await listArchiveCovers();
+    } catch (err) {
+      console.error('Failed to fetch covers:', err);
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch covers' });
+    }
+  }),
+
+  // GET /api/shows/:id — a single archive record (any status): the current
+  // PocketBase metadata a sync would push.
+  get: protectedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
+    try {
+      const show = await getArchiveShow(input.id);
+      if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+      return show;
+    } catch (err) {
+      if (err instanceof TRPCError) throw err;
+      console.error('Failed to fetch show:', err);
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch show' });
+    }
+  }),
+
+  // POST /api/shows/:id/sync-platforms — re-sync PocketBase metadata/cover to the
+  // selected platforms (PB is the master). `platforms` narrows which (default all).
+  syncPlatforms: protectedProcedure
+    .input(z.object({ id: z.string().min(1), platforms: z.array(z.enum(['youtube', 'mixcloud'])).optional() }))
+    .mutation(async ({ input }) => {
+      try {
+        const results = await syncShowToPlatforms(input.id, input.platforms ?? null);
+        if (!results) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+        return { results };
+      } catch (err) {
+        if (err instanceof TRPCError) throw err;
+        console.error('Failed to sync platforms:', err);
+        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to sync platforms' });
       }
     }),
 });

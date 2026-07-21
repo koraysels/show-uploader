@@ -6,9 +6,8 @@ import {
   clearArchiveImage,
   listArchiveCovers,
   getArchiveShow,
+  syncShowToPlatforms,
 } from '../services/shows-api';
-import { platformTitle } from '../services/format';
-import { syncYoutubeMetadata, syncMixcloudMetadata } from '../services/platform-metadata';
 import { generateMeta } from '../services/groq';
 
 export const showsRouter = Router();
@@ -109,22 +108,8 @@ showsRouter.post('/:id/sync-platforms', async (req, res) => {
   const body = req.body as { platforms?: string[] };
   const only = Array.isArray(body?.platforms) ? body.platforms : null;
   try {
-    const show = await getArchiveShow(req.params.id);
-    if (!show) return res.status(404).json({ error: 'Show not found' });
-    const edit = {
-      title: platformTitle(show.title, show.date),
-      description: show.description ?? '',
-      tags: show.tags ?? [],
-    };
-    const results: Record<string, string> = {};
-    for (const link of show.mediaLinks) {
-      const p = link.label === 'YouTube' ? 'youtube' : link.label === 'MixCloud' ? 'mixcloud' : null;
-      if (!p || (only && !only.includes(p))) continue;
-      results[p] =
-        (p === 'youtube'
-          ? await syncYoutubeMetadata(link.url, edit)
-          : await syncMixcloudMetadata(link.url, edit, show.imageUrl)) ?? 'ok';
-    }
+    const results = await syncShowToPlatforms(req.params.id, only);
+    if (!results) return res.status(404).json({ error: 'Show not found' });
     res.json({ results });
   } catch (err) {
     console.error('Failed to sync platforms:', err);
