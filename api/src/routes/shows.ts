@@ -1,5 +1,14 @@
 import { Router, raw } from 'express';
-import { listShows, listGenres, uploadArchiveImage, clearArchiveImage, listArchiveCovers } from '../services/shows-api';
+import {
+  listShows,
+  listGenres,
+  uploadArchiveImage,
+  clearArchiveImage,
+  listArchiveCovers,
+  getArchiveShow,
+} from '../services/shows-api';
+import { platformTitle } from '../services/format';
+import { syncYoutubeMetadata, syncMixcloudMetadata } from '../services/platform-metadata';
 import { generateMeta } from '../services/groq';
 
 export const showsRouter = Router();
@@ -75,5 +84,50 @@ showsRouter.get('/meta', async (req, res) => {
       mixcloudDescription: description || title || '',
       tags: [],
     });
+  }
+});
+
+// A single archive record (any status) — the current PocketBase metadata a sync
+// would push (description/tags/cover/links). Powers the archive sync panel.
+// Defined after the literal routes so it doesn't shadow /genres, /meta, /covers.
+showsRouter.get('/:id', async (req, res) => {
+  try {
+    const show = await getArchiveShow(req.params.id);
+    if (!show) return res.status(404).json({ error: 'Show not found' });
+    res.json(show);
+  } catch (err) {
+    console.error('Failed to fetch show:', err);
+    res.status(502).json({ error: 'Failed to fetch show' });
+  }
+});
+
+// Re-sync a published show's metadata from PocketBase (the master) to its
+// platforms: title/description/tags to both, cover to MixCloud (YouTube keeps
+// its own frame). `platforms` narrows which to sync (default: all linked).
+// Returns { results: { youtube?: 'ok'|<error>, mixcloud?: 'ok'|<error> } }.
+showsRouter.post('/:id/sync-platforms', async (req, res) => {
+  const body = req.body as { platforms?: string[] };
+  const only = Array.isArray(body?.platforms) ? body.platforms : null;
+  try {
+    const show = await getArchiveShow(req.params.id);
+    if (!show) return res.status(404).json({ error: 'Show not found' });
+    const edit = {
+      title: platformTitle(show.title, show.date),
+      description: show.description ?? '',
+      tags: show.tags ?? [],
+    };
+    const results: Record<string, string> = {};
+    for (const link of show.mediaLinks) {
+      const p = link.label === 'YouTube' ? 'youtube' : link.label === 'MixCloud' ? 'mixcloud' : null;
+      if (!p || (only && !only.includes(p))) continue;
+      results[p] =
+        (p === 'youtube'
+          ? await syncYoutubeMetadata(link.url, edit)
+          : await syncMixcloudMetadata(link.url, edit, show.imageUrl)) ?? 'ok';
+    }
+    res.json({ results });
+  } catch (err) {
+    console.error('Failed to sync platforms:', err);
+    res.status(502).json({ error: 'Failed to sync platforms' });
   }
 });

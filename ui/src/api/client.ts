@@ -92,6 +92,17 @@ export const api = {
   // Cover URL per archive record (all statuses), keyed by show_id — for thumbnails.
   listCovers: () => apiFetch<Record<string, string>>('/api/shows/covers'),
 
+  // A single archive record (any status) — the current PocketBase metadata.
+  getShow: (id: string) => apiFetch<AgendaShow>(`/api/shows/${id}`),
+
+  // Re-sync a published show's metadata/cover from PocketBase to its platforms.
+  syncPlatforms: (id: string, platforms: string[]) =>
+    apiFetch<{ results: Record<string, string> }>(`/api/shows/${id}/sync-platforms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ platforms }),
+    }),
+
   generateMeta: (title: string, description: string) =>
     apiFetch<GeneratedMeta>(
       `/api/shows/meta?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`

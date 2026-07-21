@@ -105,6 +105,17 @@ export async function listShows(): Promise<AgendaShow[]> {
   return body.items.map(toAgendaShow);
 }
 
+// Fetch a single archive record (any status) as an AgendaShow — used to read the
+// current PocketBase metadata (title/notes/genres/image/mediaLinks) when syncing
+// a published show to its platforms, PB being the master.
+export async function getArchiveShow(id: string): Promise<AgendaShow | null> {
+  const fields = 'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,expand.genres.name';
+  const res = await pbFetch(`/api/collections/archive/records/${id}?expand=genres&fields=${fields}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`PocketBase archive get error (${id}): ${res.status}`);
+  return toAgendaShow((await res.json()) as ArchiveItem);
+}
+
 /**
  * Cover image URL per archive record, for ALL statuses (draft AND published) —
  * unlike listShows (drafts only), so the archive/history thumbnails resolve for
@@ -118,7 +129,8 @@ export async function listArchiveCovers(): Promise<Record<string, string>> {
   if (!res.ok) throw new Error(`PocketBase covers error: ${res.status}`);
   const body = (await res.json()) as { items: { id: string; image: string; collectionId: string }[] };
   const out: Record<string, string> = {};
-  for (const r of body.items) if (r.image) out[r.id] = imageFileUrl(r.collectionId, r.id, r.image);
+  // 160x160 = 2× the 64px list thumbnail (retina), a tiny fraction of the original.
+  for (const r of body.items) if (r.image) out[r.id] = imageFileUrl(r.collectionId, r.id, r.image, '160x160');
   return out;
 }
 
@@ -279,8 +291,11 @@ export async function removeArchiveMediaLink(id: string, label: string): Promise
 }
 
 // Build the public file URL for a record's image (same shape as toAgendaShow).
-function imageFileUrl(collectionId: string, recordId: string, filename: string): string {
-  return `${env.POCKETBASE_URL}/api/files/${collectionId}/${recordId}/${filename}`;
+// `thumb` (e.g. '160x160') asks PocketBase for an on-the-fly cropped thumbnail —
+// far smaller than the original, for fast list rendering.
+function imageFileUrl(collectionId: string, recordId: string, filename: string, thumb?: string): string {
+  const base = `${env.POCKETBASE_URL}/api/files/${collectionId}/${recordId}/${filename}`;
+  return thumb ? `${base}?thumb=${thumb}` : base;
 }
 
 /**

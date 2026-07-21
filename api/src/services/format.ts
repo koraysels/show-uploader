@@ -26,3 +26,12 @@ export function baseTitle(title: string): string {
     .replace(/\s*(\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}\s*)?@\s*coming soon\s*$/i, '')
     .trim();
 }
+
+// The inverse: the platform title convention "<name> <DD.MM.YYYY> @ coming soon"
+// built from a plain PocketBase title + the show date (YYYY-MM-DD). Strips any
+// existing suffix first so re-syncing never doubles it.
+export function platformTitle(name: string, date: string): string {
+  const [y, m, d] = (date ?? '').split('-');
+  const dmy = d && m && y ? `${d}.${m}.${y}` : date;
+  return `${baseTitle(name)} ${dmy} @ coming soon`.trim();
+}

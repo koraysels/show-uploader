@@ -17,6 +17,18 @@ export function useCovers() {
   return useQuery({ queryKey: ['covers'], queryFn: api.listCovers, refetchInterval: 15_000, staleTime: 10_000 });
 }
 
+// The current PocketBase metadata for one show (what a platform sync would push).
+export function useShow(id: string, enabled: boolean) {
+  return useQuery({ queryKey: ['show', id], queryFn: () => api.getShow(id), enabled, staleTime: 10_000 });
+}
+
+// Re-sync a published show's metadata/cover from PocketBase to selected platforms.
+export function useSyncPlatforms() {
+  return useMutation({
+    mutationFn: ({ id, platforms }: { id: string; platforms: string[] }) => api.syncPlatforms(id, platforms),
+  });
+}
+
 export function useStagedShowIds() {
   return useQuery({ queryKey: ['staged-shows'], queryFn: api.getStagedShowIds, refetchInterval: 15_000 });
 }
