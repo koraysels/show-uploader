@@ -93,6 +93,49 @@ export function useGenerateAudio() {
   });
 }
 
+// Cover image lives in the PocketBase record; changing it invalidates shows so
+// every view (form, archive) reflects the new master cover.
+export function useUploadCover(showId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.uploadCover(showId!, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+  });
+}
+
+export function useClearCover(showId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.clearCover(showId!),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+  });
+}
+
+// Managing an already-published platform link. update/set-public return { error }
+// (a message on failure). remove un-links from the archive record → refetch shows.
+export function usePlatformUpdate() {
+  return useMutation({
+    mutationFn: (body: { platform: string; url: string; title: string; description: string; tags: string[] }) =>
+      api.platformUpdate(body),
+  });
+}
+
+export function usePlatformSetPublic() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (url: string) => api.platformSetPublic(url),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+  });
+}
+
+export function usePlatformRemove() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ showId, label }: { showId: string; label: string }) => api.platformRemove(showId, label),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+  });
+}
+
 export function useClaimPending() {
   const qc = useQueryClient();
   return useMutation({

@@ -45,6 +45,32 @@ async function youtubeAccessToken(): Promise<string> {
   return data.access_token;
 }
 
+// Flip a published YouTube video to public. Requires the youtube.force-ssl scope
+// (the upload-only token returns 403 — re-authorise to enable this).
+export async function setYoutubePublic(url: string): Promise<string | null> {
+  if (!env.YOUTUBE_CLIENT_ID || !env.YOUTUBE_REFRESH_TOKEN) return 'YouTube not configured';
+  const id = youtubeVideoId(url);
+  if (!id) return `couldn't parse video id from ${url}`;
+  try {
+    const token = await youtubeAccessToken();
+    const g = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=status&id=${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!g.ok) return `YouTube read ${g.status}: ${await g.text()}`;
+    const status = ((await g.json()) as { items?: { status?: Record<string, unknown> }[] }).items?.[0]?.status ?? {};
+    status.privacyStatus = 'public';
+    const res = await fetch('https://www.googleapis.com/youtube/v3/videos?part=status', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status }),
+    });
+    if (!res.ok) return `YouTube set-public ${res.status}: ${await res.text()}`;
+    return null;
+  } catch (err) {
+    return `YouTube: ${err instanceof Error ? err.message : String(err)}`;
+  }
+}
+
 export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<string | null> {
   if (!env.YOUTUBE_CLIENT_ID || !env.YOUTUBE_REFRESH_TOKEN) return 'YouTube not configured';
   const id = youtubeVideoId(url);

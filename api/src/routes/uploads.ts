@@ -19,8 +19,8 @@ import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { getLiveState } from '../services/live-guard';
-import { updateArchiveRecord, resolveGenreIds } from '../services/shows-api';
-import { syncYoutubeMetadata, syncMixcloudMetadata } from '../services/platform-metadata';
+import { updateArchiveRecord, resolveGenreIds, removeArchiveMediaLink } from '../services/shows-api';
+import { syncYoutubeMetadata, syncMixcloudMetadata, setYoutubePublic } from '../services/platform-metadata';
 import { baseTitle } from '../services/format';
 import { env } from '../env';
 
@@ -343,6 +343,61 @@ uploadsRouter.patch('/:uploadId/metadata', async (req, res) => {
   } catch (err) {
     console.error('Failed to update metadata:', err);
     res.status(500).json({ error: 'Failed to update metadata' });
+  }
+});
+
+// --- Managing an already-published platform link (from the "Publish to" section
+// on the upload form). These act on a platform URL / archive record directly,
+// independent of any show_uploads row, so they work for shows published by any
+// means. Each returns { error } (a string on failure, null on success).
+
+// Push the current form metadata to a single already-published platform.
+const PlatformUpdateSchema = z.object({
+  platform: z.enum(['youtube', 'mixcloud']),
+  url: z.string().url(),
+  title: z.string().min(1),
+  description: z.string().default(''),
+  tags: z.array(z.string()).default([]),
+});
+uploadsRouter.post('/platform/update', async (req, res) => {
+  const parsed = PlatformUpdateSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+  const { platform, url, ...edit } = parsed.data;
+  try {
+    const error =
+      platform === 'youtube' ? await syncYoutubeMetadata(url, edit) : await syncMixcloudMetadata(url, edit);
+    res.json({ error });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Flip a published YouTube video to public (needs the force-ssl scope).
+const SetPublicSchema = z.object({ url: z.string().url() });
+uploadsRouter.post('/platform/set-public', async (req, res) => {
+  const parsed = SetPublicSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+  try {
+    const error = await setYoutubePublic(parsed.data.url);
+    res.json({ error });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
+// Un-link a platform from the archive record (removes the mediaLink so it's no
+// longer shown as published and can be re-published). Does NOT delete the actual
+// video/cloudcast — that stays live on the platform.
+const RemoveLinkSchema = z.object({ showId: z.string().min(1), label: z.string().min(1) });
+uploadsRouter.post('/platform/remove', async (req, res) => {
+  const parsed = RemoveLinkSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+  try {
+    await removeArchiveMediaLink(parsed.data.showId, parsed.data.label);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Failed to remove media link:', err);
+    res.status(502).json({ error: 'Failed to remove link' });
   }
 });
 

@@ -240,3 +240,67 @@ export async function updateArchiveRecord(id: string, patch: ArchivePatch): Prom
     throw new Error(`PocketBase archive update failed (${id}): ${res.status} ${await res.text()}`);
   }
 }
+
+/**
+ * Remove a single platform link from an archive record's mediaLinks by label.
+ * Replaces the whole array (so it can actually drop an entry — unlike the merge
+ * in updateArchiveRecord). Un-links only; the platform content stays live.
+ */
+export async function removeArchiveMediaLink(id: string, label: string): Promise<void> {
+  const recPath = `/api/collections/archive/records/${id}`;
+  const cur = await pbFetch(`${recPath}?fields=mediaLinks`);
+  const existing = cur.ok ? ((await cur.json()).mediaLinks as MediaLink[] | null) : null;
+  const next = (Array.isArray(existing) ? existing : []).filter((l) => l.label !== label);
+  const res = await pbFetch(recPath, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mediaLinks: next }),
+  });
+  if (!res.ok) {
+    throw new Error(`PocketBase remove media link failed (${id}): ${res.status} ${await res.text()}`);
+  }
+}
+
+// Build the public file URL for a record's image (same shape as toAgendaShow).
+function imageFileUrl(collectionId: string, recordId: string, filename: string): string {
+  return `${env.POCKETBASE_URL}/api/files/${collectionId}/${recordId}/${filename}`;
+}
+
+/**
+ * Set the archive record's cover image directly in PocketBase (the master) — no
+ * S3. The api proxies the operator's uploaded file to PB's `image` file field.
+ * Rebuilds the FormData per attempt so the 401/403 retry can re-send the body.
+ * Returns the new public image URL (or null if PB stored none).
+ */
+export async function uploadArchiveImage(
+  id: string,
+  file: Buffer,
+  filename: string,
+  contentType: string
+): Promise<string | null> {
+  const recUrl = `${pbBase}/api/collections/archive/records/${id}`;
+  const run = (token: string): Promise<Response> => {
+    const form = new FormData();
+    form.append('image', new Blob([new Uint8Array(file)], { type: contentType }), filename);
+    return fetch(recUrl, { method: 'PATCH', headers: { Authorization: token }, body: form });
+  };
+  let token = await getToken();
+  let res = await run(token);
+  if (res.status === 401 || res.status === 403) {
+    token = await authenticate();
+    res = await run(token);
+  }
+  if (!res.ok) throw new Error(`PocketBase cover upload failed (${id}): ${res.status} ${await res.text()}`);
+  const rec = (await res.json()) as { collectionId?: string; image?: string };
+  return rec.image && rec.collectionId ? imageFileUrl(rec.collectionId, id, rec.image) : null;
+}
+
+// Clear the archive record's cover image in PocketBase.
+export async function clearArchiveImage(id: string): Promise<void> {
+  const res = await pbFetch(`/api/collections/archive/records/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ image: null }),
+  });
+  if (!res.ok) throw new Error(`PocketBase cover clear failed (${id}): ${res.status} ${await res.text()}`);
+}

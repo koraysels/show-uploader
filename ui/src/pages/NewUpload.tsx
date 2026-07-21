@@ -121,7 +121,6 @@ export default function NewUpload() {
 
   // Platforms already published on this record (YouTube/MixCloud), from mediaLinks.
   const existingLinks = selectedShow?.mediaLinks ?? [];
-  const existingPlatforms = existingLinks.map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
 
   // On show change, reset the editable fields + drop-folder pick. The video
   // itself is DERIVED (staged query + live upload, both keyed by showId), so
@@ -281,6 +280,7 @@ export default function NewUpload() {
 
         <Section title="Details">
           <MetadataForm
+            showId={selectedShow.id}
             title={title}
             description={description}
             tags={tags}
@@ -322,27 +322,12 @@ export default function NewUpload() {
         </Section>
 
         <Section title="Publish to">
-          {existingLinks.length > 0 && (
-            <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs lowercase text-muted">
-              <span className="text-faint">already published:</span>
-              {existingLinks.map((l) => (
-                <a
-                  key={l.label + l.url}
-                  href={l.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-ink underline decoration-line underline-offset-2 hover:decoration-ink"
-                >
-                  {l.label} ↗
-                </a>
-              ))}
-              <span className="text-faint">— already-published platforms are locked to avoid duplicates.</span>
-            </p>
-          )}
           <PlatformSelector
             platforms={platforms}
             includeJingle={includeJingle}
-            existingPlatforms={existingPlatforms}
+            showId={selectedShow.id}
+            existingLinks={existingLinks}
+            meta={{ title, description, tags }}
             onChange={setPlatforms}
             onJingleChange={setIncludeJingle}
           />

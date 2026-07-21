@@ -11,7 +11,7 @@ import { baseTitle } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key, title, description, tags, jingleS3Key, includeJingle, trimStart, trimEnd, autoTrimSilence } = job.data;
+  const { jobId, uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle, trimStart, trimEnd, autoTrimSilence } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
@@ -57,10 +57,23 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       }
     }
 
-    // Cover art = a square frame grabbed 20s into the video. Non-fatal.
-    await captureSquareFrame(videoPath, thumbPath, 20).catch((err) =>
-      console.warn('Cover frame capture failed:', err instanceof Error ? err.message : err)
-    );
+    // Cover art: the PocketBase record image (the master cover, set by the
+    // operator) wins; otherwise a square frame grabbed 20s into the video. Both
+    // are non-fatal — publish coverless if they fail.
+    if (imageUrl) {
+      try {
+        const r = await fetch(imageUrl);
+        if (r.ok) await fs.promises.writeFile(thumbPath, Buffer.from(await r.arrayBuffer()));
+        else console.warn(`PB cover fetch ${r.status}, falling back to frame`);
+      } catch (err) {
+        console.warn('PB cover fetch failed, falling back to frame:', err instanceof Error ? err.message : err);
+      }
+    }
+    if (!fs.existsSync(thumbPath)) {
+      await captureSquareFrame(videoPath, thumbPath, 20).catch((err) =>
+        console.warn('Cover frame capture failed:', err instanceof Error ? err.message : err)
+      );
+    }
 
     await setJobStatus(jobId, 'processing', { progress_pct: 70 });
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 70 });

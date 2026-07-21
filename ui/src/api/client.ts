@@ -168,6 +168,43 @@ export const api = {
   generateAudio: (uploadId: string) =>
     apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/archive`, { method: 'POST' }),
 
+  // Cover image → the PocketBase archive record's `image` field (PB is master).
+  // Sends the raw image bytes; the api proxies them into PB. Returns the new URL.
+  uploadCover: (showId: string, file: File) =>
+    apiFetch<{ imageUrl: string | null }>(`/api/shows/${showId}/cover`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'image/jpeg' },
+      body: file,
+    }),
+  clearCover: (showId: string) =>
+    apiFetch<{ ok: boolean }>(`/api/shows/${showId}/cover`, { method: 'DELETE' }),
+
+  // Managing an already-published platform link (from the "Publish to" section).
+  platformUpdate: (body: {
+    platform: string;
+    url: string;
+    title: string;
+    description: string;
+    tags: string[];
+  }) =>
+    apiFetch<{ error: string | null }>('/api/uploads/platform/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  platformSetPublic: (url: string) =>
+    apiFetch<{ error: string | null }>('/api/uploads/platform/set-public', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    }),
+  platformRemove: (showId: string, label: string) =>
+    apiFetch<{ ok: boolean }>('/api/uploads/platform/remove', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ showId, label }),
+    }),
+
   // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
   getStaged: (showId: string) =>
     apiFetch<{ show_id: string; s3_key: string; filename: string; size_bytes: number } | null>(
