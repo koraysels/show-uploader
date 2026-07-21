@@ -5,13 +5,13 @@ vi.mock('jose', () => ({
   jwtVerify: vi.fn(),
 }));
 
-vi.mock('../env', () => ({
+vi.mock('../../src/env', () => ({
   env: { ZITADEL_DOMAIN: 'test.zitadel.cloud', ZITADEL_CLIENT_ID: 'test-client-id' },
 }));
 
 // Import AFTER mocking so the module uses mocked versions
 import { jwtVerify, createRemoteJWKSet } from 'jose';
-import { requireAuth } from './requireAuth';
+import { requireAuth } from '../../src/middleware/requireAuth';
 
 function makeReq(authHeader?: string) {
   return { headers: { authorization: authHeader } } as any;

@@ -192,6 +192,10 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+  platformYoutubeStatus: (url: string) =>
+    apiFetch<{ privacyStatus: string | null; error: string | null }>(
+      `/api/uploads/platform/youtube-status?url=${encodeURIComponent(url)}`
+    ),
   platformSetPublic: (url: string) =>
     apiFetch<{ error: string | null }>('/api/uploads/platform/set-public', {
       method: 'POST',

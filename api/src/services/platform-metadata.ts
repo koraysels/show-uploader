@@ -45,6 +45,27 @@ async function youtubeAccessToken(): Promise<string> {
   return data.access_token;
 }
 
+// Read a published YouTube video's privacy status (public/unlisted/private) so
+// the UI can reflect the real state instead of always offering "set public".
+export async function getYoutubePrivacyStatus(
+  url: string
+): Promise<{ privacyStatus: string | null; error: string | null }> {
+  if (!env.YOUTUBE_CLIENT_ID || !env.YOUTUBE_REFRESH_TOKEN) return { privacyStatus: null, error: 'YouTube not configured' };
+  const id = youtubeVideoId(url);
+  if (!id) return { privacyStatus: null, error: `couldn't parse video id from ${url}` };
+  try {
+    const token = await youtubeAccessToken();
+    const r = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=status&id=${id}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!r.ok) return { privacyStatus: null, error: `YouTube read ${r.status}: ${await r.text()}` };
+    const status = ((await r.json()) as { items?: { status?: { privacyStatus?: string } }[] }).items?.[0]?.status;
+    return { privacyStatus: status?.privacyStatus ?? null, error: null };
+  } catch (err) {
+    return { privacyStatus: null, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 // Flip a published YouTube video to public. Requires the youtube.force-ssl scope
 // (the upload-only token returns 403 — re-authorise to enable this).
 export async function setYoutubePublic(url: string): Promise<string | null> {

@@ -1,10 +1,10 @@
 import { vi, describe, it, expect } from 'vitest';
 
-vi.mock('../env', () => ({
+vi.mock('../../src/env', () => ({
   env: { POCKETBASE_URL: 'https://pb.test' },
 }));
 
-import { toAgendaShow } from './shows-api';
+import { toAgendaShow } from '../../src/services/shows-api';
 
 const base = {
   id: 'ep1',

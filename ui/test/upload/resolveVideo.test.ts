@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveVideo, type LiveUpload } from './resolveVideo';
+import { resolveVideo, type LiveUpload } from '../../src/upload/resolveVideo';
 
 const live = (over: Partial<LiveUpload>): LiveUpload => ({
   status: 'uploading',

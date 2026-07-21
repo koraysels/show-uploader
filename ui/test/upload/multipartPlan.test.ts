@@ -5,7 +5,7 @@ import {
   progressFraction,
   backoffDelay,
   fileFingerprint,
-} from './multipartPlan';
+} from '../../src/upload/multipartPlan';
 
 const MB = 1024 * 1024;
 

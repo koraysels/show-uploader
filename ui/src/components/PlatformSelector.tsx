@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { api } from '../api/client';
-import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove } from '../api/hooks';
+import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeStatus } from '../api/hooks';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
 function JinglePreview() {
@@ -91,8 +91,11 @@ function PublishedPlatform({
   const update = usePlatformUpdate();
   const setPublic = usePlatformSetPublic();
   const remove = usePlatformRemove();
+  const ytStatus = useYoutubeStatus(url, id === 'youtube');
   const [confirming, setConfirming] = useState(false);
 
+  const privacy = ytStatus.data?.privacyStatus ?? null; // public | unlisted | private | null
+  const isPublic = privacy === 'public';
   const btn = 'border border-line px-2.5 py-1 text-xs lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50';
 
   return (
@@ -101,7 +104,9 @@ function PublishedPlatform({
         <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium text-ink hover:underline">
           {label} ↗
         </a>
-        <span className="text-[10px] lowercase text-ok">✓ published</span>
+        <span className="text-[10px] lowercase text-ok">
+          ✓ published{id === 'youtube' && privacy ? ` · ${privacy}` : ''}
+        </span>
       </div>
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <button
@@ -113,17 +118,20 @@ function PublishedPlatform({
         >
           {update.isPending ? 'updating…' : 'update'}
         </button>
-        {id === 'youtube' && (
-          <button
-            type="button"
-            disabled={setPublic.isPending}
-            onClick={() => setPublic.mutate(url)}
-            className={btn}
-            title="make the video public on YouTube (needs the re-authorised token)"
-          >
-            {setPublic.isPending ? 'setting…' : 'set public'}
-          </button>
-        )}
+        {id === 'youtube' &&
+          (isPublic ? (
+            <span className="text-xs lowercase text-ok">✓ public</span>
+          ) : (
+            <button
+              type="button"
+              disabled={setPublic.isPending}
+              onClick={() => setPublic.mutate(url, { onSuccess: () => ytStatus.refetch() })}
+              className={btn}
+              title="make the video public on YouTube (needs the re-authorised token)"
+            >
+              {setPublic.isPending ? 'setting…' : 'set public'}
+            </button>
+          ))}
         {!confirming ? (
           <button type="button" onClick={() => setConfirming(true)} className={`${btn} hover:!border-danger hover:!text-danger`}>
             remove

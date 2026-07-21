@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baseTitle, appendHashtags, tagsToHashtags } from './format';
+import { baseTitle, appendHashtags, tagsToHashtags } from '../../src/services/format';
 
 describe('baseTitle — plain title for PocketBase, no convention suffix', () => {
   it('strips a "<date> @ coming soon" suffix as one unit', () => {

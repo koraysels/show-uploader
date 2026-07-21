@@ -2,11 +2,11 @@ import { vi, describe, it, expect } from 'vitest';
 
 // live-guard imports ../env, which parses process.env at load. Mock it so the
 // pure detector tests don't require the full runtime env.
-vi.mock('../env', () => ({
+vi.mock('../../src/env', () => ({
   env: { POCKETBASE_URL: 'https://pb.test', LIVE_GUARD_BUFFER_MIN: 15 },
 }));
 
-import { evaluateLive, type Episode } from './live-guard';
+import { evaluateLive, type Episode } from '../../src/services/live-guard';
 
 // Base window: 12:00–13:00 UTC on a fixed day. Buffer 15m in all tests.
 const BUF = 15;

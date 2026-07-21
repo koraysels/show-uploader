@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import postgres from 'postgres';
-import { runMigrations } from './migrate';
+import { runMigrations } from '../../src/db/migrate';
 import {
   upsertClaim,
   heartbeatClaim,
@@ -8,7 +8,7 @@ import {
   releaseClaimForShow,
   releaseStaleClaims,
   listClaims,
-} from './queries';
+} from '../../src/db/queries';
 
 // Real claim-lifecycle coverage against Postgres — the steal / wrong-owner /
 // sweep behaviour lives in SQL, so it can only be tested against a live DB.

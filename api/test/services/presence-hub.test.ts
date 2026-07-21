@@ -2,15 +2,15 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // The hub pulls the pg client and claim queries; stub both so importing it never
 // touches env/DB. broadcastClaims/snapshot read listClaims, which we drive here.
-vi.mock('../db/client', () => ({ db: {} }));
+vi.mock('../../src/db/client', () => ({ db: {} }));
 
 const { listClaims, releaseStaleClaims } = vi.hoisted(() => ({
   listClaims: vi.fn(),
   releaseStaleClaims: vi.fn(),
 }));
-vi.mock('../db/queries', () => ({ listClaims, releaseStaleClaims }));
+vi.mock('../../src/db/queries', () => ({ listClaims, releaseStaleClaims }));
 
-import { presenceHub } from './presence-hub';
+import { presenceHub } from '../../src/services/presence-hub';
 
 type Frame = { event: string; data: unknown };
 

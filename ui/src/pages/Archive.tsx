@@ -1,10 +1,32 @@
 import { useState } from 'react';
-import { useUploads, useUpdateMetadata, useGenres, usePublishRecord, useGenerateAudio } from '../api/hooks';
+import { useUploads, useShows, useUpdateMetadata, useGenres, usePublishRecord, useGenerateAudio, useYoutubeStatus } from '../api/hooks';
 import TagInput from '../components/TagInput';
 import { usePaged, Pager } from '../components/Pager';
 import type { UploadWithJobs } from '../api/client';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
+
+// The agenda admin hosts each archive record at `<base>/#/archive/<recordId>`,
+// where the record id is the show_id.
+const AGENDA_BASE = import.meta.env.VITE_POCKETBASE_URL ?? 'https://agenda.coming-soon.space';
+
+// A published platform link, with the real YouTube privacy status appended
+// (public/unlisted/private) so the operator sees the actual state.
+function PublishedLink({ platform, url }: { platform: string; url: string }) {
+  const isYt = platform === 'youtube';
+  const status = useYoutubeStatus(url, isYt);
+  const priv = status.data?.privacyStatus;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <a href={url} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+        {PLATFORM_LABELS[platform] ?? platform} ↗
+      </a>
+      {isYt && priv && (
+        <span className={`text-[10px] lowercase ${priv === 'public' ? 'text-ok' : 'text-faint'}`}>{priv}</span>
+      )}
+    </span>
+  );
+}
 
 // A show belongs in the archive once it's been published somewhere.
 function publishedJobs(u: UploadWithJobs) {
@@ -108,7 +130,9 @@ function EditPanel({ upload }: { upload: UploadWithJobs }) {
   );
 }
 
-function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
+// coverUrl comes from the PocketBase record (the master), not the stored
+// upload.image_url snapshot — so the thumbnail is always the current agenda image.
+function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: string | null }) {
   const [editing, setEditing] = useState(false);
   const publish = usePublishRecord();
   const pub = publishedJobs(upload);
@@ -116,9 +140,9 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
   return (
     <div className="border border-line bg-surface p-5">
       <div className="flex gap-4">
-        {upload.image_url && (
+        {coverUrl && (
           <img
-            src={upload.image_url}
+            src={coverUrl}
             alt=""
             className="h-16 w-16 shrink-0 border border-line object-cover"
             onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
@@ -127,14 +151,22 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
             <p className="font-medium text-ink">{upload.title}</p>
-            <p className="shrink-0 font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
+            <div className="flex shrink-0 items-baseline gap-3">
+              <a
+                href={`${AGENDA_BASE}/#/archive/${upload.show_id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-[13px] lowercase text-muted underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+              >
+                ↗ agenda
+              </a>
+              <p className="font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
+            </div>
           </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
             {pub.map((j) => (
-              <a key={j.platform} href={j.result_url!} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
-                {PLATFORM_LABELS[j.platform]} ↗
-              </a>
+              <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
             ))}
             <span className="text-line" aria-hidden>|</span>
             <DownloadLink url={upload.video_url} label="Video" />
@@ -174,6 +206,9 @@ function ArchiveCard({ upload }: { upload: UploadWithJobs }) {
 
 export default function Archive() {
   const { data: uploads = [], isPending } = useUploads();
+  const { data: shows = [] } = useShows();
+  // Cover per show from the PocketBase record (master), keyed by show_id.
+  const coverByShow = new Map(shows.map((s) => [s.id, s.imageUrl]));
   const archived = uploads
     .filter((u) => publishedJobs(u).length > 0)
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
@@ -198,7 +233,7 @@ export default function Archive() {
         <>
           <div className="space-y-3">
             {paged.slice.map((u) => (
-              <ArchiveCard key={u.id} upload={u} />
+              <ArchiveCard key={u.id} upload={u} coverUrl={coverByShow.get(u.show_id) ?? null} />
             ))}
           </div>
           <Pager page={paged.page} pageCount={paged.pageCount} total={paged.total} setPage={paged.setPage} unit="shows" />

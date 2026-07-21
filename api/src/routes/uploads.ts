@@ -20,7 +20,7 @@ import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { getLiveState } from '../services/live-guard';
 import { updateArchiveRecord, resolveGenreIds, removeArchiveMediaLink } from '../services/shows-api';
-import { syncYoutubeMetadata, syncMixcloudMetadata, setYoutubePublic } from '../services/platform-metadata';
+import { syncYoutubeMetadata, syncMixcloudMetadata, setYoutubePublic, getYoutubePrivacyStatus } from '../services/platform-metadata';
 import { baseTitle } from '../services/format';
 import { env } from '../env';
 
@@ -370,6 +370,14 @@ uploadsRouter.post('/platform/update', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
   }
+});
+
+// Read a YouTube video's real privacy status so the UI can reflect it (public
+// hides the "set public" button). Never throws — returns { privacyStatus, error }.
+uploadsRouter.get('/platform/youtube-status', async (req, res) => {
+  const url = typeof req.query.url === 'string' ? req.query.url : '';
+  if (!url) return res.status(400).json({ privacyStatus: null, error: 'url required' });
+  res.json(await getYoutubePrivacyStatus(url));
 });
 
 // Flip a published YouTube video to public (needs the force-ssl scope).

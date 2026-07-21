@@ -120,6 +120,18 @@ export function usePlatformUpdate() {
   });
 }
 
+// Real YouTube privacy status for a published video, so the UI can hide "set
+// public" once it's actually public (enabled only for YouTube links).
+export function useYoutubeStatus(url: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['yt-status', url],
+    queryFn: () => api.platformYoutubeStatus(url),
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
 export function usePlatformSetPublic() {
   const qc = useQueryClient();
   return useMutation({
