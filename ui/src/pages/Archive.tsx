@@ -18,7 +18,8 @@ const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 
 // where the record id is the show_id.
 const AGENDA_BASE = import.meta.env.VITE_POCKETBASE_URL ?? 'https://agenda.coming-soon.space';
 
-const LABEL_TO_ID: Record<string, string> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
+type Platform = 'youtube' | 'mixcloud';
+const LABEL_TO_ID: Record<string, Platform> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
 
 // A published platform link + the real YouTube privacy status (read-only). Sync
 // actions live in the SyncPanel below, metadata editing in PocketBase ("edit ↗").
@@ -49,9 +50,9 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
   const ytLink = links.find((l) => l.label === 'YouTube');
   const ytStatus = useYoutubeStatus(ytLink?.url ?? '', !!ytLink);
 
-  const present = links.map((l) => LABEL_TO_ID[l.label]).filter(Boolean);
-  const [selected, setSelected] = useState<string[]>(present);
-  const toggle = (p: string) => setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]));
+  const present = links.map((l) => LABEL_TO_ID[l.label]).filter(Boolean) as Platform[];
+  const [selected, setSelected] = useState<Platform[]>(present);
+  const toggle = (p: Platform) => setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]));
   const results = sync.data?.results;
 
   return (

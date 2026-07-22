@@ -1,32 +1,40 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
+import { useTRPC } from './trpc';
 
 // Queries -------------------------------------------------------------------
+//
+// The `shows` domain is served over tRPC (end-to-end typed, no hand-written
+// client methods). The rest still use the REST `api` client — tRPC lives
+// alongside it and is being adopted domain by domain.
 
 export function useShows() {
-  return useQuery({ queryKey: ['shows'], queryFn: api.listShows, staleTime: 60_000 });
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.listShows.queryOptions(undefined, { staleTime: 60_000 }));
 }
 
 export function useGenres() {
-  return useQuery({ queryKey: ['genres'], queryFn: api.listGenres, staleTime: 300_000 });
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.listGenres.queryOptions(undefined, { staleTime: 300_000 }));
 }
 
 // Cover URLs per show from PocketBase (the master). Polls so a cover changed in
 // the agenda admin shows up here within ~15s without a manual refresh.
 export function useCovers() {
-  return useQuery({ queryKey: ['covers'], queryFn: api.listCovers, refetchInterval: 15_000, staleTime: 10_000 });
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.listCovers.queryOptions(undefined, { refetchInterval: 15_000, staleTime: 10_000 }));
 }
 
 // The current PocketBase metadata for one show (what a platform sync would push).
 export function useShow(id: string, enabled: boolean) {
-  return useQuery({ queryKey: ['show', id], queryFn: () => api.getShow(id), enabled, staleTime: 10_000 });
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.get.queryOptions({ id }, { enabled, staleTime: 10_000 }));
 }
 
 // Re-sync a published show's metadata/cover from PocketBase to selected platforms.
 export function useSyncPlatforms() {
-  return useMutation({
-    mutationFn: ({ id, platforms }: { id: string; platforms: string[] }) => api.syncPlatforms(id, platforms),
-  });
+  const trpc = useTRPC();
+  return useMutation(trpc.shows.syncPlatforms.mutationOptions());
 }
 
 export function useStagedShowIds() {
@@ -47,13 +55,13 @@ export function useAuthCheck(enabled: boolean) {
 }
 
 export function useGeneratedMeta(title: string | undefined, description: string | undefined) {
-  return useQuery({
-    queryKey: ['meta', title, description],
-    queryFn: () => api.generateMeta(title ?? '', description ?? ''),
-    enabled: !!title,
-    retry: false,
-    staleTime: Infinity,
-  });
+  const trpc = useTRPC();
+  return useQuery(
+    trpc.shows.generateMeta.queryOptions(
+      { title: title ?? '', description: description ?? '' },
+      { enabled: !!title, retry: false, staleTime: Infinity }
+    )
+  );
 }
 
 export function usePendingVideos() {
@@ -115,17 +123,19 @@ export function useGenerateAudio() {
 // every view (form, archive) reflects the new master cover.
 export function useUploadCover(showId: string | undefined) {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: (file: File) => api.uploadCover(showId!, file),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
   });
 }
 
 export function useClearCover(showId: string | undefined) {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: () => api.clearCover(showId!),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
   });
 }
 
@@ -158,17 +168,19 @@ export function useYoutubeStatus(url: string, enabled: boolean) {
 
 export function usePlatformSetPublic() {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: (url: string) => api.platformSetPublic(url),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
   });
 }
 
 export function usePlatformRemove() {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: ({ showId, label }: { showId: string; label: string }) => api.platformRemove(showId, label),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['shows'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
   });
 }
 

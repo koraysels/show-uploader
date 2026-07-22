@@ -9,6 +9,9 @@ import { watcherRouter } from './routes/watcher';
 import { presenceRouter } from './routes/presence';
 import { presenceHub } from './services/presence-hub';
 import { requireAuth } from './middleware/requireAuth';
+import { createExpressMiddleware } from '@trpc/server/adapters/express';
+import { appRouter } from './trpc/root';
+import { createContext } from './trpc/trpc';
 
 export function createApp() {
   const app = express();
@@ -27,6 +30,12 @@ export function createApp() {
   app.use('/api/uploads', requireAuth, uploadsRouter);
   app.use('/api/uploads', requireAuth, eventsRouter);
   app.use('/api/presence', requireAuth, presenceRouter);
+
+  // tRPC — mounted ALONGSIDE the REST routes above (nothing removed). NOT behind
+  // requireAuth globally: auth is per-procedure. protectedProcedure enforces the
+  // same Zitadel JWT + member role as requireAuth, while watcher procedures (next
+  // phase) validate the shared WATCHER_API_KEY inside the procedure instead.
+  app.use('/api/trpc', createExpressMiddleware({ router: appRouter, createContext }));
 
   presenceHub.startSweeper();
 
