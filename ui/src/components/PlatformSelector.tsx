@@ -112,7 +112,7 @@ function PublishedPlatform({
         <button
           type="button"
           disabled={update.isPending}
-          onClick={() => update.mutate({ platform: id, url, ...meta })}
+          onClick={() => update.mutate({ platform: id as 'youtube' | 'mixcloud', url, ...meta })}
           className={btn}
           title={
             id === 'mixcloud'
