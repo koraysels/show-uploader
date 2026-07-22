@@ -53,13 +53,19 @@ services:
       # Write published results back to the PocketBase archive record via the api
       # (which holds the PB superuser). Same isolated network, api listens on 3000.
       - INTERNAL_API_URL=http://api:3000/api
+      # Reach PocketBase over the shared network to fetch a record's cover image
+      # for the MixCloud upload (the public host isn't reachable from inside — NAT
+      # hairpin). POCKETBASE_URL (the public base to rewrite from) comes from .env.
+      - POCKETBASE_INTERNAL_URL=http://radio-pocketbase:8090
     depends_on:
       - redis
       - minio
       - api
     restart: unless-stopped
     networks:
+      # reverse-proxy is the shared external network where radio-pocketbase lives.
       - default
+      - reverse-proxy
 
   redis:
     image: redis:7-alpine

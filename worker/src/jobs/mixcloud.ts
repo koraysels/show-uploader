@@ -2,6 +2,7 @@ import type { Job } from 'bullmq';
 import path from 'path';
 import fs from 'fs';
 import type { JobPayload } from '../types';
+import { env } from '../env';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
 import { extractAudio, prependJingle, captureSquareFrame, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
@@ -62,7 +63,13 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     // are non-fatal — publish coverless if they fail.
     if (imageUrl) {
       try {
-        const r = await fetch(imageUrl);
+        // Fetch the PB cover over the internal host (the public one isn't reachable
+        // from inside the box — NAT hairpin); falls back to the URL as-is if unset.
+        const coverUrl =
+          env.POCKETBASE_INTERNAL_URL && env.POCKETBASE_URL
+            ? imageUrl.replace(env.POCKETBASE_URL, env.POCKETBASE_INTERNAL_URL)
+            : imageUrl;
+        const r = await fetch(coverUrl);
         if (r.ok) await fs.promises.writeFile(thumbPath, Buffer.from(await r.arrayBuffer()));
         else console.warn(`PB cover fetch ${r.status}, falling back to frame`);
       } catch (err) {

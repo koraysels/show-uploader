@@ -20,6 +20,12 @@ const schema = z.object({
   // 'auto' = dry-run only when platform creds are missing/placeholder; 'true'/'false' force it.
   PUBLISH_DRY_RUN: z.enum(['auto', 'true', 'false']).default('auto'),
   MIXCLOUD_ACCESS_TOKEN: z.string().optional(),
+  // PocketBase file URLs are built with the PUBLIC host (agenda.coming-soon.space),
+  // unreachable from inside the box (NAT hairpin). To fetch a record's cover image
+  // for the MixCloud upload we rewrite that base to the INTERNAL host. Both come
+  // from the compose env; when unset the cover fetch just uses the URL as-is.
+  POCKETBASE_URL: z.string().url().optional(),
+  POCKETBASE_INTERNAL_URL: z.string().url().optional(),
   ARCHIVE_VIDEO_BITRATE: z.string().default('4000k'),
   ARCHIVE_AUDIO_BITRATE: z.string().default('256k'),
   JINGLE_S3_KEY: z.string().optional(),
