@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthProvider';
 import { UploadProvider } from './upload/UploadProvider';
 import { PresenceProvider } from './presence/PresenceProvider';
 import { TRPCProvider, trpcClient } from './api/trpc';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { router } from './router';
 import './index.css';
 
@@ -15,16 +16,18 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
-        <AuthProvider>
-          <UploadProvider>
-            <PresenceProvider>
-              <RouterProvider router={router} />
-            </PresenceProvider>
-          </UploadProvider>
-        </AuthProvider>
-      </TRPCProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TRPCProvider trpcClient={trpcClient} queryClient={queryClient}>
+          <AuthProvider>
+            <UploadProvider>
+              <PresenceProvider>
+                <RouterProvider router={router} />
+              </PresenceProvider>
+            </UploadProvider>
+          </AuthProvider>
+        </TRPCProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

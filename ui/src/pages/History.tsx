@@ -4,6 +4,7 @@ import { useUploads } from '../api/hooks';
 import type { UploadWithJobs } from '../api/client';
 import JobProgress from '../components/JobProgress';
 import { usePaged, Pager } from '../components/Pager';
+import { ListSkeleton } from '../components/Skeleton';
 
 const isSettled = (u: UploadWithJobs) =>
   u.jobs.length > 0 && u.jobs.every((j) => j.status === 'done' || j.status === 'failed');
@@ -55,7 +56,7 @@ export default function History() {
     }
   }, [highlight, uploads]);
 
-  if (isPending) return <p className="text-sm text-muted">Loading…</p>;
+  if (isPending) return <ListSkeleton />;
 
   return (
     <div className="space-y-8">

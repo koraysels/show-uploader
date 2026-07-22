@@ -14,6 +14,8 @@ import History from './pages/History';
 import Archive from './pages/Archive';
 import { UploadIndicator } from './components/Dropzone';
 import { PresenceRoster } from './components/PresenceRoster';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { PageLoading } from './components/Skeleton';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
 
@@ -25,9 +27,12 @@ function AuthedLayout() {
     if (!loading && !user) void userManager.signinRedirect();
   }, [loading, user, userManager]);
 
-  if (loading || !user) return null;
+  // Never render null here — that blanks the page during auth/redirect (e.g. a
+  // session that expired after long idle). Show a loader instead.
+  if (loading) return <PageLoading label="loading…" />;
+  if (!user) return <PageLoading label="signing in…" />;
   if (authCheck.isError && authCheck.error.message.includes('403')) return <AccessDenied />;
-  if (authCheck.isPending) return null;
+  if (authCheck.isPending) return <PageLoading label="checking access…" />;
 
   const navLink = 'px-3 py-1.5 text-sm lowercase text-muted hover:text-ink transition-colors';
   const navActive = 'px-3 py-1.5 text-sm lowercase text-paper bg-ink';
@@ -94,7 +99,11 @@ function AuthedLayout() {
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
-        <Outlet />
+        {/* Page-level boundary: a crash in one page keeps the header/nav + is
+            recoverable, instead of blanking the whole app. */}
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );

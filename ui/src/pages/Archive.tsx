@@ -10,6 +10,7 @@ import {
   useSyncPlatforms,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
+import { ListSkeleton } from '../components/Skeleton';
 import type { UploadWithJobs } from '../api/client';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -285,8 +286,6 @@ export default function Archive() {
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
   const paged = usePaged(archived, (u) => u.title);
 
-  if (isPending) return <p className="text-sm text-muted">Loading…</p>;
-
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -298,7 +297,9 @@ export default function Archive() {
           className="field w-full sm:w-64"
         />
       </header>
-      {archived.length === 0 ? (
+      {isPending ? (
+        <ListSkeleton />
+      ) : archived.length === 0 ? (
         <p className="text-sm text-muted">no published shows yet.</p>
       ) : (
         <>

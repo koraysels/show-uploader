@@ -119,6 +119,16 @@ export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<
   }
 }
 
+// PocketBase file URLs are built with the PUBLIC host (for the browser), but the
+// api container reaches PB over the INTERNAL host — the public IP isn't reachable
+// from inside the box (NAT hairpin), so a server-side fetch of the public URL
+// fails ("fetch failed"). Rewrite the base to the internal host for server fetches.
+function internalPbUrl(url: string): string {
+  return env.POCKETBASE_INTERNAL_URL && env.POCKETBASE_URL
+    ? url.replace(env.POCKETBASE_URL, env.POCKETBASE_INTERNAL_URL)
+    : url;
+}
+
 // imageUrl (the PocketBase record cover) is optional: when given, the cover is
 // re-uploaded to MixCloud too (via multipart), so changing the agenda cover and
 // hitting "update" re-syncs the artwork. Without it, only the text is edited.
@@ -136,7 +146,7 @@ export async function syncMixcloudMetadata(
     let res: Response;
     if (imageUrl) {
       // Multipart so the cover picture rides along with the metadata.
-      const img = await fetch(imageUrl);
+      const img = await fetch(internalPbUrl(imageUrl));
       if (!img.ok) return `MixCloud cover fetch ${img.status}`;
       const ct = img.headers.get('content-type') ?? 'image/jpeg';
       const buf = Buffer.from(await img.arrayBuffer());
