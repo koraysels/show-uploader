@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import { useShows, useGeneratedMeta, usePendingVideos, useClaimPending, useCreateUpload, useStaged } from '../api/hooks';
-import { api } from '../api/client';
+import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
@@ -160,7 +160,7 @@ export default function NewUpload() {
     setSelectedPendingId(null);
     if (showId) {
       upload.reset(showId);
-      void api.deleteStaged(showId).catch(() => {});
+      void trpcClient.uploads.deleteStaged.mutate({ showId }).catch(() => {});
       void qc.invalidateQueries({ queryKey: ['staged', showId] });
       void qc.invalidateQueries({ queryKey: ['staged-shows'] });
     }
@@ -176,7 +176,7 @@ export default function NewUpload() {
         tags,
         imageUrl: imageUrl || null,
         videoS3Key,
-        platforms,
+        platforms: platforms as ('youtube' | 'mixcloud')[],
         includeJingle,
         autoTrimSilence,
         trimStart: trimStart || null,

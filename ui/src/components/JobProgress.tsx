@@ -118,7 +118,7 @@ export default function JobProgress({ uploadId, jobs }: Props) {
                   <span className="text-danger">{s.error ?? 'Failed'}</span>
                   <button
                     type="button"
-                    onClick={() => retry.mutate(platform)}
+                    onClick={() => retry.mutate(platform as 'youtube' | 'mixcloud' | 'archive')}
                     disabled={retry.isPending}
                     className="border border-line px-2 py-0.5 font-medium text-accent hover:bg-line disabled:opacity-50"
                   >

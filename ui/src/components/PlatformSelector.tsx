@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { api } from '../api/client';
+import { trpcClient } from '../api/trpc';
 import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeStatus } from '../api/hooks';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
@@ -19,7 +19,7 @@ function JinglePreview() {
     if (!a.src) {
       setLoading(true);
       try {
-        const { url } = await api.getJinglePreview();
+        const { url } = await trpcClient.uploads.getJinglePreview.query();
         a.src = url;
       } catch {
         setErr(true);
