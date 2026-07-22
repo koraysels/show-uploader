@@ -73,37 +73,37 @@ export function usePendingVideos() {
 }
 
 export function useUploads() {
-  return useQuery({
-    queryKey: ['uploads'],
-    queryFn: api.listUploads,
-    refetchInterval: 10_000,
-  });
+  const trpc = useTRPC();
+  return useQuery(trpc.uploads.list.queryOptions(undefined, { refetchInterval: 10_000 }));
 }
 
 // Mutations -----------------------------------------------------------------
 
 export function useCreateUpload() {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: api.createUpload,
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
 
 export function useRetryJob(uploadId: string) {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: (platform: string) => api.retryJob(uploadId, platform),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
 
 export function useUpdateMetadata(uploadId: string) {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: (body: { title: string; description: string; tags: string[] }) =>
       api.updateMetadata(uploadId, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
 
@@ -113,9 +113,10 @@ export function usePublishRecord() {
 
 export function useGenerateAudio() {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
     mutationFn: (uploadId: string) => api.generateAudio(uploadId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['uploads'] }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
 
@@ -139,49 +140,35 @@ export function useClearCover(showId: string | undefined) {
   });
 }
 
-// Managing an already-published platform link. update/set-public return { error }
-// (a message on failure). remove un-links from the archive record → refetch shows.
+// Managing an already-published platform link, over tRPC. update/set-public
+// return { error } (a message on failure). remove un-links from the archive
+// record → refetch shows.
 export function usePlatformUpdate() {
-  return useMutation({
-    mutationFn: (body: {
-      platform: string;
-      url: string;
-      title: string;
-      description: string;
-      tags: string[];
-      imageUrl: string | null;
-    }) => api.platformUpdate(body),
-  });
+  const trpc = useTRPC();
+  return useMutation(trpc.platform.update.mutationOptions());
 }
 
 // Real YouTube privacy status for a published video, so the UI can hide "set
 // public" once it's actually public (enabled only for YouTube links).
 export function useYoutubeStatus(url: string, enabled: boolean) {
-  return useQuery({
-    queryKey: ['yt-status', url],
-    queryFn: () => api.platformYoutubeStatus(url),
-    enabled,
-    staleTime: 30_000,
-    retry: false,
-  });
+  const trpc = useTRPC();
+  return useQuery(trpc.platform.youtubeStatus.queryOptions({ url }, { enabled, staleTime: 30_000, retry: false }));
 }
 
 export function usePlatformSetPublic() {
   const qc = useQueryClient();
   const trpc = useTRPC();
-  return useMutation({
-    mutationFn: (url: string) => api.platformSetPublic(url),
-    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
-  });
+  return useMutation(
+    trpc.platform.setPublic.mutationOptions({ onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()) })
+  );
 }
 
 export function usePlatformRemove() {
   const qc = useQueryClient();
   const trpc = useTRPC();
-  return useMutation({
-    mutationFn: ({ showId, label }: { showId: string; label: string }) => api.platformRemove(showId, label),
-    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
-  });
+  return useMutation(
+    trpc.platform.removeLink.mutationOptions({ onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()) })
+  );
 }
 
 export function useClaimPending() {
