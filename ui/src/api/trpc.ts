@@ -6,21 +6,42 @@ import { userManager } from '../auth/AuthProvider';
 // time — nothing from the api runtime is bundled into the UI).
 import type { AppRouter } from '../../../api/src/trpc/root';
 
-// Attach the Zitadel access token, mirroring how api/client.ts's apiFetch pulls
-// it from the oidc userManager. Runs per request batch (async) so it always uses
-// the freshest token oidc-client-ts holds (it renews silently in the background).
-async function authHeaders(): Promise<Record<string, string>> {
-  const user = await userManager.getUser();
-  if (user?.access_token) return { Authorization: `Bearer ${user.access_token}` };
-  return {};
+// Auth-aware fetch for the tRPC link — full parity with api/client.ts's apiFetch:
+// attach the Zitadel access token, and on a 401 try a silent renew + retry once,
+// then bounce to login rather than dead-ending. Every request is cloned before
+// sending so the body survives the retry.
+async function sendWithToken(base: Request, token: string | undefined): Promise<Response> {
+  const req = base.clone();
+  if (token) req.headers.set('Authorization', `Bearer ${token}`);
+  return fetch(req);
 }
+
+const authedFetch: typeof fetch = async (input, init) => {
+  const base = input instanceof Request ? input : new Request(input as string, init);
+  const user = await userManager.getUser();
+  let res = await sendWithToken(base, user?.access_token);
+  if (res.status === 401) {
+    let renewed = null;
+    try {
+      renewed = await userManager.signinSilent();
+    } catch {
+      renewed = null;
+    }
+    if (renewed?.access_token) res = await sendWithToken(base, renewed.access_token);
+    if (res.status === 401) {
+      await userManager.signinRedirect();
+      throw new Error('Session expired');
+    }
+  }
+  return res;
+};
 
 // Standalone vanilla client — usable outside React (loaders, imperative calls).
 export const trpcClient = createTRPCClient<AppRouter>({
   links: [
     httpBatchLink({
       url: '/api/trpc',
-      headers: authHeaders,
+      fetch: authedFetch,
     }),
   ],
 });
