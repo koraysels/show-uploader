@@ -82,38 +82,12 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// Everything else moved to tRPC (see ./trpc.ts). What stays REST here is exactly
+// what doesn't fit tRPC's batch link: the resumable multipart flow, the raw
+// cover-byte upload, the auth probe, and the presence claims (paired with the
+// presence SSE stream).
 export const api = {
   checkAuth: () => apiFetch<{ ok: boolean }>('/api/auth/me'),
-
-  listShows: () => apiFetch<AgendaShow[]>('/api/shows'),
-
-  listGenres: () => apiFetch<string[]>('/api/shows/genres'),
-
-  // Cover URL per archive record (all statuses), keyed by show_id — for thumbnails.
-  listCovers: () => apiFetch<Record<string, string>>('/api/shows/covers'),
-
-  // A single archive record (any status) — the current PocketBase metadata.
-  getShow: (id: string) => apiFetch<AgendaShow>(`/api/shows/${id}`),
-
-  // Re-sync a published show's metadata/cover from PocketBase to its platforms.
-  syncPlatforms: (id: string, platforms: string[]) =>
-    apiFetch<{ results: Record<string, string> }>(`/api/shows/${id}/sync-platforms`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ platforms }),
-    }),
-
-  generateMeta: (title: string, description: string) =>
-    apiFetch<GeneratedMeta>(
-      `/api/shows/meta?title=${encodeURIComponent(title)}&description=${encodeURIComponent(description)}`
-    ),
-
-  getPresignedUrl: (filename: string, contentType: string) =>
-    apiFetch<{ url: string; key: string }>('/api/uploads/presign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename, contentType }),
-    }),
 
   // Resumable multipart upload
   mpCreate: (filename: string, contentType: string, size: number, showId: string) =>
@@ -143,45 +117,6 @@ export const api = {
   mpAbort: (sessionId: string) =>
     apiFetch(`/api/uploads/multipart/${sessionId}/abort`, { method: 'POST' }),
 
-  createUpload: (body: {
-    showId: string;
-    title: string;
-    description: string;
-    tags: string[];
-    imageUrl: string | null;
-    videoS3Key: string;
-    platforms: string[];
-    includeJingle: boolean;
-    autoTrimSilence: boolean;
-    trimStart?: string | null;
-    trimEnd?: string | null;
-  }) =>
-    apiFetch<{ uploadId: string }>('/api/uploads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-
-  listUploads: () => apiFetch<UploadWithJobs[]>('/api/uploads'),
-
-  retryJob: (uploadId: string, platform: string) =>
-    apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/jobs/${platform}/retry`, { method: 'POST' }),
-
-  updateMetadata: (uploadId: string, body: { title: string; description: string; tags: string[] }) =>
-    apiFetch<MetadataSync>(`/api/uploads/${uploadId}/metadata`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-
-  // Flip the PocketBase archive record to published (live on the agenda site).
-  publishRecord: (uploadId: string) =>
-    apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/publish`, { method: 'POST' }),
-
-  // (Re)generate the downloadable audio archive (m4a) for an upload.
-  generateAudio: (uploadId: string) =>
-    apiFetch<{ ok: boolean }>(`/api/uploads/${uploadId}/archive`, { method: 'POST' }),
-
   // Cover image → the PocketBase archive record's `image` field (PB is master).
   // Sends the raw image bytes; the api proxies them into PB. Returns the new URL.
   uploadCover: (showId: string, file: File) =>
@@ -192,66 +127,6 @@ export const api = {
     }),
   clearCover: (showId: string) =>
     apiFetch<{ ok: boolean }>(`/api/shows/${showId}/cover`, { method: 'DELETE' }),
-
-  // Managing an already-published platform link (from the "Publish to" section).
-  platformUpdate: (body: {
-    platform: string;
-    url: string;
-    title: string;
-    description: string;
-    tags: string[];
-    imageUrl: string | null;
-  }) =>
-    apiFetch<{ error: string | null }>('/api/uploads/platform/update', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-  platformYoutubeStatus: (url: string) =>
-    apiFetch<{ privacyStatus: string | null; error: string | null }>(
-      `/api/uploads/platform/youtube-status?url=${encodeURIComponent(url)}`
-    ),
-  platformSetPublic: (url: string) =>
-    apiFetch<{ error: string | null }>('/api/uploads/platform/set-public', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    }),
-  platformRemove: (showId: string, label: string) =>
-    apiFetch<{ ok: boolean }>('/api/uploads/platform/remove', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ showId, label }),
-    }),
-
-  // Staged (uploaded-but-unpublished) video per show — survives refresh / works cross-machine.
-  getStaged: (showId: string) =>
-    apiFetch<{ show_id: string; s3_key: string; filename: string; size_bytes: number } | null>(
-      `/api/uploads/staged/${showId}`
-    ),
-  // The most recent COMPLETED upload's video for a show (staged rows are cleared
-  // on publish; this restores the published recording into the form).
-  getShowVideo: (showId: string) =>
-    apiFetch<{ videoS3Key: string; filename: string } | null>(`/api/uploads/for-show/${showId}`),
-  // show_ids that already have a staged (uploaded, not-yet-published) video.
-  getStagedShowIds: () => apiFetch<string[]>('/api/uploads/staged'),
-  putStaged: (showId: string, body: { s3Key: string; filename: string; sizeBytes: number }) =>
-    apiFetch(`/api/uploads/staged/${showId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    }),
-  deleteStaged: (showId: string) => apiFetch(`/api/uploads/staged/${showId}`, { method: 'DELETE' }),
-
-  getJinglePreview: () => apiFetch<{ url: string; filename: string }>('/api/uploads/jingle-preview'),
-
-  listPendingVideos: () =>
-    apiFetch<{ id: string; s3_key: string; filename: string; size_bytes: number; created_at: string }[]>(
-      '/api/watcher/pending'
-    ),
-
-  claimPendingVideo: (id: string) =>
-    apiFetch(`/api/watcher/pending/${id}`, { method: 'DELETE' }),
 
   // Presence / soft-claims
   claimShow: (showId: string) =>

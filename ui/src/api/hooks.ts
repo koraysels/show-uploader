@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
-import { useTRPC } from './trpc';
+import { useTRPC, trpcClient } from './trpc';
 
 // Queries -------------------------------------------------------------------
 //
-// The `shows` domain is served over tRPC (end-to-end typed, no hand-written
-// client methods). The rest still use the REST `api` client — tRPC lives
-// alongside it and is being adopted domain by domain.
+// Everything except multipart uploads, the raw cover-byte upload and the SSE
+// streams is served over tRPC (end-to-end typed). The remaining REST `api`
+// methods cover exactly those cases.
 
 export function useShows() {
   const trpc = useTRPC();
@@ -38,16 +38,15 @@ export function useSyncPlatforms() {
 }
 
 export function useStagedShowIds() {
-  return useQuery({ queryKey: ['staged-shows'], queryFn: api.getStagedShowIds, refetchInterval: 15_000 });
+  const trpc = useTRPC();
+  return useQuery(trpc.uploads.getStagedShowIds.queryOptions(undefined, { refetchInterval: 15_000 }));
 }
 
 export function useStaged(showId: string | undefined) {
-  return useQuery({
-    queryKey: ['staged', showId],
-    queryFn: () => api.getStaged(showId!),
-    enabled: !!showId,
-    refetchInterval: 10_000,
-  });
+  const trpc = useTRPC();
+  return useQuery(
+    trpc.uploads.getStaged.queryOptions({ showId: showId ?? '' }, { enabled: !!showId, refetchInterval: 10_000 })
+  );
 }
 
 export function useAuthCheck(enabled: boolean) {
@@ -65,11 +64,8 @@ export function useGeneratedMeta(title: string | undefined, description: string 
 }
 
 export function usePendingVideos() {
-  return useQuery({
-    queryKey: ['pending-videos'],
-    queryFn: api.listPendingVideos,
-    refetchInterval: 15_000,
-  });
+  const trpc = useTRPC();
+  return useQuery(trpc.watcher.pending.queryOptions(undefined, { refetchInterval: 15_000 }));
 }
 
 export function useUploads() {
@@ -82,40 +78,33 @@ export function useUploads() {
 export function useCreateUpload() {
   const qc = useQueryClient();
   const trpc = useTRPC();
-  return useMutation({
-    mutationFn: api.createUpload,
-    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
-  });
+  return useMutation(
+    trpc.uploads.create.mutationOptions({ onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()) })
+  );
 }
 
+// Keeps the `retry.mutate(platform)` call-site shape; the uploadId is bound here.
 export function useRetryJob(uploadId: string) {
   const qc = useQueryClient();
   const trpc = useTRPC();
   return useMutation({
-    mutationFn: (platform: string) => api.retryJob(uploadId, platform),
-    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
-  });
-}
-
-export function useUpdateMetadata(uploadId: string) {
-  const qc = useQueryClient();
-  const trpc = useTRPC();
-  return useMutation({
-    mutationFn: (body: { title: string; description: string; tags: string[] }) =>
-      api.updateMetadata(uploadId, body),
+    mutationFn: (platform: 'youtube' | 'mixcloud' | 'archive') =>
+      trpcClient.uploads.retryJob.mutate({ uploadId, platform }),
     onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
 
 export function usePublishRecord() {
-  return useMutation({ mutationFn: (uploadId: string) => api.publishRecord(uploadId) });
+  return useMutation({
+    mutationFn: (uploadId: string) => trpcClient.uploads.publishRecord.mutate({ uploadId }),
+  });
 }
 
 export function useGenerateAudio() {
   const qc = useQueryClient();
   const trpc = useTRPC();
   return useMutation({
-    mutationFn: (uploadId: string) => api.generateAudio(uploadId),
+    mutationFn: (uploadId: string) => trpcClient.uploads.generateAudio.mutate({ uploadId }),
     onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
@@ -173,8 +162,9 @@ export function usePlatformRemove() {
 
 export function useClaimPending() {
   const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
-    mutationFn: (id: string) => api.claimPendingVideo(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['pending-videos'] }),
+    mutationFn: (id: string) => trpcClient.watcher.claimPending.mutate({ id }),
+    onSuccess: () => qc.invalidateQueries(trpc.watcher.pathFilter()),
   });
 }
