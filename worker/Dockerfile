@@ -1,4 +1,4 @@
-FROM node:20-alpine AS builder
+FROM node:22-alpine AS builder
 RUN apk add --no-cache ffmpeg python3 make g++ && corepack enable
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
@@ -11,7 +11,7 @@ COPY worker/src/ worker/src/
 COPY worker/tsconfig.json worker/
 RUN pnpm --filter @show-uploader/worker build
 
-FROM node:20-alpine
+FROM node:22-alpine
 RUN apk add --no-cache ffmpeg && corepack enable
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./

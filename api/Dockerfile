@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:22-alpine AS base
 RUN corepack enable
 WORKDIR /app
 # Copy the lockfile + every workspace manifest so pnpm can resolve the graph.
@@ -26,7 +26,7 @@ COPY api/src/ api/src/
 COPY api/tsconfig.json api/
 RUN pnpm --filter @show-uploader/api build
 
-FROM node:20-alpine
+FROM node:22-alpine
 RUN corepack enable
 WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
