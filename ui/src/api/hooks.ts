@@ -37,6 +37,17 @@ export function useSyncPlatforms() {
   return useMutation(trpc.shows.syncPlatforms.mutationOptions());
 }
 
+// Save the upload-page edits (title/description/tags) straight to the PocketBase
+// archive record, so they persist before the upload finishes. Invalidates shows
+// so the (re-seeded) form + archive reflect the saved values.
+export function useSaveShowMetadata() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation(
+    trpc.shows.saveMetadata.mutationOptions({ onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()) })
+  );
+}
+
 export function useStagedShowIds() {
   const trpc = useTRPC();
   return useQuery(trpc.uploads.getStagedShowIds.queryOptions(undefined, { refetchInterval: 15_000 }));

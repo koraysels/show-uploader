@@ -7,7 +7,11 @@ import {
   listArchiveCovers,
   getArchiveShow,
   syncShowToPlatforms,
+  updateArchiveRecord,
+  resolveGenreIds,
+  type ArchivePatch,
 } from '../../services/shows-api';
+import { baseTitle } from '../../services/format';
 import { generateMeta } from '../../services/groq';
 
 // tRPC mirror of the plain request/response endpoints in routes/shows.ts. The SSE
@@ -109,6 +113,38 @@ export const showsRouter = router({
         if (err instanceof TRPCError) throw err;
         console.error('Failed to sync platforms:', err);
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to sync platforms' });
+      }
+    }),
+
+  // Persist the operator's in-progress edits straight to the PocketBase archive
+  // record (the master), independent of the upload finishing — so edits on the
+  // upload page survive a refresh or navigation. Every field is optional so a
+  // caller can save just the tags (the common case) without touching title/notes.
+  // The record keeps the plain title (baseTitle strips the platform date/@coming
+  // soon suffix); tags are the genres relation, only written when non-empty so
+  // clearing never wipes the curated genres. The worker still writes the platform
+  // links back on publish.
+  saveMetadata: protectedProcedure
+    .input(
+      z.object({
+        id: z.string().min(1),
+        title: z.string().min(1).optional(),
+        description: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const patch: ArchivePatch = {};
+      if (input.title !== undefined) patch.title = baseTitle(input.title);
+      if (input.description !== undefined) patch.notes = input.description;
+      if (input.tags && input.tags.length) patch.genres = await resolveGenreIds(input.tags);
+      if (Object.keys(patch).length === 0) return { ok: true };
+      try {
+        await updateArchiveRecord(input.id, patch);
+        return { ok: true };
+      } catch (err) {
+        console.error('Failed to save show metadata:', err);
+        throw new TRPCError({ code: 'BAD_GATEWAY', message: 'Failed to save to agenda' });
       }
     }),
 });

@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
-import { useShows, useGeneratedMeta, usePendingVideos, useClaimPending, useCreateUpload, useStaged } from '../api/hooks';
+import {
+  useShows,
+  useGeneratedMeta,
+  usePendingVideos,
+  useClaimPending,
+  useCreateUpload,
+  useStaged,
+  useSaveShowMetadata,
+} from '../api/hooks';
 import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
@@ -75,6 +83,7 @@ export default function NewUpload() {
   const pending = usePendingVideos();
   const claim = useClaimPending();
   const createUpload = useCreateUpload();
+  const saveMeta = useSaveShowMetadata();
   const upload = useUpload();
   const activeUpload = showId ? upload.get(showId) : undefined;
   const stagedQ = useStaged(showId);
@@ -289,6 +298,25 @@ export default function NewUpload() {
             suggestedTags={meta.data?.tags ?? []}
             onChange={handleField}
           />
+          {/* Persist tag edits to the agenda record now — they survive a refresh /
+              navigation, without waiting for the upload to finish. (Cover already
+              saves on upload; title/description land in the agenda when you
+              publish, or edit them directly in the agenda admin.) */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
+            <button
+              type="button"
+              disabled={saveMeta.isPending}
+              onClick={() => saveMeta.mutate({ id: selectedShow.id, tags })}
+              className="border border-line px-4 py-2 text-sm lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50"
+            >
+              {saveMeta.isPending ? 'saving…' : 'save tags to agenda'}
+            </button>
+            {saveMeta.isSuccess && !saveMeta.isPending && (
+              <span className="text-xs lowercase text-ok">✓ saved to agenda</span>
+            )}
+            {saveMeta.isError && <span className="text-xs lowercase text-danger">save failed — try again</span>}
+            <span className="ml-auto text-[11px] lowercase text-faint">pocketbase is the master · persists now</span>
+          </div>
         </Section>
 
         <Section title="Video">
