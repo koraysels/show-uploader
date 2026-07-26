@@ -10,7 +10,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { useShows, useStagedShowIds } from '../api/hooks';
+import { useShows, useStagedShowIds, useUploads } from '../api/hooks';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
@@ -20,9 +20,21 @@ const col = createColumnHelper<AgendaShow>();
 
 const SHORT: Record<string, string> = { YouTube: 'YT', MixCloud: 'MC' };
 
-// Per-show video state in the table: live upload progress, or a ✓ when a
-// recording is already staged/uploaded, else nothing.
-function VideoCell({ showId, uploads, staged }: { showId: string; uploads: Record<string, UploadItem>; staged: Set<string> }) {
+// Per-show video state in the table: live upload progress, "ready" when a
+// recording is staged (uploaded, not yet published), "uploaded" when it's already
+// been published (the staged row is cleared on publish, but the archived video
+// still exists), else nothing.
+function VideoCell({
+  showId,
+  uploads,
+  staged,
+  uploaded,
+}: {
+  showId: string;
+  uploads: Record<string, UploadItem>;
+  staged: Set<string>;
+  uploaded: Set<string>;
+}) {
   const item = uploads[showId];
   if (item?.status === 'uploading') {
     const pct = Math.round(item.fraction * 100);
@@ -47,6 +59,17 @@ function VideoCell({ showId, uploads, staged }: { showId: string; uploads: Recor
       <span className="inline-flex items-center gap-2 rounded-full border border-ok/40 bg-ok-soft px-3 py-1 text-sm font-semibold lowercase text-ok" title="recording ready to publish">
         <span className="h-2 w-2 rounded-full bg-ok" aria-hidden />
         ready
+      </span>
+    );
+  }
+  if (uploaded.has(showId)) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-sm lowercase text-muted"
+        title="already uploaded — the archived video is available on the archive page"
+      >
+        <span className="h-2 w-2 rounded-full bg-muted" aria-hidden />
+        uploaded
       </span>
     );
   }
@@ -92,6 +115,10 @@ export default function Shows() {
   const { uploads } = useUpload();
   const { data: stagedIds = [] } = useStagedShowIds();
   const staged = useMemo(() => new Set(stagedIds), [stagedIds]);
+  // Shows that already have a completed upload (published → staged row cleared, but
+  // the recording was uploaded + archived). Keeps the Video column honest.
+  const { data: uploadList = [] } = useUploads();
+  const uploaded = useMemo(() => new Set(uploadList.map((u) => u.show_id)), [uploadList]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [filter, setFilter] = useState('');
 
@@ -104,11 +131,18 @@ export default function Shows() {
         cell: (c) => <span className="font-medium text-ink">{c.getValue()}</span>,
       }),
       col.accessor(
-        (s) => (uploads[s.id]?.status === 'uploading' ? 2 : uploads[s.id]?.status === 'done' || staged.has(s.id) ? 1 : 0),
+        (s) =>
+          uploads[s.id]?.status === 'uploading'
+            ? 3
+            : uploads[s.id]?.status === 'done' || staged.has(s.id)
+            ? 2
+            : uploaded.has(s.id)
+            ? 1
+            : 0,
         {
           id: 'video',
           header: 'Video',
-          cell: (c) => <VideoCell showId={c.row.original.id} uploads={uploads} staged={staged} />,
+          cell: (c) => <VideoCell showId={c.row.original.id} uploads={uploads} staged={staged} uploaded={uploaded} />,
         }
       ),
       col.accessor((s) => s.mediaLinks?.length ?? 0, {
@@ -130,7 +164,7 @@ export default function Shows() {
         },
       }),
     ],
-    [claims, myUserId, uploads, staged]
+    [claims, myUserId, uploads, staged, uploaded]
   );
 
   const table = useReactTable({
