@@ -10,12 +10,26 @@ type Props = {
   imageUrl: string;
   generating: boolean;
   suggestedTags: string[];
+  suggestedDescription: string;
   onChange: (field: string, value: string | string[]) => void;
 };
 
-export default function MetadataForm({ showId, title, description, tags, imageUrl, generating, suggestedTags, onChange }: Props) {
+export default function MetadataForm({
+  showId,
+  title,
+  description,
+  tags,
+  imageUrl,
+  generating,
+  suggestedTags,
+  suggestedDescription,
+  onChange,
+}: Props) {
   const { data: genres = [] } = useGenres();
   const unusedSuggestions = suggestedTags.filter((t) => !tags.includes(t));
+  // Offer the AI copy as a one-click suggestion (never auto-applied) — PB notes
+  // stay the master until the operator chooses it.
+  const canSuggestDescription = !!suggestedDescription && suggestedDescription.trim() !== description.trim();
 
   // Cover → PocketBase (the master), not S3. Upload writes the file into the
   // archive record's image field; the returned URL becomes the form's cover.
@@ -46,6 +60,23 @@ export default function MetadataForm({ showId, title, description, tags, imageUr
           value={description}
           onChange={(e) => onChange('description', e.target.value)}
         />
+        {(generating || canSuggestDescription) && (
+          <div className="mt-2 flex flex-wrap items-start gap-2">
+            <span className="mt-1 shrink-0 text-[11px] lowercase text-faint">
+              {generating ? 'suggesting…' : 'ai suggestion:'}
+            </span>
+            {canSuggestDescription && (
+              <button
+                type="button"
+                onClick={() => onChange('description', suggestedDescription)}
+                title={suggestedDescription}
+                className="flex-1 rounded border border-line px-2 py-1 text-left text-xs leading-relaxed text-muted hover:border-ink hover:text-ink"
+              >
+                {suggestedDescription}
+              </button>
+            )}
+          </div>
+        )}
       </div>
       <div>
         <label className="label">Tags</label>

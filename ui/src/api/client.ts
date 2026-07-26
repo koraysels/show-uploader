@@ -13,6 +13,8 @@ export type AgendaShow = {
   imageUrl: string | null;
   tags: string[] | null;
   mediaLinks: MediaLink[];
+  // The linked show/series blurb (archive.show → shows.description).
+  showDescription: string | null;
 };
 
 export type GeneratedMeta = {

@@ -79,7 +79,11 @@ export default function NewUpload() {
   const [autoTrimSilence, setAutoTrimSilence] = useState(true);
 
   const qc = useQueryClient();
-  const meta = useGeneratedMeta(selectedShow?.title, selectedShow?.description);
+  // Feed the AI both the episode notes and the linked show's blurb as context.
+  const meta = useGeneratedMeta(
+    selectedShow?.title,
+    [selectedShow?.description, selectedShow?.showDescription].filter(Boolean).join('\n\n')
+  );
   const pending = usePendingVideos();
   const claim = useClaimPending();
   const createUpload = useCreateUpload();
@@ -137,7 +141,9 @@ export default function NewUpload() {
   useEffect(() => {
     if (!selectedShow) return;
     setTitle(publishTitle(selectedShow.title, selectedShow.date));
-    setDescription(selectedShow.description ?? '');
+    // Description = the episode's own notes (PB is master); fall back to the
+    // linked show's blurb when the episode has none of its own.
+    setDescription(selectedShow.description || selectedShow.showDescription || '');
     setTags(selectedShow.tags ?? []);
     setImageUrl(selectedShow.imageUrl ?? '');
     setPickedVideo(null);
@@ -149,11 +155,9 @@ export default function NewUpload() {
     setPlatforms(ALL_PLATFORMS.filter((p) => !already.includes(p)));
   }, [selectedShow?.id]);
 
-  // Seed the description from AI, but NOT tags — good tags need the audio
-  // analysed first, so they're offered as suggestions instead (below the field).
-  useEffect(() => {
-    if (meta.data) setDescription(meta.data.youtubeDescription);
-  }, [meta.data]);
+  // The AI description is a SUGGESTION (a button in the form), not an auto-
+  // override — PocketBase is the master, so the field stays the record's notes
+  // until the operator chooses to apply the suggestion. (Tags work the same way.)
 
   const handleField = (field: string, value: string | string[]) => {
     if (field === 'title') setTitle(value as string);
@@ -296,20 +300,21 @@ export default function NewUpload() {
             imageUrl={imageUrl}
             generating={meta.isFetching}
             suggestedTags={meta.data?.tags ?? []}
+            suggestedDescription={meta.data?.youtubeDescription ?? ''}
             onChange={handleField}
           />
-          {/* Persist tag edits to the agenda record now — they survive a refresh /
-              navigation, without waiting for the upload to finish. (Cover already
-              saves on upload; title/description land in the agenda when you
-              publish, or edit them directly in the agenda admin.) */}
+          {/* Persist title / description / tags straight to the agenda record now —
+              they survive a refresh / navigation, without waiting for the upload to
+              finish. PocketBase is the master; the description is the episode's own
+              notes (not the AI copy, which is just a suggestion above). */}
           <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
             <button
               type="button"
-              disabled={saveMeta.isPending}
-              onClick={() => saveMeta.mutate({ id: selectedShow.id, tags })}
+              disabled={saveMeta.isPending || !title.trim()}
+              onClick={() => saveMeta.mutate({ id: selectedShow.id, title, description, tags })}
               className="border border-line px-4 py-2 text-sm lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50"
             >
-              {saveMeta.isPending ? 'saving…' : 'save tags to agenda'}
+              {saveMeta.isPending ? 'saving…' : 'save to agenda'}
             </button>
             {saveMeta.isSuccess && !saveMeta.isPending && (
               <span className="text-xs lowercase text-ok">✓ saved to agenda</span>

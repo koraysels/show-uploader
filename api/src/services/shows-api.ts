@@ -18,6 +18,10 @@ export type AgendaShow = {
   // Links already on the record (YouTube/MixCloud), so the UI can show what's
   // published and pre-select only the missing platform on a re-publish.
   mediaLinks: MediaLink[];
+  // The linked show/series blurb (archive.show → shows.description). Context for
+  // the upload description: seed from it when the episode has no notes of its own,
+  // and feed it to the AI suggestion. Null when there's no linked show.
+  showDescription: string | null;
 };
 
 // PocketBase serialises datetimes as "YYYY-MM-DD HH:MM:SS.sssZ".
@@ -29,7 +33,13 @@ function splitDateTime(ts: string | undefined): { date: string; time: string } {
 type ArchiveItem = Pick<
   ArchiveRecord,
   'id' | 'title' | 'notes' | 'startTime' | 'endTime' | 'image' | 'genres' | 'mediaLinks'
-> & { collectionId: string; expand?: { genres?: { name: string }[] } };
+> & { collectionId: string; expand?: { genres?: { name: string }[]; show?: { description?: string } } };
+
+// The relation-expand string used everywhere we read an archive record — the
+// genre names for tags + the linked show's description for the upload context.
+const ARCHIVE_EXPAND = 'genres,show';
+const ARCHIVE_FIELDS =
+  'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,expand.genres.name,expand.show.description';
 
 export function toAgendaShow(rec: ArchiveItem): AgendaShow {
   const start = splitDateTime(rec.startTime);
@@ -47,6 +57,7 @@ export function toAgendaShow(rec: ArchiveItem): AgendaShow {
     // Genres are a relation; use the expanded names (not the raw record IDs).
     tags: rec.expand?.genres?.length ? rec.expand.genres.map((g) => g.name).filter(Boolean) : null,
     mediaLinks: Array.isArray(rec.mediaLinks) ? (rec.mediaLinks as MediaLink[]) : [],
+    showDescription: rec.expand?.show?.description || null,
   };
 }
 
@@ -84,10 +95,9 @@ async function authenticate(): Promise<string> {
 
 async function fetchDrafts(token: string): Promise<Response> {
   const filter = `(status='draft')`;
-  const fields = 'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,expand.genres.name';
   const url =
     `${pbBase}/api/collections/archive/records` +
-    `?perPage=200&sort=-startTime&expand=genres&fields=${fields}&filter=${encodeURIComponent(filter)}`;
+    `?perPage=200&sort=-startTime&expand=${ARCHIVE_EXPAND}&fields=${ARCHIVE_FIELDS}&filter=${encodeURIComponent(filter)}`;
   return fetch(url, { headers: { Authorization: token } });
 }
 
@@ -111,8 +121,7 @@ export async function listShows(): Promise<AgendaShow[]> {
 // current PocketBase metadata (title/notes/genres/image/mediaLinks) when syncing
 // a published show to its platforms, PB being the master.
 export async function getArchiveShow(id: string): Promise<AgendaShow | null> {
-  const fields = 'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,expand.genres.name';
-  const res = await pbFetch(`/api/collections/archive/records/${id}?expand=genres&fields=${fields}`);
+  const res = await pbFetch(`/api/collections/archive/records/${id}?expand=${ARCHIVE_EXPAND}&fields=${ARCHIVE_FIELDS}`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`PocketBase archive get error (${id}): ${res.status}`);
   return toAgendaShow((await res.json()) as ArchiveItem);
