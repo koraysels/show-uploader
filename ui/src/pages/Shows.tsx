@@ -10,7 +10,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { useShows, useStagedShowIds, useUploads } from '../api/hooks';
+import { useShows, useStagedShowIds, useUploads, useUploadingShowIds } from '../api/hooks';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
@@ -29,11 +29,13 @@ function VideoCell({
   uploads,
   staged,
   uploaded,
+  uploadingElsewhere,
 }: {
   showId: string;
   uploads: Record<string, UploadItem>;
   staged: Set<string>;
   uploaded: Set<string>;
+  uploadingElsewhere: Set<string>;
 }) {
   const item = uploads[showId];
   if (item?.status === 'uploading') {
@@ -70,6 +72,19 @@ function VideoCell({
       >
         <span className="h-2 w-2 rounded-full bg-muted" aria-hidden />
         uploaded
+      </span>
+    );
+  }
+  // A browser elsewhere is mid-upload — its live % is local to that machine, so
+  // here we can only show that it's happening.
+  if (uploadingElsewhere.has(showId)) {
+    return (
+      <span
+        className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft/40 px-3 py-1 text-sm lowercase text-accent"
+        title="a recording is being uploaded on another machine"
+      >
+        <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden />
+        uploading elsewhere
       </span>
     );
   }
@@ -119,6 +134,9 @@ export default function Shows() {
   // the recording was uploaded + archived). Keeps the Video column honest.
   const { data: uploadList = [] } = useUploads();
   const uploaded = useMemo(() => new Set(uploadList.map((u) => u.show_id)), [uploadList]);
+  // In-progress multipart uploads on any machine → "uploading elsewhere" here.
+  const { data: uploadingIds = [] } = useUploadingShowIds();
+  const uploadingElsewhere = useMemo(() => new Set(uploadingIds), [uploadingIds]);
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [filter, setFilter] = useState('');
 
@@ -133,16 +151,26 @@ export default function Shows() {
       col.accessor(
         (s) =>
           uploads[s.id]?.status === 'uploading'
-            ? 3
+            ? 4
             : uploads[s.id]?.status === 'done' || staged.has(s.id)
-            ? 2
+            ? 3
             : uploaded.has(s.id)
+            ? 2
+            : uploadingElsewhere.has(s.id)
             ? 1
             : 0,
         {
           id: 'video',
           header: 'Video',
-          cell: (c) => <VideoCell showId={c.row.original.id} uploads={uploads} staged={staged} uploaded={uploaded} />,
+          cell: (c) => (
+            <VideoCell
+              showId={c.row.original.id}
+              uploads={uploads}
+              staged={staged}
+              uploaded={uploaded}
+              uploadingElsewhere={uploadingElsewhere}
+            />
+          ),
         }
       ),
       col.accessor((s) => s.mediaLinks?.length ?? 0, {
@@ -164,7 +192,7 @@ export default function Shows() {
         },
       }),
     ],
-    [claims, myUserId, uploads, staged, uploaded]
+    [claims, myUserId, uploads, staged, uploaded, uploadingElsewhere]
   );
 
   const table = useReactTable({

@@ -13,6 +13,7 @@ import {
   resetPlatformJobForRetry,
   updateUploadMetadata,
   listStagedShowIds,
+  listUploadingShowIds,
 } from '../../db/queries';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue } from '../../queue';
@@ -108,6 +109,17 @@ export const uploadsRouter = router({
       return await listStagedShowIds(db);
     } catch (err) {
       internal(err, 'Failed to list staged shows:', 'Failed to list staged shows');
+    }
+  }),
+
+  // show_ids with an in-progress multipart upload — lets OTHER machines show
+  // "uploading elsewhere" while a browser is mid-upload (the live % is local to
+  // that browser; the staged row only lands on completion).
+  getUploadingShowIds: protectedProcedure.query(async () => {
+    try {
+      return await listUploadingShowIds(db);
+    } catch (err) {
+      internal(err, 'Failed to list uploading shows:', 'Failed to list uploading shows');
     }
   }),
 

@@ -53,6 +53,13 @@ export function useStagedShowIds() {
   return useQuery(trpc.uploads.getStagedShowIds.queryOptions(undefined, { refetchInterval: 15_000 }));
 }
 
+// show_ids with a multipart upload in progress on some browser — so this machine
+// can show "uploading elsewhere". Polls briskly since it reflects live activity.
+export function useUploadingShowIds() {
+  const trpc = useTRPC();
+  return useQuery(trpc.uploads.getUploadingShowIds.queryOptions(undefined, { refetchInterval: 8_000 }));
+}
+
 export function useStaged(showId: string | undefined) {
   const trpc = useTRPC();
   return useQuery(

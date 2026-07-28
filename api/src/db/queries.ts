@@ -121,6 +121,17 @@ export function listStagedShowIds(db: Sql) {
   return db<{ show_id: string }[]>`SELECT show_id FROM staged_uploads`.then((r) => r.map((x) => x.show_id));
 }
 
+// show_ids with a multipart upload currently in progress — so OTHER machines can
+// show "uploading elsewhere" while a browser is mid-upload (the live % itself is
+// local to that browser; the staged row only lands on completion). Recent only,
+// so a browser that quit mid-upload doesn't leave a phantom forever.
+export function listUploadingShowIds(db: Sql) {
+  return db<{ show_id: string }[]>`
+    SELECT DISTINCT show_id FROM multipart_uploads
+    WHERE status = 'in_progress' AND show_id IS NOT NULL AND created_at > now() - interval '6 hours'
+  `.then((r) => r.map((x) => x.show_id));
+}
+
 // Most recent upload for a show — used to restore its (published) video into the
 // form after the staged row has been cleared.
 export function getLatestUploadForShow(db: Sql, showId: string) {
