@@ -121,15 +121,17 @@ export function listStagedShowIds(db: Sql) {
   return db<{ show_id: string }[]>`SELECT show_id FROM staged_uploads`.then((r) => r.map((x) => x.show_id));
 }
 
-// show_ids with a multipart upload currently in progress — so OTHER machines can
-// show "uploading elsewhere" while a browser is mid-upload (the live % itself is
-// local to that browser; the staged row only lands on completion). Recent only,
-// so a browser that quit mid-upload doesn't leave a phantom forever.
-export function listUploadingShowIds(db: Sql) {
-  return db<{ show_id: string }[]>`
-    SELECT DISTINCT show_id FROM multipart_uploads
+// In-progress multipart sessions (recent only, so a browser that quit mid-upload
+// doesn't leave a phantom forever) — used to show "uploading elsewhere" with a
+// real % on OTHER machines. The % is computed server-side from S3 ListParts, so
+// no client reporting is needed. Newest per show, in case of a restarted session.
+export function listUploadingSessions(db: Sql) {
+  return db<{ show_id: string; s3_key: string; s3_upload_id: string; size_bytes: string }[]>`
+    SELECT DISTINCT ON (show_id) show_id, s3_key, s3_upload_id, size_bytes
+    FROM multipart_uploads
     WHERE status = 'in_progress' AND show_id IS NOT NULL AND created_at > now() - interval '6 hours'
-  `.then((r) => r.map((x) => x.show_id));
+    ORDER BY show_id, created_at DESC
+  `;
 }
 
 // Most recent upload for a show — used to restore its (published) video into the

@@ -10,7 +10,7 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
-import { useShows, useStagedShowIds, useUploads, useUploadingShowIds } from '../api/hooks';
+import { useShows, useStagedShowIds, useUploads, useUploadingProgress } from '../api/hooks';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
@@ -35,7 +35,9 @@ function VideoCell({
   uploads: Record<string, UploadItem>;
   staged: Set<string>;
   uploaded: Set<string>;
-  uploadingElsewhere: Set<string>;
+  // show_id → server-computed % (null when it couldn't be read); presence in the
+  // map means an upload is in progress on some machine.
+  uploadingElsewhere: Map<string, number | null>;
 }) {
   const item = uploads[showId];
   if (item?.status === 'uploading') {
@@ -75,16 +77,16 @@ function VideoCell({
       </span>
     );
   }
-  // A browser elsewhere is mid-upload — its live % is local to that machine, so
-  // here we can only show that it's happening.
+  // A browser elsewhere is mid-upload — show the server-computed %.
   if (uploadingElsewhere.has(showId)) {
+    const pct = uploadingElsewhere.get(showId);
     return (
       <span
         className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft/40 px-3 py-1 text-sm lowercase text-accent"
         title="a recording is being uploaded on another machine"
       >
         <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden />
-        uploading elsewhere
+        uploading elsewhere{typeof pct === 'number' ? ` · ${pct}%` : ''}
       </span>
     );
   }
@@ -134,9 +136,13 @@ export default function Shows() {
   // the recording was uploaded + archived). Keeps the Video column honest.
   const { data: uploadList = [] } = useUploads();
   const uploaded = useMemo(() => new Set(uploadList.map((u) => u.show_id)), [uploadList]);
-  // In-progress multipart uploads on any machine → "uploading elsewhere" here.
-  const { data: uploadingIds = [] } = useUploadingShowIds();
-  const uploadingElsewhere = useMemo(() => new Set(uploadingIds), [uploadingIds]);
+  // In-progress multipart uploads on any machine (show_id → %) → "uploading
+  // elsewhere · N%" here.
+  const { data: uploadingList = [] } = useUploadingProgress();
+  const uploadingElsewhere = useMemo(
+    () => new Map(uploadingList.map((u) => [u.show_id, u.pct])),
+    [uploadingList]
+  );
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [filter, setFilter] = useState('');
 

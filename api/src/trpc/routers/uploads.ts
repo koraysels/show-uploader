@@ -13,11 +13,11 @@ import {
   resetPlatformJobForRetry,
   updateUploadMetadata,
   listStagedShowIds,
-  listUploadingShowIds,
+  listUploadingSessions,
 } from '../../db/queries';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue } from '../../queue';
-import { createDownloadPresignedUrl } from '../../services/s3';
+import { createDownloadPresignedUrl, listUploadedParts } from '../../services/s3';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
 import { updateArchiveRecord, resolveGenreIds } from '../../services/shows-api';
@@ -112,14 +112,30 @@ export const uploadsRouter = router({
     }
   }),
 
-  // show_ids with an in-progress multipart upload — lets OTHER machines show
-  // "uploading elsewhere" while a browser is mid-upload (the live % is local to
-  // that browser; the staged row only lands on completion).
-  getUploadingShowIds: protectedProcedure.query(async () => {
+  // In-progress multipart uploads with a real % per show, so OTHER machines show
+  // "uploading elsewhere · N%" while a browser is mid-upload. The % is computed
+  // server-side from S3 ListParts (uploaded bytes / total) — no client reporting,
+  // so it's the same number on every machine. A failed ListParts drops that
+  // session's % to null (still shown as "uploading", just without the number).
+  getUploadingProgress: protectedProcedure.query(async () => {
     try {
-      return await listUploadingShowIds(db);
+      const sessions = await listUploadingSessions(db);
+      return await Promise.all(
+        sessions.map(async (s) => {
+          const total = Number(s.size_bytes) || 0;
+          let pct: number | null = null;
+          try {
+            const parts = await listUploadedParts(s.s3_key, s.s3_upload_id);
+            const uploaded = parts.reduce((sum, p) => sum + (p.Size ?? 0), 0);
+            if (total > 0) pct = Math.min(99, Math.round((uploaded / total) * 100));
+          } catch {
+            pct = null; // session may have just completed/aborted — ignore
+          }
+          return { show_id: s.show_id, pct };
+        })
+      );
     } catch (err) {
-      internal(err, 'Failed to list uploading shows:', 'Failed to list uploading shows');
+      internal(err, 'Failed to read upload progress:', 'Failed to read upload progress');
     }
   }),
 
