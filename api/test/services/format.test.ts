@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baseTitle, appendHashtags, tagsToHashtags } from '../../src/services/format';
+import { baseTitle, appendHashtags, tagsToHashtags, htmlToText } from '../../src/services/format';
 
 describe('baseTitle — plain title for PocketBase, no convention suffix', () => {
   it('strips a "<date> @ coming soon" suffix as one unit', () => {
@@ -42,5 +42,31 @@ describe('tags → hashtags', () => {
   it('returns the description unchanged when there are no usable tags', () => {
     expect(appendHashtags('hello', [])).toBe('hello');
     expect(appendHashtags('hello', ['!'])).toBe('hello');
+  });
+});
+
+describe('htmlToText — rich-text description → plain text for platforms', () => {
+  it('strips the react-admin-style paragraph/span wrapper', () => {
+    expect(htmlToText('<p><span style="color: rgb(107, 114, 128);">A summer hangout.</span></p>')).toBe(
+      'A summer hangout.'
+    );
+  });
+
+  it('turns <br> and block ends into newlines, collapsing runs', () => {
+    expect(htmlToText('<p>line one</p><p>line two</p>')).toBe('line one\nline two');
+    expect(htmlToText('a<br>b')).toBe('a\nb');
+  });
+
+  it('renders list items with bullets', () => {
+    expect(htmlToText('<ul><li>one</li><li>two</li></ul>')).toBe('• one\n• two');
+  });
+
+  it('decodes the common HTML entities', () => {
+    expect(htmlToText('<p>rock &amp; roll &lt;3 &quot;x&quot; it&#39;s</p>')).toBe('rock & roll <3 "x" it\'s');
+  });
+
+  it('passes plain text through unchanged', () => {
+    expect(htmlToText('just plain text')).toBe('just plain text');
+    expect(htmlToText('')).toBe('');
   });
 });

@@ -21,6 +21,7 @@ export default defineConfig({
             { name: 'react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/ },
             { name: 'tanstack', test: /node_modules[\\/]@tanstack[\\/]/ },
             { name: 'auth', test: /node_modules[\\/]oidc-client-ts[\\/]/ },
+            { name: 'editor', test: /node_modules[\\/](@tiptap|prosemirror)[^\\/]*[\\/]/ },
           ],
         },
       },

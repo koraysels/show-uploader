@@ -2,6 +2,9 @@ type Props = {
   autoTrimSilence: boolean;
   trimStart: string;
   trimEnd: string;
+  // The scheduled show length (HH:MM:SS) derived from the agenda start/end times —
+  // the expected recording duration, offered as a suggested end point.
+  scheduledDuration?: string | null;
   onAutoTrimChange: (v: boolean) => void;
   onChange: (field: 'trimStart' | 'trimEnd', value: string) => void;
 };
@@ -10,7 +13,14 @@ function isValidTime(v: string) {
   return v === '' || /^(\d{1,2}:)?\d{2}:\d{2}$/.test(v);
 }
 
-export default function TrimFields({ autoTrimSilence, trimStart, trimEnd, onAutoTrimChange, onChange }: Props) {
+export default function TrimFields({
+  autoTrimSilence,
+  trimStart,
+  trimEnd,
+  scheduledDuration,
+  onAutoTrimChange,
+  onChange,
+}: Props) {
   const hasManual = !!trimStart || !!trimEnd;
   return (
     <div className="space-y-3">
@@ -51,6 +61,16 @@ export default function TrimFields({ autoTrimSilence, trimStart, trimEnd, onAuto
               />
             </div>
           </div>
+          {scheduledDuration && (
+            <button
+              type="button"
+              onClick={() => onChange('trimEnd', scheduledDuration)}
+              className="mt-2 text-xs lowercase text-accent hover:underline"
+              title="set the end point to the scheduled show length"
+            >
+              scheduled length ≈ {scheduledDuration} · use as end
+            </button>
+          )}
           <p className="mt-2 text-xs text-faint">
             Format HH:MM:SS (e.g. 00:04:30). Overrides auto-trim. Applied to YouTube, MixCloud and the archive.
           </p>

@@ -35,6 +35,24 @@ function timeAgo(iso: string): string {
   return `${Math.round(mins / 60)}h ago`;
 }
 
+// The scheduled show length from the agenda start/end (both "HH:MM"), as HH:MM:SS
+// — the expected recording duration, suggested as a trim end point. Handles an
+// overnight window (end past midnight). Null when the times don't parse.
+function scheduledDuration(startTime: string, endTime: string): string | null {
+  const toMin = (t: string): number | null => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(t ?? '');
+    return m ? +m[1] * 60 + +m[2] : null;
+  };
+  const s = toMin(startTime);
+  const e = toMin(endTime);
+  if (s === null || e === null) return null;
+  let mins = e - s;
+  if (mins <= 0) mins += 24 * 60; // crosses midnight
+  const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+  const mm = String(mins % 60).padStart(2, '0');
+  return `${hh}:${mm}:00`;
+}
+
 // Published title convention: "<name> <DD.MM.YYYY> @ coming soon".
 function publishTitle(name: string, date: string): string {
   const [y, m, d] = (date ?? '').split('-');
@@ -346,6 +364,7 @@ export default function NewUpload() {
             autoTrimSilence={autoTrimSilence}
             trimStart={trimStart}
             trimEnd={trimEnd}
+            scheduledDuration={scheduledDuration(selectedShow.startTime, selectedShow.endTime)}
             onAutoTrimChange={setAutoTrimSilence}
             onChange={(field, value) => {
               if (field === 'trimStart') setTrimStart(value);

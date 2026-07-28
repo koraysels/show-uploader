@@ -6,7 +6,7 @@ import { uploadToYoutube } from '../services/youtube-client';
 import { setJobStatus, getUploadRow } from '../db';
 import { makeTempPath, cleanup, resolveTrim, trimVideoCopy } from '../services/ffmpeg';
 import { finalizeArchiveRecord } from '../services/shows-api';
-import { baseTitle } from '../services/format';
+import { baseTitle, htmlToText } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processYoutube(job: Job<JobPayload>): Promise<string> {
@@ -34,7 +34,8 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     const resultUrl = await uploadToYoutube({
       videoPath: uploadPath,
       title,
-      description,
+      // YouTube wants plain text; the description is rich-text HTML (the PB master).
+      description: htmlToText(description),
       tags,
       onProgress: async (pct) => {
         const adjusted = 20 + Math.round(pct * 0.78);

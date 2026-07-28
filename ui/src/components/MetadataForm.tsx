@@ -1,6 +1,10 @@
-import { useRef } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import { useGenres, useUploadCover, useClearCover } from '../api/hooks';
 import TagInput from './TagInput';
+
+// The rich-text editor pulls in TipTap (~120 kB gzip) — load it only when a
+// MetadataForm actually renders (the upload page), not on every page.
+const RichTextEditor = lazy(() => import('./RichTextEditor'));
 
 type Props = {
   showId: string;
@@ -55,11 +59,13 @@ export default function MetadataForm({
           Description
           {generating && <span className="ml-2 lowercase tracking-normal text-accent">· writing…</span>}
         </label>
-        <textarea
-          className="field min-h-[96px] resize-y leading-relaxed"
-          value={description}
-          onChange={(e) => onChange('description', e.target.value)}
-        />
+        {/* Rich text (HTML) — the agenda notes are rich text, so we edit them as
+            such; platform pushes strip to plain text server-side. */}
+        <Suspense
+          fallback={<div className="min-h-[132px] animate-pulse rounded border border-line bg-surface" aria-hidden />}
+        >
+          <RichTextEditor value={description} onChange={(html) => onChange('description', html)} />
+        </Suspense>
         {(generating || canSuggestDescription) && (
           <div className="mt-2 flex flex-wrap items-start gap-2">
             <span className="mt-1 shrink-0 text-[11px] lowercase text-faint">

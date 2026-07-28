@@ -8,7 +8,7 @@ import { uploadToMixcloud } from '../services/mixcloud-client';
 import { extractAudio, prependJingle, captureSquareFrame, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import { setJobStatus, getUploadRow } from '../db';
 import { finalizeArchiveRecord } from '../services/shows-api';
-import { baseTitle } from '../services/format';
+import { baseTitle, htmlToText } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
@@ -88,7 +88,8 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     const resultUrl = await uploadToMixcloud({
       audioPath: finalAudioPath,
       title,
-      description,
+      // MixCloud wants plain text; the description is rich-text HTML (the PB master).
+      description: htmlToText(description),
       tags,
       imagePath: fs.existsSync(thumbPath) ? thumbPath : undefined,
     });

@@ -1,5 +1,5 @@
 import { env } from '../env';
-import { appendHashtags } from './format';
+import { appendHashtags, htmlToText } from './format';
 
 // Edit already-published metadata (title/description/tags) in place on each
 // platform — no re-upload. Called when an operator changes an archive record.
@@ -106,7 +106,8 @@ export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<
         id,
         snippet: {
           title: edit.title,
-          description: appendHashtags(edit.description, edit.tags),
+          // The description is rich-text HTML (the PB master); YouTube wants plain text.
+          description: appendHashtags(htmlToText(edit.description), edit.tags),
           tags: edit.tags,
           categoryId: '10',
         },
@@ -143,6 +144,8 @@ export async function syncMixcloudMetadata(
   try {
     // POST /upload/<user>/<slug>/edit/ — tags are all-or-nothing, so re-send them.
     const endpoint = `https://api.mixcloud.com/upload${key}edit/?access_token=${encodeURIComponent(env.MIXCLOUD_ACCESS_TOKEN)}`;
+    // The description is rich-text HTML (the PB master); MixCloud wants plain text.
+    const description = htmlToText(edit.description);
     let res: Response;
     if (imageUrl) {
       // Multipart so the cover picture rides along with the metadata.
@@ -152,12 +155,12 @@ export async function syncMixcloudMetadata(
       const buf = Buffer.from(await img.arrayBuffer());
       const form = new FormData();
       form.append('name', edit.title);
-      form.append('description', edit.description);
+      form.append('description', description);
       edit.tags.slice(0, 5).forEach((tag, i) => form.append(`tags-${i}-tag`, tag));
       form.append('picture', new Blob([new Uint8Array(buf)], { type: ct }), `cover.${ct.split('/')[1]?.split(';')[0] || 'jpg'}`);
       res = await fetch(endpoint, { method: 'POST', body: form });
     } else {
-      const body = new URLSearchParams({ name: edit.title, description: edit.description });
+      const body = new URLSearchParams({ name: edit.title, description });
       edit.tags.slice(0, 5).forEach((tag, i) => body.append(`tags-${i}-tag`, tag));
       res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     }

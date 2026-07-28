@@ -15,6 +15,29 @@ export function appendHashtags(description: string, tags: string[]): string {
   return description ? `${description}\n\n${tail}` : tail;
 }
 
+// The archive description is rich text (HTML, like the react-admin editor on the
+// agenda). YouTube/MixCloud descriptions are plain text, so convert to text
+// before pushing: block-level tags become line breaks, other tags are dropped,
+// and the common HTML entities are decoded. Plain-text input passes through
+// unchanged. Kept in sync with api/src/services/format.ts.
+export function htmlToText(html: string): string {
+  if (!html || !/[<&]/.test(html)) return html ?? '';
+  return html
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\/\s*(p|div|li|h[1-6]|tr|blockquote)\s*>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#0*39;|&apos;/gi, "'")
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 // Strip the "<DD.MM.YYYY> @ coming soon" convention suffix so PocketBase keeps
 // the plain show title — that suffix belongs only on the platform (YT/MixCloud)
 // titles, not on the archive record.
