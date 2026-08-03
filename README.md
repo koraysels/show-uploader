@@ -253,6 +253,23 @@ Shows all uploads with live progress. Each platform shows its status and, once d
 
 ---
 
+## Working on the UI
+
+The interface is [MUI](https://mui.com) themed to `DESIGN.md` — square corners, monospace, no shadows. Colours, spacing and component defaults all live in `ui/src/theme.ts`; change them there rather than at the call site, and anything that starts looking like stock Material is a gap in that file.
+
+### Offline preview
+
+```bash
+pnpm dev:ui
+# then open http://localhost:5173/?mock=1
+```
+
+`?mock=1` swaps the backend for fixtures in `ui/src/dev/` — no API, no database, no login, and **no chance of a click reaching production data**. Use it to check layout at real viewport sizes (resize the window, or use the browser's device toolbar); every page works, including a mid-flight upload, a failed job, a missing source file and a published show.
+
+The mock is behind `import.meta.env.DEV` and a dynamic import, so none of it ships in a production build.
+
+---
+
 ## Authentication
 
 | Route | Auth |
