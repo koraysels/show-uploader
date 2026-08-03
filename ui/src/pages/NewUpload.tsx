@@ -9,6 +9,7 @@ import {
   useCreateUpload,
   useStaged,
   useSaveShowMetadata,
+  useUploads,
 } from '../api/hooks';
 import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
@@ -81,6 +82,15 @@ export default function NewUpload() {
 
   const { data: shows = [] } = useShows();
   const selectedShow = shows.find((s) => s.id === showId) ?? null;
+
+  // An upload for this show whose platform work hasn't settled yet. Newest
+  // first, since a re-upload leaves the older finished one behind.
+  const { data: allUploads = [] } = useUploads();
+  const runningUpload =
+    allUploads
+      .filter((u) => u.show_id === showId)
+      .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at))
+      .find((u) => u.jobs.some((j) => j.status === 'queued' || j.status === 'processing')) ?? null;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -264,6 +274,24 @@ export default function NewUpload() {
         {existingClaim && existingClaim.userSub === presence.myUserId && ackSteal && (
           <p className="border border-ink bg-paper px-3 py-2 text-xs lowercase text-muted">
             you took this over — it's now claimed by you
+          </p>
+        )}
+        {/* Arriving here from the archive's "replace" link (or a second tab)
+            while this show still has work in flight: say so and point at it,
+            rather than letting the operator queue a second run blind. */}
+        {runningUpload && (
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-ink bg-paper px-3 py-2 text-xs lowercase text-muted">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden />
+              this show already has an upload running
+            </span>
+            <Link
+              to="/history"
+              search={{ highlight: runningUpload.id }}
+              className="underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+            >
+              view job →
+            </Link>
           </p>
         )}
         <div>
