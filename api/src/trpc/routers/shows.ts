@@ -4,7 +4,7 @@ import { router, protectedProcedure } from '../trpc';
 import {
   listShows,
   listGenres,
-  listArchiveCovers,
+  listArchiveStates,
   getArchiveShow,
   syncShowToPlatforms,
   updateArchiveRecord,
@@ -75,14 +75,15 @@ export const showsRouter = router({
       }
     }),
 
-  // GET /api/shows/covers — cover URL per archive record (all statuses), keyed
-  // by show_id, for thumbnails.
-  listCovers: protectedProcedure.query(async () => {
+  // Cover URL + live publish status per archive record, keyed by show_id. The
+  // status is what lets the archive page report whether a show is actually on
+  // the website rather than what this browser last clicked.
+  listStates: protectedProcedure.query(async () => {
     try {
-      return await listArchiveCovers();
+      return await listArchiveStates();
     } catch (err) {
-      console.error('Failed to fetch covers:', err);
-      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch covers' });
+      console.error('Failed to fetch archive states:', err);
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to fetch archive states' });
     }
   }),
 

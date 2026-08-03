@@ -162,16 +162,32 @@ export async function syncShowToPlatforms(
  * unlike listShows (drafts only), so the archive/history thumbnails resolve for
  * shows that have since been published. Keyed by record id (= show_id).
  */
-export async function listArchiveCovers(): Promise<Record<string, string>> {
-  const path =
-    `/api/collections/archive/records` +
-    `?perPage=500&fields=id,image,collectionId&filter=${encodeURIComponent("image!=''")}`;
+export type ArchiveState = { cover: string | null; status: 'draft' | 'published' };
+
+/**
+ * Cover + live publish status for every archive record, keyed by show id.
+ *
+ * Status is the point: without it the UI can only report what the operator
+ * clicked in this browser session, which is wrong after a reload and wrong for
+ * everyone on another machine. Deliberately unfiltered — a record with no cover
+ * still has a status worth showing.
+ */
+export async function listArchiveStates(): Promise<Record<string, ArchiveState>> {
+  // perPage caps at 500 records; the agenda is nowhere near that.
+  const path = `/api/collections/archive/records?perPage=500&fields=id,image,collectionId,status`;
   const res = await pbFetch(path);
-  if (!res.ok) throw new Error(`PocketBase covers error: ${res.status}`);
-  const body = (await res.json()) as { items: { id: string; image: string; collectionId: string }[] };
-  const out: Record<string, string> = {};
-  // 160x160 = 2× the 64px list thumbnail (retina), a tiny fraction of the original.
-  for (const r of body.items) if (r.image) out[r.id] = imageFileUrl(r.collectionId, r.id, r.image, '160x160');
+  if (!res.ok) throw new Error(`PocketBase archive states error: ${res.status}`);
+  const body = (await res.json()) as {
+    items: { id: string; image: string; collectionId: string; status: string }[];
+  };
+  const out: Record<string, ArchiveState> = {};
+  for (const r of body.items) {
+    out[r.id] = {
+      // 160x160 = 2× the 64px list thumbnail (retina), a tiny fraction of the original.
+      cover: r.image ? imageFileUrl(r.collectionId, r.id, r.image, '160x160') : null,
+      status: r.status === 'published' ? 'published' : 'draft',
+    };
+  }
   return out;
 }
 

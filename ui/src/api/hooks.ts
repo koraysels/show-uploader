@@ -20,9 +20,12 @@ export function useGenres() {
 
 // Cover URLs per show from PocketBase (the master). Polls so a cover changed in
 // the agenda admin shows up here within ~15s without a manual refresh.
-export function useCovers() {
+// Cover + live publish status per show, straight from PocketBase. Polled, so
+// the archive reflects what's actually on the website — including changes made
+// by someone else or in the agenda admin.
+export function useArchiveStates() {
   const trpc = useTRPC();
-  return useQuery(trpc.shows.listCovers.queryOptions(undefined, { refetchInterval: 15_000, staleTime: 10_000 }));
+  return useQuery(trpc.shows.listStates.queryOptions(undefined, { refetchInterval: 15_000, staleTime: 10_000 }));
 }
 
 // The current PocketBase metadata for one show (what a platform sync would push).
@@ -126,6 +129,14 @@ export function useGenerateAudio() {
     mutationFn: (uploadId: string) => trpcClient.uploads.generateAudio.mutate({ uploadId }),
     onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
+}
+
+// Whether the source recording is really on S3 for an upload (HEAD, not a DB
+// guess). Long staleTime: the answer only changes when a file is uploaded or
+// the archive job rewrites it, so it shouldn't ride the uploads poll.
+export function useVideoInfo(uploadId: string) {
+  const trpc = useTRPC();
+  return useQuery(trpc.uploads.videoInfo.queryOptions({ uploadId }, { staleTime: 5 * 60_000 }));
 }
 
 // Puts the agenda record back to draft — the inverse of usePublishRecord. The

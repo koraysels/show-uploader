@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import {
   useUploads,
-  useCovers,
+  useArchiveStates,
   usePublishRecord,
   useGenerateAudio,
   useYoutubeStatus,
@@ -10,6 +11,7 @@ import {
   useSyncPlatforms,
   useRemuxBackfill,
   useUnpublishRecord,
+  useVideoInfo,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
@@ -194,6 +196,47 @@ function VideoPlayer({ url }: { url: string }) {
   );
 }
 
+function humanSize(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  return `${Math.round(bytes / 1024)} KB`;
+}
+
+// The source recording's real state on S3, plus the way back to the upload page
+// when it's wrong. The row's key alone would claim a file exists even when the
+// object is gone, which is exactly the case worth catching.
+function SourceVideo({ upload }: { upload: UploadWithJobs }) {
+  const info = useVideoInfo(upload.id);
+
+  if (info.isPending) return <span className="text-xs lowercase text-faint">checking file…</span>;
+  if (info.isError) return <span className="text-xs lowercase text-faint">file state unknown</span>;
+
+  const { exists, size, filename } = info.data;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs lowercase">
+      {exists ? (
+        <span className="inline-flex items-center gap-1.5 text-muted" title={filename}>
+          <span className="h-1.5 w-1.5 rounded-full bg-muted" aria-hidden />
+          source file{size ? ` · ${humanSize(size)}` : ''}
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1.5 text-danger" title={`${filename} is not in the bucket`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-danger" aria-hidden />
+          source file missing
+        </span>
+      )}
+      <Link
+        to="/upload/$showId"
+        params={{ showId: upload.show_id }}
+        className="text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+        title="upload a different recording for this show. re-publishing to a platform that already has this show creates a second entry there — the old link stays until you un-link it"
+      >
+        {exists ? 'replace' : 'upload'}
+      </Link>
+    </span>
+  );
+}
+
 function Spinner() {
   return <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />;
 }
@@ -225,7 +268,16 @@ function AudioCell({ upload }: { upload: UploadWithJobs }) {
 
 // coverUrl comes from the PocketBase record (the master), not the stored
 // upload.image_url snapshot — so the thumbnail is always the current agenda image.
-function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: string | null }) {
+function ArchiveCard({
+  upload,
+  coverUrl,
+  live,
+}: {
+  upload: UploadWithJobs;
+  coverUrl: string | null;
+  // PocketBase's own status, not this session's click history.
+  live: boolean;
+}) {
   const [syncOpen, setSyncOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const publish = usePublishRecord();
@@ -256,52 +308,69 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
             <p className="shrink-0 font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
           </div>
 
+          {/* Tier one: the media itself — where it's published, how to play it,
+              how to get it. What the operator came here for. */}
           <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
             {pub.map((j) => (
               <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
             ))}
-            <span className="text-line" aria-hidden>|</span>
+            {pub.length > 0 && (
+              <span className="text-line" aria-hidden>
+                |
+              </span>
+            )}
             {playable && (
               <button
                 type="button"
                 onClick={() => setPlayerOpen((v) => !v)}
-                className="font-medium text-accent hover:underline"
+                className="font-medium lowercase text-accent hover:underline"
               >
-                {playerOpen ? 'close player' : 'Watch ▸'}
+                {playerOpen ? 'close player' : 'watch ▸'}
               </button>
             )}
-            <DownloadLink url={upload.video_url} label="Video" />
+            <DownloadLink url={upload.video_url} label="video" />
             <AudioCell upload={upload} />
-            <span className="ml-auto flex items-center gap-3">
-              {publish.isSuccess ? (
-                <span className="rounded-full border border-ok/40 bg-ok-soft px-3 py-1 text-xs font-medium lowercase text-ok">
-                  ✓ on main website
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => publish.mutate(upload.id)}
-                  disabled={publish.isPending}
-                  className="rounded-full bg-ink px-3.5 py-1 text-xs font-medium lowercase text-paper hover:opacity-90 disabled:opacity-50"
-                  title="set the agenda record to published — makes it live on the main website"
-                >
-                  {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
-                </button>
-              )}
-              {unpublish.isSuccess ? (
-                <span className="text-xs lowercase text-muted">✓ back to draft</span>
-              ) : (
-                <ConfirmAction
-                  label="unpublish"
-                  question="back to draft?"
-                  pending={unpublish.isPending}
-                  pendingLabel="unpublishing…"
-                  // Clear the publish chip too — otherwise a publish/unpublish in
-                  // the same session would still read "✓ on main website".
-                  onConfirm={() => unpublish.mutate(upload.id, { onSuccess: () => publish.reset() })}
-                  title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
-                />
-              )}
+          </div>
+
+          {/* Tier two: managing the record. Quieter, and separated by a rule so
+              the destructive half never sits inline with the download links. */}
+          <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3">
+            {live ? (
+              <span className="inline-flex items-center gap-1.5 text-xs lowercase text-ok" title="this show is live on the main website">
+                <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
+                on main website
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs lowercase text-faint" title="draft — not visible on the main website">
+                <span className="h-1.5 w-1.5 rounded-full bg-line" aria-hidden />
+                draft
+              </span>
+            )}
+
+            {live ? (
+              <ConfirmAction
+                label="unpublish"
+                question="back to draft?"
+                pending={unpublish.isPending}
+                pendingLabel="unpublishing…"
+                onConfirm={() => unpublish.mutate(upload.id)}
+                title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => publish.mutate(upload.id)}
+                disabled={publish.isPending}
+                className="border border-ink px-2.5 py-1 text-xs lowercase text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
+                title="set the agenda record to published — makes it live on the main website"
+              >
+                {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
+              </button>
+            )}
+
+            <SourceVideo upload={upload} />
+
+            <span className="ml-auto flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => setSyncOpen((v) => !v)}
@@ -320,6 +389,14 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
               </a>
             </span>
           </div>
+
+          {/* A failed unpublish used to be silent — the button just reappeared,
+              and the operator assumed the show came off the website. */}
+          {unpublish.isError && (
+            <p className="mt-2 text-xs lowercase text-danger">
+              unpublish failed — the show is still live. try again.
+            </p>
+          )}
 
           {playerOpen && playable && <VideoPlayer url={upload.video_url} />}
           {syncOpen && <SyncPanel showId={upload.show_id} links={links} />}
@@ -350,27 +427,30 @@ function RemuxBackfill({ pending }: { pending: number }) {
         ✓ converting {backfill.data.enqueued} recording{backfill.data.enqueued === 1 ? '' : 's'} — watch the progress bars
       </span>
     );
+  // This replaces the original recordings on S3 and deletes the old files, in
+  // bulk. It was the most destructive control on the page and the only one
+  // without a confirmation step.
   return (
-    <button
-      type="button"
-      onClick={() => backfill.mutate()}
-      disabled={backfill.isPending}
-      className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink disabled:opacity-50"
-      title="re-run the archive job on older recordings so they play in the browser"
-    >
-      {backfill.isPending
-        ? 'starting…'
-        : backfill.isError
+    <ConfirmAction
+      label={
+        backfill.isError
           ? 'retry conversion'
-          : `convert ${pending} older recording${pending === 1 ? '' : 's'} to mp4`}
-    </button>
+          : `convert ${pending} older recording${pending === 1 ? '' : 's'} to mp4`
+      }
+      question={`replaces ${pending} original recording${pending === 1 ? '' : 's'} on s3. proceed?`}
+      pending={backfill.isPending}
+      pendingLabel="starting…"
+      onConfirm={() => backfill.mutate()}
+      title="re-runs the archive job on older recordings: converts each to mp4 and deletes the original file from s3"
+    />
   );
 }
 
 export default function Archive() {
   const { data: uploads = [], isPending } = useUploads();
-  // Cover per show from PocketBase (all statuses), keyed by show_id — polled live.
-  const { data: covers = {} } = useCovers();
+  // Cover + real publish status per show from PocketBase, keyed by show_id —
+  // polled, so a change made elsewhere shows up here.
+  const { data: states = {} } = useArchiveStates();
   const archived = uploads
     .filter((u) => publishedJobs(u).length > 0)
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
@@ -399,7 +479,12 @@ export default function Archive() {
         <>
           <div className="space-y-3">
             {paged.slice.map((u) => (
-              <ArchiveCard key={u.id} upload={u} coverUrl={covers[u.show_id] ?? null} />
+              <ArchiveCard
+                key={u.id}
+                upload={u}
+                coverUrl={states[u.show_id]?.cover ?? null}
+                live={states[u.show_id]?.status === 'published'}
+              />
             ))}
           </div>
           <Pager page={paged.page} pageCount={paged.pageCount} total={paged.total} setPage={paged.setPage} unit="shows" />

@@ -8,6 +8,7 @@ import {
   ListPartsCommand,
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../env';
@@ -73,6 +74,19 @@ export async function createDownloadPresignedUrl(key: string) {
   if (!env.S3_BUCKET) throw new Error('S3 not configured (S3_BUCKET required)');
   const command = new GetObjectCommand({ Bucket: env.S3_BUCKET, Key: key });
   return getSignedUrl(presignS3, command, { expiresIn: 3600 * 6 });
+}
+
+// Does this object actually exist, and how big is it? A key in the database is
+// not proof of a file: a half-finished remux, a manual bucket cleanup, or an
+// aborted upload all leave the row pointing at nothing.
+export async function objectInfo(key: string): Promise<{ exists: boolean; size: number | null }> {
+  if (!env.S3_BUCKET) return { exists: false, size: null };
+  try {
+    const head = await s3.send(new HeadObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+    return { exists: true, size: head.ContentLength ?? null };
+  } catch {
+    return { exists: false, size: null };
+  }
 }
 
 // --- Multipart (resumable) upload ------------------------------------------

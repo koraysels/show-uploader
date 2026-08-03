@@ -4,7 +4,7 @@ import {
   listGenres,
   uploadArchiveImage,
   clearArchiveImage,
-  listArchiveCovers,
+  listArchiveStates,
   getArchiveShow,
   syncShowToPlatforms,
 } from '../services/shows-api';
@@ -12,10 +12,10 @@ import { generateMeta } from '../services/groq';
 
 export const showsRouter = Router();
 
-// Cover URL per archive record (all statuses) for thumbnails — keyed by show_id.
+// Cover URL + publish status per archive record, keyed by show_id.
 showsRouter.get('/covers', async (_req, res) => {
   try {
-    res.json(await listArchiveCovers());
+    res.json(await listArchiveStates());
   } catch (err) {
     console.error('Failed to fetch covers:', err);
     res.status(502).json({ error: 'Failed to fetch covers' });

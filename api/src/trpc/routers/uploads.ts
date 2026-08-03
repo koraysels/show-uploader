@@ -20,7 +20,7 @@ import {
 import { enqueueArchiveJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue } from '../../queue';
-import { createDownloadPresignedUrl, listUploadedParts } from '../../services/s3';
+import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../../services/s3';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
 import { updateArchiveRecord, resolveGenreIds } from '../../services/shows-api';
@@ -310,6 +310,28 @@ export const uploadsRouter = router({
       return { ok: true };
     } catch (err) {
       internal(err, 'Failed to publish archive record:', 'Failed to publish archive record');
+    }
+  }),
+
+  // Is the source recording actually still on S3 for this upload? The row's
+  // video_s3_key is not proof — so this HEADs the object rather than trusting
+  // it, which is the whole point: it's what tells an operator whether there's a
+  // file to replace.
+  videoInfo: protectedProcedure.input(z.object({ uploadId: z.string() })).query(async ({ input }) => {
+    try {
+      const upload = await getUploadWithJobs(db, input.uploadId);
+      if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+      const { exists, size } = await objectInfo(upload.video_s3_key);
+      return {
+        exists,
+        size,
+        // Strip the upload timestamp prefix the watcher adds, e.g. "1785677613218-".
+        filename: (upload.video_s3_key.split('/').pop() ?? '').replace(/^\d+-/, ''),
+        showId: upload.show_id,
+      };
+    } catch (err) {
+      if (err instanceof TRPCError) throw err;
+      internal(err, 'Failed to read video info:', 'Failed to read video info');
     }
   }),
 
