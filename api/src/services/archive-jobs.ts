@@ -4,6 +4,36 @@ import type { PlatformJob, ShowUpload } from '../db/queries';
 import { uploadQueue } from '../queue';
 
 /**
+ * Drop an upload's not-yet-started jobs from the queue.
+ *
+ * Deleting the DB row alone isn't enough: BullMQ holds its own copy of the
+ * payload, so a waiting job would still run and publish to YouTube or MixCloud
+ * after the operator removed it. Jobs are matched on payload uploadId — the
+ * BullMQ job id isn't stored anywhere.
+ *
+ * Returns the number of jobs still running, which can't be removed while a
+ * worker holds their lock. Those finish, then write to rows that no longer
+ * exist (a no-op UPDATE), so nothing breaks — but the work isn't stopped.
+ */
+export async function cancelQueuedJobs(uploadId: string): Promise<{ removed: number; active: number }> {
+  const jobs = await uploadQueue.getJobs(['waiting', 'delayed', 'paused', 'failed']);
+  let removed = 0;
+  for (const job of jobs) {
+    if (job.data?.uploadId !== uploadId) continue;
+    // Racy by nature: a job can start between the fetch and the remove, which
+    // throws. Treat that as "still active" rather than failing the delete.
+    try {
+      await job.remove();
+      removed++;
+    } catch {
+      /* picked up by a worker in the meantime */
+    }
+  }
+  const active = (await uploadQueue.getJobs(['active'])).filter((j) => j.data?.uploadId === uploadId).length;
+  return { removed, active };
+}
+
+/**
  * Whether an upload's platform work has finished. The archive job rewrites the
  * source video on S3, so it must never run while YouTube or MixCloud still
  * needs the original file. Mirrors the worker's own auto-enqueue condition.

@@ -128,6 +128,28 @@ export function useGenerateAudio() {
   });
 }
 
+// Puts the agenda record back to draft — the inverse of usePublishRecord. The
+// platform uploads and their links are untouched.
+export function useUnpublishRecord() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    mutationFn: (uploadId: string) => trpcClient.uploads.unpublishRecord.mutate({ uploadId }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+  });
+}
+
+// Removes the upload and its jobs from the queue. Files on S3 and the
+// PocketBase record stay put.
+export function useDeleteUpload() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    mutationFn: (uploadId: string) => trpcClient.uploads.deleteUpload.mutate({ uploadId }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+  });
+}
+
 // One-shot backfill: re-runs the archive job on every upload still stored in
 // its original container, converting them to browser-playable MP4.
 export function useRemuxBackfill() {

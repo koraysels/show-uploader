@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useSearch } from '@tanstack/react-router';
-import { useUploads } from '../api/hooks';
+import { useUploads, useDeleteUpload } from '../api/hooks';
 import type { UploadWithJobs } from '../api/client';
 import JobProgress from '../components/JobProgress';
+import ConfirmAction from '../components/ConfirmAction';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
 
@@ -18,6 +19,7 @@ function UploadCard({
   highlight?: string;
   highlightRef: React.RefObject<HTMLDivElement>;
 }) {
+  const remove = useDeleteUpload();
   return (
     <div
       ref={upload.id === highlight ? highlightRef : null}
@@ -36,6 +38,24 @@ function UploadCard({
         <JobProgress uploadId={upload.id} jobs={upload.jobs} />
       ) : (
         <p className="text-xs text-faint">No jobs</p>
+      )}
+      <div className="mt-4 flex items-center justify-end">
+        <ConfirmAction
+          label="delete"
+          question="remove from queue?"
+          pending={remove.isPending}
+          pendingLabel="deleting…"
+          onConfirm={() => remove.mutate(upload.id)}
+          title="remove this upload and its jobs from the queue — the files on S3 and the agenda record stay"
+        />
+      </div>
+      {remove.isError && <p className="mt-2 text-right text-[11px] text-danger">delete failed — try again.</p>}
+      {/* A job already running holds its worker lock and can't be pulled; say so
+          rather than implying the upload was stopped. */}
+      {remove.data && remove.data.stillRunning > 0 && (
+        <p className="mt-2 text-right text-[11px] text-muted">
+          removed — but {remove.data.stillRunning} job{remove.data.stillRunning === 1 ? '' : 's'} already running will finish.
+        </p>
       )}
     </div>
   );

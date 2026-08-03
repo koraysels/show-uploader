@@ -15,8 +15,9 @@ import {
   listStagedShowIds,
   listUploadingSessions,
   listUploadsNeedingRemux,
+  deleteUpload,
 } from '../../db/queries';
-import { enqueueArchiveJob, readyToArchive } from '../../services/archive-jobs';
+import { enqueueArchiveJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue } from '../../queue';
 import { createDownloadPresignedUrl, listUploadedParts } from '../../services/s3';
@@ -309,6 +310,37 @@ export const uploadsRouter = router({
       return { ok: true };
     } catch (err) {
       internal(err, 'Failed to publish archive record:', 'Failed to publish archive record');
+    }
+  }),
+
+  // The inverse: put the agenda record back to draft so it drops off the main
+  // website. Only touches PocketBase status — the platform uploads and their
+  // links stay exactly as they are.
+  unpublishRecord: protectedProcedure.input(z.object({ uploadId: z.string() })).mutation(async ({ input }) => {
+    try {
+      const upload = await getUploadWithJobs(db, input.uploadId);
+      if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+      await updateArchiveRecord(upload.show_id, { status: 'draft' });
+      return { ok: true };
+    } catch (err) {
+      internal(err, 'Failed to unpublish archive record:', 'Failed to unpublish archive record');
+    }
+  }),
+
+  // Remove an upload from the jobs queue: the row and its jobs go, the S3
+  // objects and the PocketBase record stay. Allowed even while a job is
+  // processing — a stuck job is exactly what an operator wants to clear.
+  deleteUpload: protectedProcedure.input(z.object({ uploadId: z.string() })).mutation(async ({ input }) => {
+    try {
+      // Pull the queued work first: BullMQ keeps its own copy of the payload, so
+      // a waiting job would happily publish an upload the operator just deleted.
+      const { active } = await cancelQueuedJobs(input.uploadId);
+      const removed = await deleteUpload(db, input.uploadId);
+      if (!removed) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+      // A job already in flight keeps its worker lock and runs to completion.
+      return { ok: true, stillRunning: active };
+    } catch (err) {
+      internal(err, 'Failed to delete upload:', 'Failed to delete upload');
     }
   }),
 

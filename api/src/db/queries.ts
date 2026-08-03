@@ -86,6 +86,15 @@ export function listUploadsWithJobs(db: Sql) {
   `;
 }
 
+// Drop an upload and, via ON DELETE CASCADE on platform_jobs, its job rows.
+// Deliberately leaves the S3 objects and the PocketBase record alone: this
+// clears the queue entry, it does not destroy the recording.
+export function deleteUpload(db: Sql, uploadId: string) {
+  return db`
+    DELETE FROM show_uploads WHERE id = ${uploadId} RETURNING id
+  `.then((rows) => rows.length > 0);
+}
+
 // Uploads whose video archive is still in its original container. The archive
 // job remuxes those to MP4 in place, so this is the backfill worklist for
 // recordings that predate that step.

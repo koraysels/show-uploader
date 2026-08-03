@@ -9,9 +9,11 @@ import {
   useShow,
   useSyncPlatforms,
   useRemuxBackfill,
+  useUnpublishRecord,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
+import ConfirmAction from '../components/ConfirmAction';
 import type { UploadWithJobs } from '../api/client';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -227,6 +229,7 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
   const [syncOpen, setSyncOpen] = useState(false);
   const [playerOpen, setPlayerOpen] = useState(false);
   const publish = usePublishRecord();
+  const unpublish = useUnpublishRecord();
   const pub = publishedJobs(upload);
   // Only the remuxed MP4 plays in a browser; an upload still stored as MKV stays
   // download-only until its archive job has run.
@@ -284,6 +287,20 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
                 >
                   {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
                 </button>
+              )}
+              {unpublish.isSuccess ? (
+                <span className="text-xs lowercase text-muted">✓ back to draft</span>
+              ) : (
+                <ConfirmAction
+                  label="unpublish"
+                  question="back to draft?"
+                  pending={unpublish.isPending}
+                  pendingLabel="unpublishing…"
+                  // Clear the publish chip too — otherwise a publish/unpublish in
+                  // the same session would still read "✓ on main website".
+                  onConfirm={() => unpublish.mutate(upload.id, { onSuccess: () => publish.reset() })}
+                  title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
+                />
               )}
               <button
                 type="button"
