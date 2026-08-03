@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useAuth } from '../auth/useAuth';
+import { PageLoading } from '../components/Skeleton';
 
 export default function AuthCallback() {
   const { userManager } = useAuth();
@@ -13,5 +14,7 @@ export default function AuthCallback() {
       .catch(() => navigate({ to: '/', replace: true }));
   }, [userManager, navigate]);
 
-  return null;
+  // The token exchange is a network round-trip; rendering null blanked the page
+  // for its duration, which reads as a crash on a slow connection.
+  return <PageLoading label="signing in…" />;
 }

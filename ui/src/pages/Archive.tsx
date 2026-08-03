@@ -1,5 +1,18 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import Chip from '@mui/material/Chip';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import MuiLink from '@mui/material/Link';
+import Paper from '@mui/material/Paper';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 import {
   useUploads,
   useArchiveStates,
@@ -17,6 +30,7 @@ import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import type { UploadWithJobs } from '../api/client';
+import { c } from '../theme';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
 
@@ -27,6 +41,19 @@ const AGENDA_BASE = import.meta.env.VITE_POCKETBASE_URL ?? 'https://agenda.comin
 type Platform = 'youtube' | 'mixcloud';
 const LABEL_TO_ID: Record<string, Platform> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
 
+// Agenda descriptions are HTML (the record is edited with a rich-text field).
+// The sync preview was printing the tags literally — "<p>Monthly show…</p>" —
+// so read the text out instead. DOMParser builds an inert document: nothing in
+// the string is fetched or executed.
+function htmlToText(html: string): string {
+  return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
+}
+
+// Every tappable thing in a card action row. 40px is the floor a thumb can hit
+// reliably; the old 20px-tall text links were the main reason this page was
+// painful on a phone.
+const actionSx = { minHeight: 40, px: 1.25, fontSize: '0.75rem' } as const;
+
 // A published platform link + the real YouTube privacy status (read-only). Sync
 // actions live in the SyncPanel below, metadata editing in PocketBase ("edit ↗").
 function PublishedLink({ platform, url }: { platform: string; url: string }) {
@@ -34,14 +61,20 @@ function PublishedLink({ platform, url }: { platform: string; url: string }) {
   const status = useYoutubeStatus(url, isYt);
   const priv = status.data?.privacyStatus;
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <a href={url} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
-        {PLATFORM_LABELS[platform] ?? platform} ↗
-      </a>
+    <Button
+      component="a"
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      sx={{ ...actionSx, gap: 0.75, fontWeight: 500 }}
+    >
+      {PLATFORM_LABELS[platform] ?? platform} ↗
       {isYt && priv && (
-        <span className={`text-[10px] lowercase ${priv === 'public' ? 'text-ok' : 'text-faint'}`}>{priv}</span>
+        <Box component="span" sx={{ fontSize: '0.625rem', color: priv === 'public' ? c.ok : c.faint }}>
+          {priv}
+        </Box>
       )}
-    </span>
+    </Button>
   );
 }
 
@@ -62,100 +95,114 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
   const results = sync.data?.results;
 
   return (
-    <div className="mt-4 space-y-3 border-t border-line pt-4">
-      <p className="text-[11px] lowercase tracking-wide text-faint">sync from agenda · pocketbase is the master</p>
+    <Stack spacing={1.5} sx={{ mt: 2, pt: 2, borderTop: `1px solid ${c.line}` }}>
+      <Typography variant="caption" color="text.disabled">
+        sync from agenda · pocketbase is the master
+      </Typography>
       {show.isPending ? (
-        <p className="text-xs text-muted">loading agenda data…</p>
+        <Typography variant="caption" color="text.secondary">
+          loading agenda data…
+        </Typography>
       ) : !show.data ? (
-        <p className="text-xs text-danger">couldn't load agenda data.</p>
+        <Typography variant="caption" color="error.main">
+          couldn't load agenda data.
+        </Typography>
       ) : (
         <>
-          <div className="flex gap-3">
+          <Stack direction="row" spacing={1.5}>
             {show.data.imageUrl && (
-              <img src={show.data.imageUrl} alt="" className="h-20 w-20 shrink-0 border border-line object-cover" />
+              <Box
+                component="img"
+                src={show.data.imageUrl}
+                alt=""
+                sx={{ width: 80, height: 80, flexShrink: 0, border: `1px solid ${c.line}`, objectFit: 'cover' }}
+              />
             )}
-            <div className="min-w-0 flex-1 space-y-2">
-              <p className="whitespace-pre-wrap text-sm text-ink">
-                {show.data.description || <span className="text-faint">no description in agenda</span>}
-              </p>
-              <div className="flex flex-wrap gap-1">
-                {(show.data.tags ?? []).length > 0 ? (
-                  show.data.tags!.map((t) => (
-                    <span key={t} className="border border-line px-1.5 py-0.5 text-[11px] lowercase text-muted">
-                      {t}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-[11px] text-faint">no tags</span>
+            <Stack spacing={1} sx={{ minWidth: 0, flex: 1 }}>
+              <Typography sx={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                {htmlToText(show.data.description ?? '') || (
+                  <Box component="span" sx={{ color: c.faint }}>
+                    no description in agenda
+                  </Box>
                 )}
-              </div>
-            </div>
-          </div>
+              </Typography>
+              <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', rowGap: 0.5 }}>
+                {(show.data.tags ?? []).length > 0 ? (
+                  show.data.tags!.map((t) => <Chip key={t} label={t} />)
+                ) : (
+                  <Typography variant="caption" color="text.disabled">
+                    no tags
+                  </Typography>
+                )}
+              </Stack>
+            </Stack>
+          </Stack>
 
-          <div className="space-y-1.5">
+          <Stack spacing={0.75}>
             {links.map((l) => {
               const p = LABEL_TO_ID[l.label];
               if (!p) return null;
               const r = results?.[p];
               return (
-                <div key={p} className="flex flex-wrap items-center gap-2 text-sm">
-                  <label className="flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(p)}
-                      onChange={() => toggle(p)}
-                      className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
-                    />
-                    {l.label}
-                  </label>
+                <Stack key={p} direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+                  <FormControlLabel
+                    control={<Checkbox checked={selected.includes(p)} onChange={() => toggle(p)} />}
+                    label={l.label}
+                    sx={{ ml: 0, mr: 0 }}
+                  />
                   {p === 'youtube' && ytStatus.data?.privacyStatus && (
-                    <span
-                      className={`text-[10px] lowercase ${
-                        ytStatus.data.privacyStatus === 'public' ? 'text-ok' : 'text-faint'
-                      }`}
+                    <Typography
+                      variant="caption"
+                      sx={{ color: ytStatus.data.privacyStatus === 'public' ? c.ok : c.faint }}
                     >
                       {ytStatus.data.privacyStatus}
-                    </span>
+                    </Typography>
                   )}
                   {p === 'youtube' && ytLink && ytStatus.data?.privacyStatus && ytStatus.data.privacyStatus !== 'public' && (
-                    <button
-                      type="button"
-                      disabled={setPublic.isPending}
-                      onClick={() => setPublic.mutate(ytLink.url, { onSuccess: () => ytStatus.refetch() })}
-                      className="rounded border border-line px-1.5 py-0.5 text-[10px] lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50"
-                      title="make this video public on YouTube"
-                    >
-                      {setPublic.isPending ? 'setting…' : 'set public'}
-                    </button>
+                    <Tooltip title="make this video public on YouTube">
+                      <Button
+                        disabled={setPublic.isPending}
+                        onClick={() => setPublic.mutate(ytLink.url, { onSuccess: () => ytStatus.refetch() })}
+                        sx={actionSx}
+                      >
+                        {setPublic.isPending ? 'setting…' : 'set public'}
+                      </Button>
+                    </Tooltip>
                   )}
                   {r && (
-                    <span className={`text-[10px] ${r === 'ok' ? 'text-ok' : 'text-danger'}`} title={r === 'ok' ? undefined : r}>
-                      {r === 'ok' ? '✓ synced' : `✕ ${r}`}
-                    </span>
+                    <Tooltip title={r === 'ok' ? 'synced' : r}>
+                      <Typography variant="caption" sx={{ color: r === 'ok' ? c.ok : c.danger }}>
+                        {r === 'ok' ? '✓ synced' : `✕ ${r}`}
+                      </Typography>
+                    </Tooltip>
                   )}
-                </div>
+                </Stack>
               );
             })}
-          </div>
+          </Stack>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
+          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+            <Button
+              variant="contained"
               disabled={sync.isPending || selected.length === 0}
               onClick={() => sync.mutate({ id: showId, platforms: selected })}
-              className="bg-ink px-4 py-2 text-sm font-medium lowercase text-paper hover:opacity-90 disabled:opacity-40"
+              sx={{ minHeight: 44 }}
             >
               {sync.isPending ? 'syncing…' : 'sync selected'}
-            </button>
-            <span className="text-[11px] text-faint">
-              pushes agenda title / description / tags{selected.includes('mixcloud') ? ' + cover (mixcloud)' : ''} to the
-              checked platforms.
-            </span>
-          </div>
-          {sync.isError && <p className="text-xs text-danger">sync failed — try again.</p>}
+            </Button>
+            <Typography variant="caption" color="text.disabled" sx={{ flex: 1, minWidth: 180 }}>
+              pushes agenda title / description / tags{selected.includes('mixcloud') ? ' + cover (mixcloud)' : ''} to
+              the checked platforms.
+            </Typography>
+          </Stack>
+          {sync.isError && (
+            <Typography variant="caption" color="error.main">
+              sync failed — try again.
+            </Typography>
+          )}
         </>
       )}
-    </div>
+    </Stack>
   );
 }
 
@@ -168,11 +215,16 @@ function publishedJobs(u: UploadWithJobs) {
 }
 
 function DownloadLink({ url, label }: { url: string | null; label: string }) {
-  if (!url) return <span className="text-faint">{label} —</span>;
+  if (!url)
+    return (
+      <Typography variant="caption" color="text.disabled" sx={{ alignSelf: 'center' }}>
+        {label} —
+      </Typography>
+    );
   return (
-    <a href={url} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+    <Button component="a" href={url} target="_blank" rel="noreferrer" sx={{ ...actionSx, fontWeight: 500 }}>
       {label} ↓
-    </a>
+    </Button>
   );
 }
 
@@ -181,18 +233,19 @@ function DownloadLink({ url, label }: { url: string | null; label: string }) {
 // its moov atom up front (+faststart), so seeking doesn't pull the whole file.
 function VideoPlayer({ url }: { url: string }) {
   return (
-    <div className="mt-4 border border-line bg-paper p-2">
-      <video
+    <Box sx={{ mt: 2, p: 1, border: `1px solid ${c.line}`, backgroundColor: c.paper }}>
+      <Box
+        component="video"
         src={url}
         controls
         preload="metadata"
         playsInline
-        className="max-h-[70vh] w-full bg-black"
+        sx={{ width: '100%', maxHeight: '70vh', display: 'block', backgroundColor: '#000' }}
       />
-      <p className="mt-2 text-[11px] lowercase text-faint">
-        recordings are HEVC — Safari and Chrome play them, Firefox may not. the download always works.
-      </p>
-    </div>
+      <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
+        recordings are hevc — safari and chrome play them, firefox may not. the download always works.
+      </Typography>
+    </Box>
   );
 }
 
@@ -208,61 +261,81 @@ function humanSize(bytes: number): string {
 function SourceVideo({ upload }: { upload: UploadWithJobs }) {
   const info = useVideoInfo(upload.id);
 
-  if (info.isPending) return <span className="text-xs lowercase text-faint">checking file…</span>;
-  if (info.isError) return <span className="text-xs lowercase text-faint">file state unknown</span>;
+  if (info.isPending)
+    return (
+      <Typography variant="caption" color="text.disabled">
+        checking file…
+      </Typography>
+    );
+  if (info.isError)
+    return (
+      <Typography variant="caption" color="text.disabled">
+        file state unknown
+      </Typography>
+    );
 
   const { exists, size, filename } = info.data;
   return (
-    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 text-xs lowercase">
-      {exists ? (
-        <span className="inline-flex items-center gap-1.5 text-muted" title={filename}>
-          <span className="h-1.5 w-1.5 rounded-full bg-muted" aria-hidden />
-          source file{size ? ` · ${humanSize(size)}` : ''}
-        </span>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-danger" title={`${filename} is not in the bucket`}>
-          <span className="h-1.5 w-1.5 rounded-full bg-danger" aria-hidden />
-          source file missing
-        </span>
-      )}
-      <Link
-        to="/upload/$showId"
-        params={{ showId: upload.show_id }}
-        className="text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
-        title="upload a different recording for this show. re-publishing to a platform that already has this show creates a second entry there — the old link stays until you un-link it"
-      >
-        {exists ? 'replace' : 'upload'}
-      </Link>
-    </span>
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+      <Tooltip title={exists ? filename : `${filename} is not in the bucket`}>
+        <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+          <Box
+            aria-hidden
+            sx={{ width: 6, height: 6, borderRadius: '999px', bgcolor: exists ? c.muted : c.danger, flexShrink: 0 }}
+          />
+          <Typography variant="caption" sx={{ color: exists ? c.muted : c.danger }}>
+            {exists ? `source file${size ? ` · ${humanSize(size)}` : ''}` : 'source file missing'}
+          </Typography>
+        </Stack>
+      </Tooltip>
+      {/* TanStack Link (typed params) inside a styled wrapper — MUI's `component`
+          generic drops those types. */}
+      <Tooltip title="upload a different recording for this show. re-publishing to a platform that already has this show creates a second entry there — the old link stays until you un-link it">
+        <Box
+          sx={{
+            fontSize: '0.6875rem',
+            '& a': {
+              display: 'inline-flex',
+              alignItems: 'center',
+              minHeight: 32,
+              color: c.faint,
+              textDecoration: 'underline',
+              textUnderlineOffset: '2px',
+            },
+            '& a:hover': { color: c.ink },
+          }}
+        >
+          <Link to="/upload/$showId" params={{ showId: upload.show_id }}>
+            {exists ? 'replace' : 'upload'}
+          </Link>
+        </Box>
+      </Tooltip>
+    </Stack>
   );
-}
-
-function Spinner() {
-  return <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />;
 }
 
 // The audio archive is produced by the 'archive' job — reflect its live state
 // so the operator sees it being extracted, not just a dash.
 function AudioCell({ upload }: { upload: UploadWithJobs }) {
   const gen = useGenerateAudio();
-  if (upload.audio_url) return <DownloadLink url={upload.audio_url} label="Audio" />;
+  if (upload.audio_url) return <DownloadLink url={upload.audio_url} label="audio" />;
   const job = upload.jobs.find((j) => j.platform === 'archive');
   if (gen.isPending || job?.status === 'processing' || job?.status === 'queued')
     return (
-      <span className="inline-flex items-center gap-1.5 text-muted">
-        <Spinner /> Audio {job?.progress_pct ?? 0}%
-      </span>
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', px: 1.25 }}>
+        <CircularProgress size={12} thickness={6} />
+        <Typography variant="caption" color="text.secondary">
+          audio {job?.progress_pct ?? 0}%
+        </Typography>
+      </Stack>
     );
   // No audio yet — offer to (re)generate it.
   return (
-    <button
-      type="button"
-      onClick={() => gen.mutate(upload.id)}
-      className="font-medium text-accent hover:underline"
-      title={job?.status === 'failed' ? job.error ?? 'retry' : 'extract the downloadable audio'}
-    >
-      {job?.status === 'failed' ? 'retry audio' : 'generate audio'}
-    </button>
+    <Tooltip title={job?.status === 'failed' ? job.error ?? 'retry' : 'extract the downloadable audio'}>
+      <Button onClick={() => gen.mutate(upload.id)} sx={{ ...actionSx, fontWeight: 500 }}>
+        {job?.status === 'failed' ? 'retry audio' : 'generate audio'}
+      </Button>
+    </Tooltip>
   );
 }
 
@@ -292,117 +365,137 @@ function ArchiveCard({
   const links = pub.map((j) => ({ label: PLATFORM_LABELS[j.platform] ?? j.platform, url: j.result_url! }));
 
   return (
-    <div className="border border-line bg-surface p-5">
-      <div className="flex gap-4">
+    <Paper variant="outlined" sx={{ p: { xs: 1.75, sm: 2.5 } }}>
+      {/* Cover + title share a row at every width — a 56px thumbnail is small
+          enough to leave the title readable on a 360px screen — but the meta
+          below it stacks instead of fighting for the same line. */}
+      <Stack direction="row" spacing={{ xs: 1.5, sm: 2 }}>
         {coverUrl && (
-          <img
+          <Box
+            component="img"
             src={coverUrl}
             alt=""
-            className="h-16 w-16 shrink-0 border border-line object-cover"
-            onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = 'none')}
+            onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+              e.currentTarget.style.display = 'none';
+            }}
+            sx={{
+              width: { xs: 56, sm: 64 },
+              height: { xs: 56, sm: 64 },
+              flexShrink: 0,
+              border: `1px solid ${c.line}`,
+              objectFit: 'cover',
+            }}
           />
         )}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <p className="font-medium text-ink">{upload.title}</p>
-            <p className="shrink-0 font-mono text-[13px] text-muted">{new Date(upload.created_at).toLocaleString()}</p>
-          </div>
+        <Box sx={{ minWidth: 0, flex: 1 }}>
+          <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{upload.title}</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+            {new Date(upload.created_at).toLocaleString()}
+          </Typography>
+        </Box>
+      </Stack>
 
-          {/* Tier one: the media itself — where it's published, how to play it,
-              how to get it. What the operator came here for. */}
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
-            {pub.map((j) => (
-              <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
-            ))}
-            {pub.length > 0 && (
-              <span className="text-line" aria-hidden>
-                |
-              </span>
-            )}
-            {playable && (
-              <button
-                type="button"
-                onClick={() => setPlayerOpen((v) => !v)}
-                className="font-medium lowercase text-accent hover:underline"
-              >
-                {playerOpen ? 'close player' : 'watch ▸'}
-              </button>
-            )}
-            <DownloadLink url={upload.video_url} label="video" />
-            <AudioCell upload={upload} />
-          </div>
+      {/* Tier one: the media itself — where it's published, how to play it,
+          how to get it. What the operator came here for. */}
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+      >
+        {pub.map((j) => (
+          <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
+        ))}
+        {pub.length > 0 && <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />}
+        {playable && (
+          <Button onClick={() => setPlayerOpen((v) => !v)} sx={{ ...actionSx, fontWeight: 500 }}>
+            {playerOpen ? 'close player' : 'watch ▸'}
+          </Button>
+        )}
+        <DownloadLink url={upload.video_url} label="video" />
+        <AudioCell upload={upload} />
+      </Stack>
 
-          {/* Tier two: managing the record. Quieter, and separated by a rule so
-              the destructive half never sits inline with the download links. */}
-          <div className="mt-3.5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line pt-3">
-            {live ? (
-              <span className="inline-flex items-center gap-1.5 text-xs lowercase text-ok" title="this show is live on the main website">
-                <span className="h-1.5 w-1.5 rounded-full bg-ok" aria-hidden />
-                on main website
-              </span>
-            ) : (
-              <span className="inline-flex items-center gap-1.5 text-xs lowercase text-faint" title="draft — not visible on the main website">
-                <span className="h-1.5 w-1.5 rounded-full bg-line" aria-hidden />
-                draft
-              </span>
-            )}
+      {/* Tier two: managing the record. Quieter, and separated by a rule so
+          the destructive half never sits inline with the download links. */}
+      <Stack
+        direction="row"
+        spacing={2}
+        sx={{ mt: 1.75, pt: 1.5, alignItems: 'center', flexWrap: 'wrap', rowGap: 1.25, borderTop: `1px solid ${c.line}` }}
+      >
+        <Tooltip title={live ? 'this show is live on the main website' : 'draft — not visible on the main website'}>
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <Box
+              aria-hidden
+              sx={{ width: 6, height: 6, borderRadius: '999px', flexShrink: 0, bgcolor: live ? c.ok : c.line }}
+            />
+            <Typography variant="caption" sx={{ color: live ? c.ok : c.faint }}>
+              {live ? 'on main website' : 'draft'}
+            </Typography>
+          </Stack>
+        </Tooltip>
 
-            {live ? (
-              <ConfirmAction
-                label="unpublish"
-                question="back to draft?"
-                pending={unpublish.isPending}
-                pendingLabel="unpublishing…"
-                onConfirm={() => unpublish.mutate(upload.id)}
-                title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
-              />
-            ) : (
-              <button
-                type="button"
-                onClick={() => publish.mutate(upload.id)}
-                disabled={publish.isPending}
-                className="border border-ink px-2.5 py-1 text-xs lowercase text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-                title="set the agenda record to published — makes it live on the main website"
-              >
-                {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
-              </button>
-            )}
+        {live ? (
+          <ConfirmAction
+            label="unpublish"
+            question="back to draft?"
+            pending={unpublish.isPending}
+            pendingLabel="unpublishing…"
+            onConfirm={() => unpublish.mutate(upload.id)}
+            title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
+          />
+        ) : (
+          <Tooltip title="set the agenda record to published — makes it live on the main website">
+            <Button
+              onClick={() => publish.mutate(upload.id)}
+              disabled={publish.isPending}
+              sx={{ ...actionSx, borderColor: c.ink }}
+            >
+              {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
+            </Button>
+          </Tooltip>
+        )}
 
-            <SourceVideo upload={upload} />
+        <SourceVideo upload={upload} />
 
-            <span className="ml-auto flex items-center gap-4">
-              <button
-                type="button"
-                onClick={() => setSyncOpen((v) => !v)}
-                className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
-              >
-                {syncOpen ? 'close' : 'sync platforms'}
-              </button>
-              <a
-                href={agendaUrl}
-                target="_blank"
-                rel="noreferrer"
-                title="edit this record in the agenda (PocketBase is the master)"
-                className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
-              >
-                edit ↗
-              </a>
-            </span>
-          </div>
+        {/* Explicit spacer rather than ml:auto — Stack's own spacing rules win
+            over a margin set on the child, so auto-margin silently did nothing. */}
+        <Box sx={{ flex: 1, display: { xs: 'none', sm: 'block' } }} />
 
-          {/* A failed unpublish used to be silent — the button just reappeared,
-              and the operator assumed the show came off the website. */}
-          {unpublish.isError && (
-            <p className="mt-2 text-xs lowercase text-danger">
-              unpublish failed — the show is still live. try again.
-            </p>
-          )}
+        {/* Own line on phones: inline with the source-file state it made one
+            dense, unreadable run of small links. */}
+        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
+          <Button
+            variant="text"
+            onClick={() => setSyncOpen((v) => !v)}
+            sx={{ fontSize: '0.6875rem', minHeight: 32, color: c.faint, textDecoration: 'underline', textUnderlineOffset: '2px' }}
+          >
+            {syncOpen ? 'close' : 'sync platforms'}
+          </Button>
+          <Tooltip title="edit this record in the agenda (PocketBase is the master)">
+            <MuiLink
+              href={agendaUrl}
+              target="_blank"
+              rel="noreferrer"
+              variant="caption"
+              sx={{ color: c.faint, display: 'inline-flex', alignItems: 'center', minHeight: 32, '&:hover': { color: c.ink } }}
+            >
+              edit ↗
+            </MuiLink>
+          </Tooltip>
+        </Stack>
+      </Stack>
 
-          {playerOpen && playable && <VideoPlayer url={upload.video_url} />}
-          {syncOpen && <SyncPanel showId={upload.show_id} links={links} />}
-        </div>
-      </div>
-    </div>
+      {/* A failed unpublish used to be silent — the button just reappeared,
+          and the operator assumed the show came off the website. */}
+      {unpublish.isError && (
+        <Typography variant="caption" color="error.main" sx={{ mt: 1, display: 'block' }}>
+          unpublish failed — the show is still live. try again.
+        </Typography>
+      )}
+
+      {playerOpen && playable && <VideoPlayer url={upload.video_url} />}
+      {syncOpen && <SyncPanel showId={upload.show_id} links={links} />}
+    </Paper>
   );
 }
 
@@ -423,9 +516,10 @@ function RemuxBackfill({ pending }: { pending: number }) {
   if (!pending) return null;
   if (backfill.isSuccess)
     return (
-      <span className="text-xs lowercase text-ok">
-        ✓ converting {backfill.data.enqueued} recording{backfill.data.enqueued === 1 ? '' : 's'} — watch the progress bars
-      </span>
+      <Typography variant="caption" color="success.main">
+        ✓ converting {backfill.data.enqueued} recording{backfill.data.enqueued === 1 ? '' : 's'} — watch the progress
+        bars
+      </Typography>
     );
   // This replaces the original recordings on S3 and deletes the old files, in
   // bulk. It was the most destructive control on the page and the only one
@@ -458,26 +552,37 @@ export default function Archive() {
   const needsRemux = uploads.filter(needsMp4Remux).length;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">archive</h1>
-        <div className="flex flex-wrap items-center gap-4">
+    <Stack spacing={3}>
+      <Stack
+        component="header"
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ alignItems: { sm: 'flex-end' }, justifyContent: 'space-between' }}
+      >
+        <Typography variant="h1">archive</Typography>
+        <Stack
+          direction={{ xs: 'column-reverse', sm: 'row' }}
+          spacing={2}
+          sx={{ alignItems: { sm: 'center' }, width: { xs: '100%', sm: 'auto' } }}
+        >
           <RemuxBackfill pending={needsRemux} />
-          <input
+          <TextField
+            size="small"
             value={paged.query}
             onChange={(e) => paged.setQuery(e.target.value)}
-            placeholder="Filter archive…"
-            className="field w-full sm:w-64"
+            placeholder="filter archive…"
+            sx={{ width: { xs: '100%', sm: 256 } }}
           />
-        </div>
-      </header>
+        </Stack>
+      </Stack>
+
       {isPending ? (
         <ListSkeleton />
       ) : archived.length === 0 ? (
-        <p className="text-sm text-muted">no published shows yet.</p>
+        <Typography color="text.secondary">no published shows yet.</Typography>
       ) : (
         <>
-          <div className="space-y-3">
+          <Stack spacing={1.5}>
             {paged.slice.map((u) => (
               <ArchiveCard
                 key={u.id}
@@ -486,10 +591,10 @@ export default function Archive() {
                 live={states[u.show_id]?.status === 'published'}
               />
             ))}
-          </div>
+          </Stack>
           <Pager page={paged.page} pageCount={paged.pageCount} total={paged.total} setPage={paged.setPage} unit="shows" />
         </>
       )}
-    </div>
+    </Stack>
   );
 }

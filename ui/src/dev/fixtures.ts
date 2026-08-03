@@ -1,0 +1,177 @@
+/**
+ * Fixture data for the offline UI preview (see preview.tsx).
+ *
+ * Deliberately awkward on purpose: long titles, a missing source file, a failed
+ * job with a long error, a show claimed by someone else, an upload mid-flight.
+ * A layout that survives these survives the real archive.
+ */
+
+import type { AgendaShow, UploadWithJobs } from '../api/client';
+
+const day = (n: number) => new Date(Date.now() - n * 864e5).toISOString();
+
+export const shows: AgendaShow[] = [
+  {
+    id: 'show_zonderdak',
+    title: 'Radio (z)onderdak',
+    description: '<p>Monthly show from the shelter — guests, requests, and a lot of talking.</p>',
+    date: '2026-07-31',
+    startTime: '20:00',
+    endTime: '22:00',
+    imageUrl: null,
+    tags: ['talk', 'community'],
+    mediaLinks: [],
+    showDescription: 'A monthly programme made with and by people without a roof.',
+  },
+  {
+    id: 'show_latenight',
+    title: 'Late Night Tape Deck — extended new year special with far too long a name',
+    description: '',
+    date: '2026-07-28',
+    startTime: '23:00',
+    endTime: '01:00',
+    imageUrl: null,
+    tags: ['ambient', 'tape', 'experimental', 'drone', 'field recordings'],
+    mediaLinks: [{ label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' }],
+    showDescription: null,
+  },
+  {
+    id: 'show_breakfast',
+    title: 'Breakfast Club',
+    description: '<p>Wake up slowly.</p>',
+    date: '2026-07-25',
+    startTime: '09:00',
+    endTime: '11:00',
+    imageUrl: null,
+    tags: null,
+    mediaLinks: [
+      { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo2' },
+      { label: 'MixCloud', type: 'audio', url: 'https://mixcloud.com/demo2' },
+    ],
+    showDescription: null,
+  },
+  {
+    id: 'show_dubplate',
+    title: 'Dubplate Hour',
+    description: '',
+    date: '2026-07-20',
+    startTime: '18:00',
+    endTime: '19:00',
+    imageUrl: null,
+    tags: ['dub', 'reggae'],
+    mediaLinks: [],
+    showDescription: null,
+  },
+];
+
+export const uploads: UploadWithJobs[] = [
+  // Mid-flight: one job done, one processing, archive queued.
+  {
+    id: 'upl_running',
+    show_id: 'show_zonderdak',
+    title: 'Radio (z)onderdak 31.07.2026 @ coming soon',
+    description: null,
+    tags: ['talk'],
+    image_url: null,
+    video_s3_key: 'recordings/1785677613218-radio-zonderdak.mkv',
+    archive_s3_key: null,
+    audio_s3_key: null,
+    video_url: 'https://example.invalid/video.mkv',
+    audio_url: null,
+    archive_url: null,
+    created_at: day(0),
+    jobs: [
+      { id: 'j1', upload_id: 'upl_running', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo1', error: null, progress_pct: 100 },
+      { id: 'j2', upload_id: 'upl_running', platform: 'mixcloud', status: 'processing', result_url: null, error: null, progress_pct: 62 },
+      { id: 'j3', upload_id: 'upl_running', platform: 'archive', status: 'queued', result_url: null, error: null, progress_pct: 0 },
+    ],
+  },
+  // A failed job with a long error — the case that used to push the retry
+  // button off a narrow screen.
+  {
+    id: 'upl_failed',
+    show_id: 'show_dubplate',
+    title: 'Dubplate Hour 20.07.2026 @ coming soon',
+    description: null,
+    tags: [],
+    image_url: null,
+    video_s3_key: 'recordings/1785000000000-dubplate.mkv',
+    archive_s3_key: null,
+    audio_s3_key: null,
+    video_url: 'https://example.invalid/dubplate.mkv',
+    audio_url: null,
+    archive_url: null,
+    created_at: day(3),
+    jobs: [
+      { id: 'j4', upload_id: 'upl_failed', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo3', error: null, progress_pct: 100 },
+      {
+        id: 'j5',
+        upload_id: 'upl_failed',
+        platform: 'mixcloud',
+        status: 'failed',
+        result_url: null,
+        error: 'ffmpeg exited with code 234: Conversion failed! | [ipod @ 0x14f] Could not find tag for codec pcm_s16le in stream #1',
+        progress_pct: 41,
+      },
+      { id: 'j6', upload_id: 'upl_failed', platform: 'archive', status: 'done', result_url: null, error: null, progress_pct: 100 },
+    ],
+  },
+  // Fully published, playable MP4, live on the website.
+  {
+    id: 'upl_published',
+    show_id: 'show_breakfast',
+    title: 'Breakfast Club 25.07.2026 @ coming soon',
+    description: null,
+    tags: ['morning'],
+    image_url: null,
+    video_s3_key: 'recordings/1784000000000-breakfast.mp4',
+    archive_s3_key: 'archive/breakfast.mp4',
+    audio_s3_key: 'archive/breakfast.m4a',
+    video_url: 'https://example.invalid/breakfast.mp4',
+    audio_url: 'https://example.invalid/breakfast.m4a',
+    archive_url: 'https://example.invalid/breakfast.mp4',
+    created_at: day(9),
+    jobs: [
+      { id: 'j7', upload_id: 'upl_published', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo2', error: null, progress_pct: 100 },
+      { id: 'j8', upload_id: 'upl_published', platform: 'mixcloud', status: 'done', result_url: 'https://mixcloud.com/demo2', error: null, progress_pct: 100 },
+      { id: 'j9', upload_id: 'upl_published', platform: 'archive', status: 'done', result_url: null, error: null, progress_pct: 100 },
+    ],
+  },
+  // Published but still MKV (backfill candidate) and its source file is gone —
+  // the two states the archive card has to report honestly.
+  {
+    id: 'upl_stale',
+    show_id: 'show_latenight',
+    title: 'Late Night Tape Deck — extended new year special with far too long a name 28.07.2026 @ coming soon',
+    description: null,
+    tags: ['ambient'],
+    image_url: null,
+    video_s3_key: 'recordings/1783000000000-latenight.mkv',
+    archive_s3_key: null,
+    audio_s3_key: null,
+    video_url: 'https://example.invalid/latenight.mkv',
+    audio_url: null,
+    archive_url: null,
+    created_at: day(14),
+    jobs: [
+      { id: 'j10', upload_id: 'upl_stale', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo1', error: null, progress_pct: 100 },
+      { id: 'j11', upload_id: 'upl_stale', platform: 'archive', status: 'done', result_url: null, error: null, progress_pct: 100 },
+    ],
+  },
+];
+
+export const archiveStates: Record<string, { cover: string | null; status: 'draft' | 'published' }> = {
+  show_breakfast: { cover: null, status: 'published' },
+  show_latenight: { cover: null, status: 'draft' },
+  show_zonderdak: { cover: null, status: 'draft' },
+  show_dubplate: { cover: null, status: 'draft' },
+};
+
+export const genres = ['ambient', 'techno', 'dub', 'reggae', 'talk', 'community', 'jazz', 'drone', 'tape'];
+
+export const videoInfo: Record<string, { exists: boolean; size: number | null; filename: string }> = {
+  upl_running: { exists: true, size: 2_293_760_000, filename: 'radio-zonderdak.mkv' },
+  upl_failed: { exists: true, size: 1_073_741_824, filename: 'dubplate.mkv' },
+  upl_published: { exists: true, size: 1_181_116_006, filename: 'breakfast.mp4' },
+  upl_stale: { exists: false, size: null, filename: 'latenight.mkv' },
+};

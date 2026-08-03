@@ -1,6 +1,15 @@
 import { lazy, Suspense, useRef } from 'react';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Chip from '@mui/material/Chip';
+import Skeleton from '@mui/material/Skeleton';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 import { useGenres, useUploadCover, useClearCover } from '../api/hooks';
 import TagInput from './TagInput';
+import { c } from '../theme';
 
 // The rich-text editor pulls in TipTap (~120 kB gzip) — load it only when a
 // MetadataForm actually renders (the upload page), not on every page.
@@ -17,6 +26,15 @@ type Props = {
   suggestedDescription: string;
   onChange: (field: string, value: string | string[]) => void;
 };
+
+// Section label — replaces the old `.label` utility class.
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
+      {children}
+    </Typography>
+  );
+}
 
 export default function MetadataForm({
   showId,
@@ -49,113 +67,133 @@ export default function MetadataForm({
   const removeCover = () => clearCover.mutate(undefined, { onSuccess: () => onChange('imageUrl', '') });
 
   return (
-    <div className="space-y-5">
-      <div>
-        <label className="label">Title</label>
-        <input className="field" value={title} onChange={(e) => onChange('title', e.target.value)} />
-      </div>
-      <div>
-        <label className="label">
-          Description
-          {generating && <span className="ml-2 lowercase tracking-normal text-accent">· writing…</span>}
-        </label>
+    <Stack spacing={2.5}>
+      <Box>
+        <FieldLabel>title</FieldLabel>
+        <TextField fullWidth size="small" value={title} onChange={(e) => onChange('title', e.target.value)} />
+      </Box>
+
+      <Box>
+        <FieldLabel>
+          description
+          {generating && (
+            <Box component="span" sx={{ ml: 1, color: c.ink }}>
+              · writing…
+            </Box>
+          )}
+        </FieldLabel>
         {/* Rich text (HTML) — the agenda notes are rich text, so we edit them as
             such; platform pushes strip to plain text server-side. */}
-        <Suspense
-          fallback={<div className="min-h-[132px] animate-pulse rounded border border-line bg-surface" aria-hidden />}
-        >
+        <Suspense fallback={<Skeleton variant="rectangular" height={132} />}>
           <RichTextEditor value={description} onChange={(html) => onChange('description', html)} />
         </Suspense>
         {(generating || canSuggestDescription) && (
-          <div className="mt-2 flex flex-wrap items-start gap-2">
-            <span className="mt-1 shrink-0 text-[11px] lowercase text-faint">
+          <Stack direction="row" spacing={1} sx={{ mt: 1, alignItems: 'flex-start', flexWrap: 'wrap', rowGap: 1 }}>
+            <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, flexShrink: 0 }}>
               {generating ? 'suggesting…' : 'ai suggestion:'}
-            </span>
+            </Typography>
             {canSuggestDescription && (
-              <button
-                type="button"
+              <Button
                 onClick={() => onChange('description', suggestedDescription)}
-                title={suggestedDescription}
-                className="flex-1 rounded border border-line px-2 py-1 text-left text-xs leading-relaxed text-muted hover:border-ink hover:text-ink"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  minHeight: 36,
+                  px: 1,
+                  py: 0.5,
+                  justifyContent: 'flex-start',
+                  textAlign: 'left',
+                  fontSize: '0.75rem',
+                  lineHeight: 1.625,
+                  borderColor: c.line,
+                  color: c.muted,
+                }}
               >
                 {suggestedDescription}
-              </button>
+              </Button>
             )}
-          </div>
+          </Stack>
         )}
-      </div>
-      <div>
-        <label className="label">Tags</label>
+      </Box>
+
+      <Box>
+        <FieldLabel>tags</FieldLabel>
         {/* Chip editor with autocomplete from the PocketBase genre list (the
             master tag vocabulary); new tags are allowed and become new genres. */}
         <TagInput tags={tags} suggestions={genres} onChange={(next) => onChange('tags', next)} />
         {(generating || unusedSuggestions.length > 0) && (
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] lowercase text-faint">
+          <Stack direction="row" spacing={0.75} sx={{ mt: 1, alignItems: 'center', flexWrap: 'wrap', rowGap: 0.75 }}>
+            <Typography variant="caption" color="text.disabled">
               {generating ? 'suggesting…' : 'suggested (ai, pre-audio):'}
-            </span>
+            </Typography>
             {unusedSuggestions.map((t) => (
-              <button
+              <Chip
                 key={t}
-                type="button"
+                label={`+ ${t}`}
+                clickable
                 onClick={() => onChange('tags', [...tags, t])}
-                className="border border-line px-2 py-0.5 text-xs text-muted hover:border-ink hover:text-ink"
-              >
-                + {t}
-              </button>
+                sx={{ height: 28 }}
+              />
             ))}
-          </div>
+          </Stack>
         )}
-      </div>
-      <div>
-        <label className="label">
-          Cover image <span className="lowercase tracking-normal text-faint">· optional</span>
-        </label>
-        <div className="flex items-center gap-3">
+      </Box>
+
+      <Box>
+        <FieldLabel>
+          cover image{' '}
+          <Box component="span" sx={{ color: c.faint }}>
+            · optional
+          </Box>
+        </FieldLabel>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
           {imageUrl && (
-            <img
+            <Box
+              component="img"
               src={imageUrl}
               alt="cover"
-              className="h-16 w-16 shrink-0 border border-line object-cover"
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.display = 'none';
+              onError={(e: React.SyntheticEvent<HTMLImageElement>) => {
+                e.currentTarget.style.display = 'none';
               }}
+              sx={{ width: 64, height: 64, flexShrink: 0, border: `1px solid ${c.line}`, objectFit: 'cover' }}
             />
           )}
-          <input
+          <Box
+            component="input"
             ref={fileRef}
             type="file"
             accept="image/*"
-            className="hidden"
-            onChange={(e) => {
+            sx={{ display: 'none' }}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
               pickCover(e.target.files?.[0]);
               e.target.value = '';
             }}
           />
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => fileRef.current?.click()}
-            className="border border-line px-3 py-1.5 text-sm lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50"
-          >
+          <Button disabled={busy} onClick={() => fileRef.current?.click()} sx={{ minHeight: 40 }}>
             {uploadCover.isPending ? 'uploading…' : imageUrl ? 'replace cover' : 'upload cover'}
-          </button>
+          </Button>
           {imageUrl && !busy && (
-            <button
-              type="button"
-              onClick={removeCover}
-              className="text-xs lowercase text-faint hover:text-danger"
-            >
-              remove
-            </button>
+            <Tooltip title="clears the image on the pocketbase record">
+              <Button
+                variant="text"
+                onClick={removeCover}
+                sx={{ fontSize: '0.6875rem', color: c.faint, '&:hover': { color: c.danger } }}
+              >
+                remove
+              </Button>
+            </Tooltip>
           )}
-        </div>
-        {uploadCover.isError && <p className="mt-1 text-[11px] text-danger">cover upload failed — try again.</p>}
-        <p className="mt-1 text-[11px] lowercase text-faint">
-          saved to the agenda record in pocketbase (the master). default: empty — mixcloud then uses a square
-          frame from ~20s into the video, and youtube keeps its own auto-chosen frame.
-        </p>
-      </div>
-    </div>
+        </Stack>
+        {uploadCover.isError && (
+          <Typography variant="caption" color="error.main" sx={{ mt: 0.5, display: 'block' }}>
+            cover upload failed — try again.
+          </Typography>
+        )}
+        <Typography variant="caption" color="text.disabled" sx={{ mt: 0.5, display: 'block' }}>
+          saved to the agenda record in pocketbase (the master). default: empty — mixcloud then uses a square frame
+          from ~20s into the video, and youtube keeps its own auto-chosen frame.
+        </Typography>
+      </Box>
+    </Stack>
   );
 }

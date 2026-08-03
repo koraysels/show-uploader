@@ -1,3 +1,14 @@
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import TextField from '@mui/material/TextField';
+import Typography from '@mui/material/Typography';
+import Accordion from '@mui/material/Accordion';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
+
 type Props = {
   autoTrimSilence: boolean;
   trimStart: string;
@@ -23,59 +34,84 @@ export default function TrimFields({
 }: Props) {
   const hasManual = !!trimStart || !!trimEnd;
   return (
-    <div className="space-y-3">
-      <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
-        <input
-          type="checkbox"
-          checked={autoTrimSilence}
-          onChange={(e) => onAutoTrimChange(e.target.checked)}
-          className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
-        />
-        Automatically trim silence at the start &amp; end
-        <span className="text-xs text-faint">— cuts dead air / intro for you</span>
-      </label>
+    <Stack spacing={1.5}>
+      <FormControlLabel
+        control={<Checkbox checked={autoTrimSilence} onChange={(e) => onAutoTrimChange(e.target.checked)} />}
+        label={
+          <Box>
+            automatically trim silence at the start &amp; end{' '}
+            <Typography component="span" variant="caption" color="text.disabled">
+              — cuts dead air / intro for you
+            </Typography>
+          </Box>
+        }
+        sx={{ alignItems: 'flex-start', ml: 0, '& .MuiCheckbox-root': { pt: 0.25 } }}
+      />
 
-      <details open={hasManual} className="text-sm">
-        <summary className="cursor-pointer select-none text-xs lowercase text-faint hover:text-ink">
-          manual trim (optional) — set exact in/out points
-        </summary>
-        <div className="mt-3">
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <label className="label">Start · blank = beginning</label>
-              <input
-                className={`field font-mono ${!isValidTime(trimStart) ? 'field-invalid' : ''}`}
-                placeholder="hh:mm:ss"
-                value={trimStart}
-                onChange={(e) => onChange('trimStart', e.target.value)}
-              />
-            </div>
-            <span className="pb-2.5 text-faint">→</span>
-            <div className="flex-1">
-              <label className="label">End · blank = end</label>
-              <input
-                className={`field font-mono ${!isValidTime(trimEnd) ? 'field-invalid' : ''}`}
-                placeholder="hh:mm:ss"
-                value={trimEnd}
-                onChange={(e) => onChange('trimEnd', e.target.value)}
-              />
-            </div>
-          </div>
+      <Accordion defaultExpanded={hasManual} disableGutters square sx={{ border: 'none', '&:before': { display: 'none' } }}>
+        {/* Without a chevron this read as a dead caption — nothing said the
+            manual fields were behind it. */}
+        <AccordionSummary
+          expandIcon={<Box sx={{ fontSize: '0.625rem', color: 'text.disabled' }}>▼</Box>}
+          sx={{
+            px: 0,
+            minHeight: 40,
+            justifyContent: 'flex-start',
+            gap: 1,
+            '& .MuiAccordionSummary-content': { my: 0, flexGrow: 0 },
+          }}
+        >
+          <Typography variant="caption" color="text.disabled">
+            manual trim (optional) — set exact in/out points
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails sx={{ px: 0, pt: 1.5 }}>
+          {/* Stacks on phones: two time fields plus an arrow never fit a narrow
+              row without the inputs becoming unusably small. */}
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{ alignItems: { sm: 'flex-end' } }}
+          >
+            <TextField
+              fullWidth
+              size="small"
+              label="start · blank = beginning"
+              placeholder="hh:mm:ss"
+              value={trimStart}
+              error={!isValidTime(trimStart)}
+              onChange={(e) => onChange('trimStart', e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+            <Typography color="text.disabled" sx={{ pb: 1, display: { xs: 'none', sm: 'block' } }}>
+              →
+            </Typography>
+            <TextField
+              fullWidth
+              size="small"
+              label="end · blank = end"
+              placeholder="hh:mm:ss"
+              value={trimEnd}
+              error={!isValidTime(trimEnd)}
+              onChange={(e) => onChange('trimEnd', e.target.value)}
+              slotProps={{ inputLabel: { shrink: true } }}
+            />
+          </Stack>
+
           {scheduledDuration && (
-            <button
-              type="button"
+            <Button
+              variant="text"
               onClick={() => onChange('trimEnd', scheduledDuration)}
-              className="mt-2 text-xs lowercase text-accent hover:underline"
-              title="set the end point to the scheduled show length"
+              sx={{ mt: 1, minHeight: 32, fontSize: '0.75rem', color: 'primary.main' }}
             >
               scheduled length ≈ {scheduledDuration} · use as end
-            </button>
+            </Button>
           )}
-          <p className="mt-2 text-xs text-faint">
-            Format HH:MM:SS (e.g. 00:04:30). Overrides auto-trim. Applied to YouTube, MixCloud and the archive.
-          </p>
-        </div>
-      </details>
-    </div>
+          <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
+            format hh:mm:ss (e.g. 00:04:30). overrides auto-trim. applied to youtube, mixcloud and the archive.
+          </Typography>
+        </AccordionDetails>
+      </Accordion>
+    </Stack>
   );
 }

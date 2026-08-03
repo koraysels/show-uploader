@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
 
 // Client-side search + pagination over a card list — shared by the archive and
 // jobs-queue pages so both behave identically.
@@ -37,34 +40,34 @@ export function Pager({
   setPage: (p: number) => void;
   unit: string;
 }) {
+  // Bigger tap targets than the old text links — these sit at the bottom of a
+  // long list, which is exactly where a thumb lands.
+  const nav = {
+    fontSize: '0.75rem',
+    color: 'text.disabled',
+    px: 1,
+    py: 0.5,
+    minHeight: 32,
+    '&:hover': { color: 'text.primary' },
+  };
   return (
-    <div className="flex items-center justify-between text-xs text-faint">
-      <span>
+    <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+      <Typography variant="caption" color="text.disabled">
         {total} {unit}
-      </span>
+      </Typography>
       {pageCount > 1 && (
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setPage(page - 1)}
-            disabled={page === 0}
-            className="lowercase hover:text-ink disabled:opacity-40"
-          >
+        <Stack direction="row" spacing={{ xs: 1, sm: 2 }} sx={{ alignItems: 'center' }}>
+          <Button variant="text" onClick={() => setPage(page - 1)} disabled={page === 0} sx={nav}>
             ← prev
-          </button>
-          <span className="tabular-nums">
+          </Button>
+          <Typography variant="caption" color="text.disabled" sx={{ fontVariantNumeric: 'tabular-nums' }}>
             {page + 1} / {pageCount}
-          </span>
-          <button
-            type="button"
-            onClick={() => setPage(page + 1)}
-            disabled={page >= pageCount - 1}
-            className="lowercase hover:text-ink disabled:opacity-40"
-          >
+          </Typography>
+          <Button variant="text" onClick={() => setPage(page + 1)} disabled={page >= pageCount - 1} sx={nav}>
             next →
-          </button>
-        </div>
+          </Button>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }

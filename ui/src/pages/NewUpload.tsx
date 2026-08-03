@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
+import MuiLink from '@mui/material/Link';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
 import {
   useShows,
   useGeneratedMeta,
@@ -20,6 +27,7 @@ import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
+import { c } from '../theme';
 
 // The agenda site hosts the archive record's admin detail page at
 // `<base>/#/archive/<recordId>`, and the record id is the same id we use as showId.
@@ -67,12 +75,38 @@ function publishTitle(name: string, date: string): string {
   return `${base} ${dmy} @ coming soon`;
 }
 
+// Inline text links are only as tall as their text — around 17px here, well
+// under a thumb. This gives them a 32px hit area without changing how they look.
+const tapLinkSx = { display: 'inline-flex', alignItems: 'center', minHeight: 32 } as const;
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="border-t border-line pt-6">
-      <h2 className="mb-4 text-[11px] lowercase tracking-wide text-faint">{title}</h2>
+    <Box component="section" sx={{ borderTop: `1px solid ${c.line}`, pt: 3 }}>
+      <Typography variant="caption" color="text.disabled" sx={{ mb: 2, display: 'block' }}>
+        {title}
+      </Typography>
       {children}
-    </section>
+    </Box>
+  );
+}
+
+// A short status line above the form (took-over notice, running job).
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <Stack
+      direction="row"
+      spacing={1.5}
+      sx={{
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        rowGap: 0.5,
+        border: `1px solid ${c.ink}`,
+        px: 1.5,
+        py: 1,
+      }}
+    >
+      {children}
+    </Stack>
   );
 }
 
@@ -240,104 +274,169 @@ export default function NewUpload() {
 
   if (!selectedShow) {
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-muted">That show isn't in the schedule (it may have loaded already).</p>
-        <Link to="/" className="btn-ghost w-fit">← Back to shows</Link>
-      </div>
+      <Stack spacing={2} sx={{ alignItems: 'flex-start' }}>
+        <Typography color="text.secondary">that show isn't in the schedule (it may have loaded already).</Typography>
+        <Button component={Link} to="/">
+          ← back to shows
+        </Button>
+      </Stack>
     );
   }
 
   if (heldByOther && !ackSteal) {
     return (
-      <div className="mx-auto max-w-md space-y-5 border border-ink bg-surface p-6">
-        <div>
-          <p className="text-[11px] lowercase tracking-wide text-faint">already being processed</p>
-          <h1 className="mt-2 text-xl font-semibold lowercase text-ink">{selectedShow.title}</h1>
-        </div>
-        <p className="text-sm text-muted">
-          <span className="text-ink">{shortName(existingClaim!.userName)}</span> is already working on this
-          {' '}({timeAgo(existingClaim!.claimedAt)}). Two people on the same show usually means duplicate work.
-        </p>
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setAckSteal(true)} className="btn-primary flex-1 py-2.5">
-            open anyway
-          </button>
-          <Link to="/" className="btn-ghost flex-1 py-2.5 text-center">back</Link>
-        </div>
-      </div>
+      <Paper variant="outlined" sx={{ mx: 'auto', maxWidth: 448, p: 3, borderColor: c.ink }}>
+        <Stack spacing={2.5}>
+          <Box>
+            <Typography variant="caption" color="text.disabled">
+              already being processed
+            </Typography>
+            <Typography variant="h1" sx={{ mt: 1 }}>
+              {selectedShow.title}
+            </Typography>
+          </Box>
+          <Typography color="text.secondary">
+            <Box component="span" sx={{ color: c.ink }}>
+              {shortName(existingClaim!.userName)}
+            </Box>{' '}
+            is already working on this ({timeAgo(existingClaim!.claimedAt)}). two people on the same show usually
+            means duplicate work.
+          </Typography>
+          {/* Stacks on phones — side by side these two fell under 44px each. */}
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+            <Button variant="contained" onClick={() => setAckSteal(true)} sx={{ flex: 1, minHeight: 44 }}>
+              open anyway
+            </Button>
+            <Button component={Link} to="/" sx={{ flex: 1, minHeight: 44 }}>
+              back
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
     );
   }
 
   return (
     <FullPageDropzone showId={selectedShow.id}>
-      <div className="mx-auto max-w-xl space-y-8">
+      <Stack spacing={4} sx={{ mx: 'auto', maxWidth: 576 }}>
         {existingClaim && existingClaim.userSub === presence.myUserId && ackSteal && (
-          <p className="border border-ink bg-paper px-3 py-2 text-xs lowercase text-muted">
-            you took this over — it's now claimed by you
-          </p>
+          <Notice>
+            <Typography variant="caption" color="text.secondary">
+              you took this over — it's now claimed by you
+            </Typography>
+          </Notice>
         )}
+
         {/* Arriving here from the archive's "replace" link (or a second tab)
             while this show still has work in flight: say so and point at it,
             rather than letting the operator queue a second run blind. */}
         {runningUpload && (
-          <p className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-ink bg-paper px-3 py-2 text-xs lowercase text-muted">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden />
-              this show already has an upload running
-            </span>
-            <Link
-              to="/history"
-              search={{ highlight: runningUpload.id }}
-              className="underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+          <Notice>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+              <Box
+                aria-hidden
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '999px',
+                  bgcolor: c.ink,
+                  animation: 'pulse 2s ease-in-out infinite',
+                  '@keyframes pulse': { '50%': { opacity: 0.3 } },
+                }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                this show already has an upload running
+              </Typography>
+            </Stack>
+            {/* Plain TanStack Link — its typed `search` doesn't survive MUI's
+                `component` generic, so the styling hangs off the wrapper. */}
+            <Box
+              sx={{
+                fontSize: '0.6875rem',
+                '& a': {
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  minHeight: 32,
+                  color: c.muted,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
+                },
+                '& a:hover': { color: c.ink },
+              }}
             >
-              view job →
-            </Link>
-          </p>
+              <Link to="/history" search={{ highlight: runningUpload.id }}>
+                view job →
+              </Link>
+            </Box>
+          </Notice>
         )}
-        <div>
-          <Link to="/" className="text-sm lowercase text-muted hover:text-ink">← to process</Link>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">{selectedShow.title}</h1>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p className="font-mono text-[13px] text-muted">
+
+        <Box>
+          <MuiLink component={Link} to="/" color="text.secondary" sx={tapLinkSx}>
+            ← to process
+          </MuiLink>
+          <Typography variant="h1" sx={{ mt: 1, textTransform: 'none' }}>
+            {selectedShow.title}
+          </Typography>
+          <Stack direction="row" spacing={1.5} sx={{ mt: 0.5, alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Typography variant="body2" color="text.secondary">
               {selectedShow.date} · {selectedShow.startTime}–{selectedShow.endTime}
-            </p>
-            <a
+            </Typography>
+            <MuiLink
               href={`${AGENDA_BASE}/#/archive/${selectedShow.id}`}
               target="_blank"
               rel="noreferrer"
-              className="text-[13px] lowercase text-muted underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+              variant="body2"
+              color="text.secondary"
+              sx={tapLinkSx}
             >
               ↗ open in agenda
-            </a>
-          </div>
-        </div>
+            </MuiLink>
+          </Stack>
+        </Box>
 
         {pendingVideos.length > 0 && (
-          <Section title="From drop folder">
-            <div className="space-y-1.5">
-              {pendingVideos.map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  onClick={() => {
-                    setPickedVideo({ s3_key: v.s3_key, filename: v.filename });
-                    setSelectedPendingId(v.id);
-                  }}
-                  className={`flex w-full items-center justify-between rounded-lg border px-3.5 py-2.5 text-sm transition-colors ${
-                    selectedPendingId === v.id
-                      ? 'border-accent bg-accent-soft/60 text-ink'
-                      : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink'
-                  }`}
-                >
-                  <span className="truncate font-mono text-[13px]">{v.filename}</span>
-                  <span className="ml-3 shrink-0 text-xs text-faint">{(v.size_bytes / 1e9).toFixed(1)} GB</span>
-                </button>
-              ))}
-            </div>
+          <Section title="from drop folder">
+            <Stack spacing={0.75}>
+              {pendingVideos.map((v) => {
+                const on = selectedPendingId === v.id;
+                return (
+                  <ButtonBase
+                    key={v.id}
+                    onClick={() => {
+                      setPickedVideo({ s3_key: v.s3_key, filename: v.filename });
+                      setSelectedPendingId(v.id);
+                    }}
+                    aria-pressed={on}
+                    sx={{
+                      display: 'flex',
+                      width: '100%',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 1.5,
+                      px: 1.75,
+                      py: 1.25,
+                      minHeight: 44,
+                      border: `1px solid ${on ? c.ink : c.line}`,
+                      backgroundColor: on ? c.accentSoft : c.surface,
+                      color: on ? c.ink : c.muted,
+                      '&:hover': { borderColor: c.ink, color: c.ink },
+                    }}
+                  >
+                    <Typography variant="body2" noWrap sx={{ minWidth: 0 }}>
+                      {v.filename}
+                    </Typography>
+                    <Typography variant="caption" color="text.disabled" sx={{ flexShrink: 0 }}>
+                      {(v.size_bytes / 1e9).toFixed(1)} GB
+                    </Typography>
+                  </ButtonBase>
+                );
+              })}
+            </Stack>
           </Section>
         )}
 
-        <Section title="Details">
+        <Section title="details">
           <MetadataForm
             showId={selectedShow.id}
             title={title}
@@ -353,41 +452,72 @@ export default function NewUpload() {
               they survive a refresh / navigation, without waiting for the upload to
               finish. PocketBase is the master; the description is the episode's own
               notes (not the AI copy, which is just a suggestion above). */}
-          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-line pt-4">
-            <button
-              type="button"
+          <Stack
+            direction="row"
+            spacing={1.5}
+            sx={{
+              mt: 2,
+              pt: 2,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              rowGap: 1,
+              borderTop: `1px solid ${c.line}`,
+            }}
+          >
+            <Button
               disabled={saveMeta.isPending || !title.trim()}
               onClick={() => saveMeta.mutate({ id: selectedShow.id, title, description, tags })}
-              className="border border-line px-4 py-2 text-sm lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50"
+              sx={{ minHeight: 40, borderColor: c.line, color: c.muted }}
             >
               {saveMeta.isPending ? 'saving…' : 'save to agenda'}
-            </button>
+            </Button>
             {saveMeta.isSuccess && !saveMeta.isPending && (
-              <span className="text-xs lowercase text-ok">✓ saved to agenda</span>
+              <Typography variant="caption" color="success.main">
+                ✓ saved to agenda
+              </Typography>
             )}
-            {saveMeta.isError && <span className="text-xs lowercase text-danger">save failed — try again</span>}
-            <span className="ml-auto text-[11px] lowercase text-faint">pocketbase is the master · persists now</span>
-          </div>
+            {saveMeta.isError && (
+              <Typography variant="caption" color="error.main">
+                save failed — try again
+              </Typography>
+            )}
+            <Typography variant="caption" color="text.disabled" sx={{ ml: { sm: 'auto' } }}>
+              pocketbase is the master · persists now
+            </Typography>
+          </Stack>
         </Section>
 
-        <Section title="Video">
+        <Section title="video">
           {video.state === 'ready' ? (
-            <div className="flex items-center justify-between border border-ok/40 bg-ok-soft px-4 py-3">
-              <span className="truncate text-sm text-ink">✓ {videoFilename || 'video ready'}</span>
-              <button
-                type="button"
+            <Stack
+              direction="row"
+              spacing={1.5}
+              sx={{
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                border: `1px solid ${c.ok}`,
+                backgroundColor: c.okSoft,
+                px: 2,
+                py: 1.5,
+              }}
+            >
+              <Typography noWrap sx={{ minWidth: 0 }}>
+                ✓ {videoFilename || 'video ready'}
+              </Typography>
+              <Button
+                variant="text"
                 onClick={handleReplace}
-                className="shrink-0 text-xs text-faint hover:text-danger"
+                sx={{ flexShrink: 0, minHeight: 32, fontSize: '0.6875rem', color: c.faint, '&:hover': { color: c.danger } }}
               >
                 replace
-              </button>
-            </div>
+              </Button>
+            </Stack>
           ) : (
             showId && <UploadControl showId={showId} />
           )}
         </Section>
 
-        <Section title="Trim">
+        <Section title="trim">
           <TrimFields
             autoTrimSilence={autoTrimSilence}
             trimStart={trimStart}
@@ -401,7 +531,7 @@ export default function NewUpload() {
           />
         </Section>
 
-        <Section title="Publish to">
+        <Section title="publish to">
           <PlatformSelector
             platforms={platforms}
             includeJingle={includeJingle}
@@ -413,17 +543,22 @@ export default function NewUpload() {
           />
         </Section>
 
-        <div className="border-t border-line pt-6">
-          <button onClick={handleSubmit} disabled={!canSubmit} className="btn-primary w-full py-3 text-[15px]">
+        <Box sx={{ borderTop: `1px solid ${c.line}`, pt: 3 }}>
+          <Button
+            variant="contained"
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            sx={{ width: '100%', minHeight: 48, fontSize: '0.9375rem' }}
+          >
             {createUpload.isPending ? 'starting…' : 'save & start platform uploads'}
-          </button>
-          <p className="mt-2 text-center text-xs text-faint">
+          </Button>
+          <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>
             {!videoS3Key
               ? 'add a video to start.'
               : 'uploads to youtube/mixcloud + syncs the draft. publishing the agenda record is a separate step (archive page).'}
-          </p>
-        </div>
-      </div>
+          </Typography>
+        </Box>
+      </Stack>
     </FullPageDropzone>
   );
 }

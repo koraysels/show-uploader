@@ -1,9 +1,19 @@
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Link } from '@tanstack/react-router';
 import prettyBytes from 'pretty-bytes';
 import prettyMs from 'pretty-ms';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
+import LinearProgress from '@mui/material/LinearProgress';
+import Paper from '@mui/material/Paper';
+import Popover from '@mui/material/Popover';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
+import { c, withAlpha } from '../theme';
 
 const OpenContext = createContext<() => void>(() => {});
 
@@ -23,19 +33,34 @@ export function FullPageDropzone({ children, showId }: { children: ReactNode; sh
     accept: { 'video/*': ['.mkv', '.mp4', '.mov', '.webm'] },
   });
 
+  const { ref: rootRef, ...rootProps } = getRootProps();
+
   return (
-    <div {...getRootProps({ className: 'relative min-h-screen' })}>
+    <Box {...rootProps} ref={rootRef} sx={{ position: 'relative', minHeight: '100vh' }}>
       <input {...getInputProps()} />
       <OpenContext.Provider value={open}>{children}</OpenContext.Provider>
       {isDragActive && (
-        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-paper/80 backdrop-blur-sm">
-          <div className="rounded-2xl border-2 border-dashed border-accent px-16 py-12 text-center">
-            <p className="font-display text-xl font-semibold text-ink">Drop to upload</p>
-            <p className="mt-1 text-sm text-muted">MKV · MP4 · MOV · WebM — resumable</p>
-          </div>
-        </div>
+        <Stack
+          sx={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1300,
+            alignItems: 'center',
+            justifyContent: 'center',
+            pointerEvents: 'none',
+            backgroundColor: withAlpha(c.paper, 0.8),
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          <Box sx={{ border: `2px dashed ${c.ink}`, px: { xs: 4, sm: 8 }, py: { xs: 6, sm: 6 }, textAlign: 'center' }}>
+            <Typography variant="h2">drop to upload</Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              mkv · mp4 · mov · webm — resumable
+            </Typography>
+          </Box>
+        </Stack>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -58,53 +83,88 @@ export function UploadControl({ showId }: { showId: string }) {
 
   if (item?.status === 'uploading') {
     return (
-      <div className="rounded-xl border border-line bg-surface p-5">
-        <div className="flex items-center justify-between gap-3">
-          <span className="truncate text-sm text-ink">{item.filename}</span>
-          <button type="button" onClick={() => cancel(showId)} className="shrink-0 text-xs text-faint hover:text-danger">
-            Cancel
-          </button>
-        </div>
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-line">
-          <div className="h-full rounded-full bg-accent transition-all duration-300" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="mt-2 text-xs text-muted">
+      <Paper variant="outlined" sx={{ p: 2.5 }}>
+        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography noWrap sx={{ minWidth: 0 }}>
+            {item.filename}
+          </Typography>
+          <Button
+            variant="text"
+            onClick={() => cancel(showId)}
+            sx={{ flexShrink: 0, fontSize: '0.6875rem', color: c.faint, '&:hover': { color: c.danger } }}
+          >
+            cancel
+          </Button>
+        </Stack>
+        <LinearProgress variant="determinate" value={pct} sx={{ mt: 1.5 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
           {pct}% · {stats(item.uploadedBytes, item.totalBytes, item.bytesPerSec)} · resumable
-        </p>
-      </div>
+        </Typography>
+      </Paper>
     );
   }
 
   if (item?.status === 'done') {
     return (
-      <div className="flex items-center justify-between rounded-xl border border-ok/40 bg-ok-soft px-5 py-4">
-        <span className="truncate text-sm text-ink">{item.filename}</span>
-        <span className="shrink-0 text-sm font-medium text-ok">✓ ready</span>
-      </div>
+      <Stack
+        direction="row"
+        spacing={1.5}
+        sx={{
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          border: `1px solid ${c.ok}`,
+          backgroundColor: c.okSoft,
+          px: 2.5,
+          py: 2,
+        }}
+      >
+        <Typography noWrap sx={{ minWidth: 0 }}>
+          {item.filename}
+        </Typography>
+        <Typography color="success.main" sx={{ flexShrink: 0, fontWeight: 500 }}>
+          ✓ ready
+        </Typography>
+      </Stack>
     );
   }
 
+  const failed = item?.status === 'error';
   return (
-    <button
-      type="button"
+    <ButtonBase
       onClick={open}
-      className={`w-full rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-        item?.status === 'error' ? 'border-danger/50 bg-danger-soft' : 'border-line hover:border-accent hover:bg-accent-soft/40'
-      }`}
+      sx={{
+        width: '100%',
+        display: 'block',
+        px: 3,
+        py: 5,
+        textAlign: 'center',
+        border: `2px dashed ${failed ? c.danger : c.line}`,
+        backgroundColor: failed ? c.dangerSoft : 'transparent',
+        transition: 'border-color 0.12s ease, background-color 0.12s ease',
+        '&:hover': failed ? {} : { borderColor: c.ink, backgroundColor: c.accentSoft },
+      }}
     >
-      {item?.status === 'error' ? (
+      {failed ? (
         <>
-          <p className="text-sm font-medium text-danger">Upload failed</p>
-          <p className="mt-1 text-xs text-muted">{item.error}</p>
-          <p className="mt-2 text-xs text-faint">Click to choose a file and retry</p>
+          <Typography color="error.main" sx={{ fontWeight: 500 }}>
+            upload failed
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            {item.error}
+          </Typography>
+          <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
+            tap to choose a file and retry
+          </Typography>
         </>
       ) : (
         <>
-          <p className="text-sm font-medium text-ink">Drop a video anywhere</p>
-          <p className="mt-1 text-xs text-muted">or click to browse · resumable, keeps going as you navigate</p>
+          <Typography sx={{ fontWeight: 500 }}>drop a video anywhere</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+            or tap to browse · resumable, keeps going as you navigate
+          </Typography>
         </>
       )}
-    </button>
+    </ButtonBase>
   );
 }
 
@@ -114,28 +174,52 @@ function IndicatorRow({ item, compact }: { item: UploadItem; compact?: boolean }
   const { cancel } = useUpload();
   const pct = Math.round(item.fraction * 100);
   return (
-    <span className={`flex items-center gap-2 text-xs text-muted ${compact ? '' : 'w-full px-1 py-1'}`}>
-      <Link to="/upload/$showId" params={{ showId: item.showId }} className="flex min-w-0 items-center gap-2 hover:text-ink">
-        <span className="max-w-[140px] truncate">{item.filename}</span>
-        <span className="h-1 w-20 shrink-0 overflow-hidden rounded-full bg-line">
-          <span className="block h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-        </span>
-        <span className="shrink-0 tabular-nums">{pct}%</span>
-      </Link>
-      <button
-        type="button"
-        onClick={() => cancel(item.showId)}
-        title="cancel upload"
-        className="shrink-0 text-faint hover:text-danger"
+    <Stack
+      direction="row"
+      spacing={1}
+      sx={{ alignItems: 'center', width: compact ? 'auto' : '100%', px: compact ? 0 : 0.5, py: compact ? 0 : 0.5 }}
+    >
+      {/* TanStack's Link carries typed route params, which don't survive MUI's
+          `component` generic — so it stays a plain Link and the styling hangs
+          off the wrapper. */}
+      <Box
+        sx={{
+          minWidth: 0,
+          '& a': { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: c.muted, textDecoration: 'none' },
+          '& a:hover': { color: c.ink },
+        }}
       >
-        ✕
-      </button>
-    </span>
+        <Link to="/upload/$showId" params={{ showId: item.showId }}>
+          <Typography variant="caption" noWrap sx={{ maxWidth: 140 }}>
+            {item.filename}
+          </Typography>
+          <LinearProgress
+            variant="determinate"
+            value={pct}
+            sx={{ width: 80, height: 4, flexShrink: 0 }}
+          />
+          <Typography variant="caption" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+            {pct}%
+          </Typography>
+        </Link>
+      </Box>
+      <Tooltip title="cancel upload">
+        <Button
+          variant="text"
+          onClick={() => cancel(item.showId)}
+          aria-label={`cancel upload of ${item.filename}`}
+          sx={{ flexShrink: 0, minWidth: 24, color: c.faint, '&:hover': { color: c.danger } }}
+        >
+          ✕
+        </Button>
+      </Tooltip>
+    </Stack>
   );
 }
 
 export function UploadIndicator() {
   const { uploads } = useUpload();
+  const anchorRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const active = Object.values(uploads).filter((u) => u.status === 'uploading');
 
@@ -144,23 +228,43 @@ export function UploadIndicator() {
 
   const avg = Math.round((active.reduce((s, u) => s + u.fraction, 0) / active.length) * 100);
   return (
-    <div className="relative">
-      <button
-        type="button"
+    <>
+      <Button
+        ref={anchorRef}
+        variant="text"
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 text-xs text-muted hover:text-ink"
+        sx={{ gap: 0.75, fontSize: '0.6875rem', color: c.muted, '&:hover': { textDecoration: 'none', color: c.ink } }}
       >
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" aria-hidden />
+        <Box
+          aria-hidden
+          sx={{
+            width: 6,
+            height: 6,
+            borderRadius: '999px',
+            bgcolor: c.ink,
+            animation: 'pulse 2s ease-in-out infinite',
+            '@keyframes pulse': { '50%': { opacity: 0.3 } },
+          }}
+        />
         {active.length} uploading · {avg}%
-        <span className="text-[9px]">{open ? '▲' : '▼'}</span>
-      </button>
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-72 space-y-0.5 border border-line bg-surface p-2 shadow-md">
+        <Box component="span" sx={{ fontSize: '0.5625rem' }}>
+          {open ? '▲' : '▼'}
+        </Box>
+      </Button>
+      <Popover
+        open={open}
+        anchorEl={anchorRef.current}
+        onClose={() => setOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{ paper: { variant: 'outlined', sx: { mt: 1, width: 288, p: 1 } } }}
+      >
+        <Stack spacing={0.25}>
           {active.map((u) => (
             <IndicatorRow key={u.showId} item={u} />
           ))}
-        </div>
-      )}
-    </div>
+        </Stack>
+      </Popover>
+    </>
   );
 }

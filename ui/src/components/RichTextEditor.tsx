@@ -1,6 +1,12 @@
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useEffect } from 'react';
+import Box from '@mui/material/Box';
+import Divider from '@mui/material/Divider';
+import Stack from '@mui/material/Stack';
+import ToggleButton from '@mui/material/ToggleButton';
+import Tooltip from '@mui/material/Tooltip';
+import { c } from '../theme';
 
 // Rich-text editor for the archive description — the notes field is HTML on the
 // agenda (same as the react-admin editor there), so we edit it as rich text and
@@ -23,18 +29,33 @@ function ToolbarButton({
   active?: boolean;
 }) {
   return (
-    <button
-      type="button"
-      title={title}
-      onMouseDown={(e) => e.preventDefault()} // keep the editor selection
-      onClick={onClick}
-      disabled={!editor.isEditable}
-      className={`min-w-7 rounded px-1.5 py-0.5 text-xs leading-none ${
-        active ? 'bg-ink text-paper' : 'text-muted hover:bg-line'
-      }`}
-    >
-      {label}
-    </button>
+    // Tooltip, not `title` — `title` never fires on touch, so on a phone these
+    // single-glyph buttons had no way to explain themselves.
+    <Tooltip title={title}>
+      <ToggleButton
+        value={title}
+        selected={!!active}
+        size="small"
+        aria-label={title}
+        onMouseDown={(e) => e.preventDefault()} // keep the editor selection
+        onClick={onClick}
+        disabled={!editor.isEditable}
+        sx={{
+          // 32px keeps the toolbar usable with a thumb without making it bulky.
+          minWidth: 32,
+          height: 32,
+          px: 1,
+          border: 'none',
+          fontSize: '0.75rem',
+          lineHeight: 1,
+          color: c.muted,
+          '&:hover': { backgroundColor: c.line },
+          '&.Mui-selected': { backgroundColor: c.ink, color: c.paper, '&:hover': { backgroundColor: c.inkHover } },
+        }}
+      >
+        {label}
+      </ToggleButton>
+    </Tooltip>
   );
 }
 
@@ -57,9 +78,7 @@ export default function RichTextEditor({
       onChange(html === '<p></p>' ? '' : html);
     },
     editorProps: {
-      attributes: {
-        class: 'tiptap min-h-[96px] px-3 py-2 leading-relaxed focus:outline-none',
-      },
+      attributes: { class: 'tiptap' },
     },
   });
 
@@ -78,23 +97,38 @@ export default function RichTextEditor({
 
   if (!editor) return null;
 
-  const btn = 'flex flex-wrap items-center gap-0.5 border-b border-line bg-surface px-1.5 py-1';
-
   return (
-    <div className="rounded border border-line bg-paper focus-within:border-ink">
-      <div className={btn}>
+    <Box
+      sx={{
+        border: `1px solid ${c.line}`,
+        backgroundColor: c.surface,
+        '&:focus-within': { borderColor: c.ink },
+        '& .tiptap': { minHeight: 96, px: 1.5, py: 1, lineHeight: 1.625, outline: 'none' },
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={0.25}
+        sx={{
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          borderBottom: `1px solid ${c.line}`,
+          px: 0.75,
+          py: 0.5,
+        }}
+      >
         <ToolbarButton editor={editor} label="B" title="bold" active={editor.isActive('bold')} onClick={() => editor.chain().focus().toggleBold().run()} />
         <ToolbarButton editor={editor} label="I" title="italic" active={editor.isActive('italic')} onClick={() => editor.chain().focus().toggleItalic().run()} />
-        <span className="mx-1 h-4 w-px bg-line" aria-hidden />
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.75 }} />
         <ToolbarButton editor={editor} label="H2" title="heading" active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} />
-        <ToolbarButton editor={editor} label="• List" title="bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} />
-        <ToolbarButton editor={editor} label="1. List" title="ordered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
+        <ToolbarButton editor={editor} label="•" title="bullet list" active={editor.isActive('bulletList')} onClick={() => editor.chain().focus().toggleBulletList().run()} />
+        <ToolbarButton editor={editor} label="1." title="ordered list" active={editor.isActive('orderedList')} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
         <ToolbarButton editor={editor} label="❝" title="quote" active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
-        <span className="mx-1 h-4 w-px bg-line" aria-hidden />
+        <Divider orientation="vertical" flexItem sx={{ mx: 0.5, my: 0.75 }} />
         <ToolbarButton editor={editor} label="↶" title="undo" onClick={() => editor.chain().focus().undo().run()} />
         <ToolbarButton editor={editor} label="↷" title="redo" onClick={() => editor.chain().focus().redo().run()} />
-      </div>
+      </Stack>
       <EditorContent editor={editor} placeholder={placeholder} />
-    </div>
+    </Box>
   );
 }
