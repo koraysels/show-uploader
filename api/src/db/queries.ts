@@ -86,6 +86,25 @@ export function listUploadsWithJobs(db: Sql) {
   `;
 }
 
+// Uploads whose video archive is still in its original container. The archive
+// job remuxes those to MP4 in place, so this is the backfill worklist for
+// recordings that predate that step.
+export function listUploadsNeedingRemux(db: Sql) {
+  return db<(ShowUpload & { jobs: PlatformJob[] })[]>`
+    SELECT
+      u.*,
+      COALESCE(
+        json_agg(j ORDER BY j.created_at) FILTER (WHERE j.id IS NOT NULL),
+        '[]'
+      ) AS jobs
+    FROM show_uploads u
+    LEFT JOIN platform_jobs j ON j.upload_id = u.id
+    WHERE u.video_s3_key NOT ILIKE '%.mp4'
+    GROUP BY u.id
+    ORDER BY u.created_at DESC
+  `;
+}
+
 export function updateJobStatus(
   db: Sql,
   jobId: string,

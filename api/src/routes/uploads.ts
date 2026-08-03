@@ -19,6 +19,7 @@ import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
 import { withDownloadUrls } from '../services/upload-urls';
+import { enqueueArchiveJob } from '../services/archive-jobs';
 import { getLiveState } from '../services/live-guard';
 import { updateArchiveRecord, resolveGenreIds, removeArchiveMediaLink } from '../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata, setYoutubePublic, getYoutubePrivacyStatus } from '../services/platform-metadata';
@@ -246,25 +247,8 @@ uploadsRouter.post('/:uploadId/archive', async (req, res) => {
   try {
     const upload = await getUploadWithJobs(db, req.params.uploadId);
     if (!upload) return res.status(404).json({ error: 'Upload not found' });
-    let job = upload.jobs.find((j) => j.platform === 'archive');
-    if (job?.status === 'processing') return res.status(409).json({ error: 'Already generating' });
-    if (!job) job = await createPlatformJob(db, { upload_id: upload.id, platform: 'archive' });
-    else await resetPlatformJobForRetry(db, job.id);
-    await uploadQueue.add('archive', {
-      jobId: job.id,
-      uploadId: upload.id,
-      platform: 'archive',
-      videoS3Key: upload.video_s3_key,
-      title: upload.title,
-      description: upload.description ?? '',
-      tags: upload.tags ?? [],
-      imageUrl: upload.image_url,
-      jingleS3Key: upload.jingle_s3_key,
-      includeJingle: false,
-      autoTrimSilence: true,
-      trimStart: upload.trim_start,
-      trimEnd: upload.trim_end,
-    });
+    const queued = await enqueueArchiveJob(db, upload);
+    if (!queued) return res.status(409).json({ error: 'Already generating' });
     res.json({ ok: true });
   } catch (err) {
     console.error('Failed to enqueue audio archive:', err);

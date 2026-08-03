@@ -8,6 +8,7 @@ import {
   usePlatformSetPublic,
   useShow,
   useSyncPlatforms,
+  useRemuxBackfill,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
@@ -171,6 +172,26 @@ function DownloadLink({ url, label }: { url: string | null; label: string }) {
   );
 }
 
+// Inline playback of the archived recording. Native controls give scrubbing for
+// free: the presigned S3 GET honours range requests and the remuxed MP4 carries
+// its moov atom up front (+faststart), so seeking doesn't pull the whole file.
+function VideoPlayer({ url }: { url: string }) {
+  return (
+    <div className="mt-4 border border-line bg-paper p-2">
+      <video
+        src={url}
+        controls
+        preload="metadata"
+        playsInline
+        className="max-h-[70vh] w-full bg-black"
+      />
+      <p className="mt-2 text-[11px] lowercase text-faint">
+        recordings are HEVC — Safari and Chrome play them, Firefox may not. the download always works.
+      </p>
+    </div>
+  );
+}
+
 function Spinner() {
   return <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-line border-t-accent" aria-hidden />;
 }
@@ -204,8 +225,12 @@ function AudioCell({ upload }: { upload: UploadWithJobs }) {
 // upload.image_url snapshot — so the thumbnail is always the current agenda image.
 function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: string | null }) {
   const [syncOpen, setSyncOpen] = useState(false);
+  const [playerOpen, setPlayerOpen] = useState(false);
   const publish = usePublishRecord();
   const pub = publishedJobs(upload);
+  // Only the remuxed MP4 plays in a browser; an upload still stored as MKV stays
+  // download-only until its archive job has run.
+  const playable = !!upload.video_url && /\.mp4$/i.test(upload.video_s3_key);
   // Editing happens in the PocketBase agenda admin — the master record. There's
   // no duplicate record here, so the "edit" action just opens it there.
   const agendaUrl = `${AGENDA_BASE}/#/archive/${upload.show_id}`;
@@ -233,6 +258,15 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
               <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
             ))}
             <span className="text-line" aria-hidden>|</span>
+            {playable && (
+              <button
+                type="button"
+                onClick={() => setPlayerOpen((v) => !v)}
+                className="font-medium text-accent hover:underline"
+              >
+                {playerOpen ? 'close player' : 'Watch ▸'}
+              </button>
+            )}
             <DownloadLink url={upload.video_url} label="Video" />
             <AudioCell upload={upload} />
             <span className="ml-auto flex items-center gap-3">
@@ -270,10 +304,49 @@ function ArchiveCard({ upload, coverUrl }: { upload: UploadWithJobs; coverUrl: s
             </span>
           </div>
 
+          {playerOpen && playable && <VideoPlayer url={upload.video_url} />}
           {syncOpen && <SyncPanel showId={upload.show_id} links={links} />}
         </div>
       </div>
     </div>
+  );
+}
+
+// Which uploads the backfill will actually pick up. Mirrors the server rule in
+// api/src/services/archive-jobs.ts (readyToArchive) so the button's count never
+// promises more than the mutation converts: the archive job replaces the source
+// video on S3, so it only runs once every platform job is done with it.
+function needsMp4Remux(u: UploadWithJobs): boolean {
+  if (/\.mp4$/i.test(u.video_s3_key)) return false;
+  const platform = u.jobs.filter((j) => j.platform !== 'archive');
+  return platform.length > 0 && platform.every((j) => j.status === 'done');
+}
+
+// Older recordings sit on S3 in their original container and can't be played in
+// the browser. Offer the one-shot conversion only while some are left.
+function RemuxBackfill({ pending }: { pending: number }) {
+  const backfill = useRemuxBackfill();
+  if (!pending) return null;
+  if (backfill.isSuccess)
+    return (
+      <span className="text-xs lowercase text-ok">
+        ✓ converting {backfill.data.enqueued} recording{backfill.data.enqueued === 1 ? '' : 's'} — watch the progress bars
+      </span>
+    );
+  return (
+    <button
+      type="button"
+      onClick={() => backfill.mutate()}
+      disabled={backfill.isPending}
+      className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink disabled:opacity-50"
+      title="re-run the archive job on older recordings so they play in the browser"
+    >
+      {backfill.isPending
+        ? 'starting…'
+        : backfill.isError
+          ? 'retry conversion'
+          : `convert ${pending} older recording${pending === 1 ? '' : 's'} to mp4`}
+    </button>
   );
 }
 
@@ -285,17 +358,21 @@ export default function Archive() {
     .filter((u) => publishedJobs(u).length > 0)
     .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
   const paged = usePaged(archived, (u) => u.title);
+  const needsRemux = uploads.filter(needsMp4Remux).length;
 
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">archive</h1>
-        <input
-          value={paged.query}
-          onChange={(e) => paged.setQuery(e.target.value)}
-          placeholder="Filter archive…"
-          className="field w-full sm:w-64"
-        />
+        <div className="flex flex-wrap items-center gap-4">
+          <RemuxBackfill pending={needsRemux} />
+          <input
+            value={paged.query}
+            onChange={(e) => paged.setQuery(e.target.value)}
+            placeholder="Filter archive…"
+            className="field w-full sm:w-64"
+          />
+        </div>
       </header>
       {isPending ? (
         <ListSkeleton />

@@ -3,6 +3,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
@@ -46,6 +47,19 @@ export async function uploadToS3(localPath: string, key: string, contentType: st
       ContentLength: stat.size,
     })
   );
+}
+
+// Byte size of an object, or null if it isn't there. Used to prove a freshly
+// uploaded file actually landed before the original it replaces is deleted.
+export async function objectSize(key: string): Promise<number | null> {
+  try {
+    const head = await s3.send(
+      new HeadObjectCommand({ Bucket: (env.S3_BUCKET ?? ''), Key: key })
+    );
+    return head.ContentLength ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function deleteFromS3(key: string): Promise<void> {

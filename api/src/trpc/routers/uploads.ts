@@ -14,7 +14,9 @@ import {
   updateUploadMetadata,
   listStagedShowIds,
   listUploadingSessions,
+  listUploadsNeedingRemux,
 } from '../../db/queries';
+import { enqueueArchiveJob, readyToArchive } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue } from '../../queue';
 import { createDownloadPresignedUrl, listUploadedParts } from '../../services/s3';
@@ -267,30 +269,33 @@ export const uploadsRouter = router({
     try {
       const upload = await getUploadWithJobs(db, input.uploadId);
       if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
-      let job = upload.jobs.find((j) => j.platform === 'archive');
-      if (job?.status === 'processing') {
-        throw new TRPCError({ code: 'CONFLICT', message: 'Already generating' });
-      }
-      if (!job) job = await createPlatformJob(db, { upload_id: upload.id, platform: 'archive' });
-      else await resetPlatformJobForRetry(db, job.id);
-      await uploadQueue.add('archive', {
-        jobId: job.id,
-        uploadId: upload.id,
-        platform: 'archive',
-        videoS3Key: upload.video_s3_key,
-        title: upload.title,
-        description: upload.description ?? '',
-        tags: upload.tags ?? [],
-        imageUrl: upload.image_url,
-        jingleS3Key: upload.jingle_s3_key,
-        includeJingle: false,
-        autoTrimSilence: true,
-        trimStart: upload.trim_start,
-        trimEnd: upload.trim_end,
-      });
+      const queued = await enqueueArchiveJob(db, upload);
+      if (!queued) throw new TRPCError({ code: 'CONFLICT', message: 'Already generating' });
       return { ok: true };
     } catch (err) {
       internal(err, 'Failed to enqueue audio archive:', 'Failed to generate audio');
+    }
+  }),
+
+  // Backfill for recordings that predate the MP4 remux: re-run the archive job
+  // on every upload whose video is still in its original container. The job is
+  // the same one a single upload gets, so this needs no separate code path —
+  // and it's safe to run twice, since an upload drops off the list once its
+  // video_s3_key ends in .mp4.
+  remuxBackfill: protectedProcedure.mutation(async () => {
+    try {
+      const pending = await listUploadsNeedingRemux(db);
+      let enqueued = 0;
+      for (const upload of pending) {
+        // Same precondition the worker uses before auto-enqueuing an archive:
+        // the archive replaces the source video on S3, so it must not run while
+        // a platform job still needs the original file.
+        if (!readyToArchive(upload.jobs)) continue;
+        if (await enqueueArchiveJob(db, upload)) enqueued++;
+      }
+      return { enqueued, skipped: pending.length - enqueued };
+    } catch (err) {
+      internal(err, 'Failed to enqueue remux backfill:', 'Failed to start remux');
     }
   }),
 

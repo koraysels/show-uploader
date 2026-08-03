@@ -60,6 +60,18 @@ export async function setAudioKey(uploadId: string, key: string) {
   await db`UPDATE show_uploads SET audio_s3_key = ${key} WHERE id = ${uploadId}`;
 }
 
+// Repoint the video archive at the remuxed MP4. Clearing the trim is required,
+// not cosmetic: the retry endpoints rebuild job payloads from this row, and the
+// new file is *already* trimmed — leaving the bounds in place would cut a
+// retried job a second time.
+export async function setVideoKey(uploadId: string, key: string) {
+  await db`
+    UPDATE show_uploads
+    SET video_s3_key = ${key}, trim_start = NULL, trim_end = NULL
+    WHERE id = ${uploadId}
+  `;
+}
+
 export async function createArchiveJobRecord(uploadId: string): Promise<string | null> {
   const rows = await db<{ id: string }[]>`
     INSERT INTO platform_jobs (upload_id, platform)

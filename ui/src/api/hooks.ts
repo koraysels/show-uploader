@@ -128,6 +128,17 @@ export function useGenerateAudio() {
   });
 }
 
+// One-shot backfill: re-runs the archive job on every upload still stored in
+// its original container, converting them to browser-playable MP4.
+export function useRemuxBackfill() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    mutationFn: () => trpcClient.uploads.remuxBackfill.mutate(),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+  });
+}
+
 // Cover image lives in the PocketBase record; changing it invalidates shows so
 // every view (form, archive) reflects the new master cover.
 export function useUploadCover(showId: string | undefined) {

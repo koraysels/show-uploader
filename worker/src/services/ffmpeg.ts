@@ -19,31 +19,88 @@ function applyTrim(cmd: ffmpeg.FfmpegCommand, trimStart?: string | null, trimEnd
   }
 }
 
+// Codecs an MP4/M4A container can hold as-is. Anything else (OBS can be set to
+// record uncompressed PCM, or Opus) must be re-encoded — the .m4a "ipod" muxer
+// rejects them at header-write time with AVERROR(EINVAL), i.e. exit code 234.
+const MP4_AUDIO_CODECS = new Set(['aac', 'alac']);
+
+async function probeStreams(
+  input: string
+): Promise<{ audioCodec: string | null; videoCodec: string | null }> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(input, (err, data) => {
+      // Fail open: an unreadable probe degrades to "re-encode", never to a throw.
+      if (err || !data?.streams) return resolve({ audioCodec: null, videoCodec: null });
+      const find = (kind: string) =>
+        data.streams.find((s) => s.codec_type === kind)?.codec_name ?? null;
+      resolve({ audioCodec: find('audio'), videoCodec: find('video') });
+    });
+  });
+}
+
+const FFMPEG_ERROR_LINE = /error|could not|unable to|invalid|failed|no such|denied|not supported/i;
+
+/**
+ * Run an ffmpeg command, rejecting with the *real* ffmpeg error.
+ *
+ * fluent-ffmpeg's own error text is useless: its extractError() drops every
+ * stderr line starting with '[', which is exactly where ffmpeg puts the cause,
+ * leaving only a bare "Conversion failed!". So keep a tail of stderr ourselves.
+ * The full tail goes to the worker log; the thrown message — which ends up in
+ * the job row and is rendered on one line in the UI — carries only the lines
+ * that actually name a cause.
+ */
+function runCommand(cmd: ffmpeg.FfmpegCommand, onProgress?: (pct: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tail: string[] = [];
+    cmd.on('stderr', (line: string) => {
+      if (!line.trim()) return;
+      tail.push(line);
+      if (tail.length > 40) tail.shift();
+    });
+
+    if (onProgress) {
+      cmd.on('progress', (p: { percent?: number }) => {
+        onProgress(Math.min(99, Math.round(p.percent ?? 0)));
+      });
+    }
+
+    cmd
+      .on('end', () => resolve())
+      .on('error', (err: Error) => {
+        if (!tail.length) return reject(err);
+        console.error(`ffmpeg failed:\n${tail.join('\n')}`);
+        const causes = tail.filter((l) => FFMPEG_ERROR_LINE.test(l)).slice(-3);
+        reject(new Error([err.message, ...causes].join(' | ')));
+      })
+      .run();
+  });
+}
+
 export async function extractAudio(
   videoPath: string,
   outputPath: string,
   opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    // Direct AAC stream copy out of the MKV — no re-encode, so no quality loss.
-    // (OBS records AAC; the .m4a container just rewraps the same audio stream.)
-    const cmd = ffmpeg(videoPath)
-      .noVideo()
-      .audioCodec('copy');
+  const { audioCodec } = await probeStreams(videoPath);
 
-    applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
+  const cmd = ffmpeg(videoPath).noVideo();
 
-    cmd.outputOptions('-movflags', '+faststart');
-    cmd.output(outputPath);
+  // Stream-copy when the source audio already fits the .m4a container (OBS set
+  // to AAC) — no re-encode, no quality loss. Otherwise encode to AAC: a copy of
+  // e.g. pcm_s16le into .m4a fails outright, it does not degrade gracefully.
+  if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
+    cmd.audioCodec('copy');
+  } else {
+    cmd.audioCodec('aac').audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
+  }
 
-    if (opts?.onProgress) {
-      cmd.on('progress', (p: { percent?: number }) => {
-        opts.onProgress!(Math.min(99, Math.round(p.percent ?? 0)));
-      });
-    }
+  applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
 
-    cmd.on('end', () => resolve()).on('error', reject).run();
-  });
+  cmd.outputOptions('-movflags', '+faststart');
+  cmd.output(outputPath);
+
+  return runCommand(cmd, opts?.onProgress);
 }
 
 // Prepend a jingle to the (stream-copied) show audio. Uses the concat FILTER,
@@ -60,15 +117,12 @@ export async function captureSquareFrame(
   outputPath: string,
   atSeconds = 20
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return runCommand(
     ffmpeg(videoPath)
       .seekInput(atSeconds)
       .outputOptions(['-frames:v', '1', '-vf', 'crop=ih:ih,scale=1080:1080', '-q:v', '2'])
       .output(outputPath)
-      .on('end', () => resolve())
-      .on('error', reject)
-      .run();
-  });
+  );
 }
 
 export async function prependJingle(
@@ -76,7 +130,7 @@ export async function prependJingle(
   audioPath: string,
   outputPath: string
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
+  return runCommand(
     ffmpeg()
       .input(jinglePath)
       .input(audioPath)
@@ -93,37 +147,40 @@ export async function prependJingle(
       .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)
       .outputOptions(['-movflags', '+faststart'])
       .output(outputPath)
-      .on('end', () => resolve())
-      .on('error', reject)
-      .run();
-  });
+  );
 }
 
-export async function transcodeToMp4(
+/**
+ * Rewrap a recording into MP4 without touching the video: the video stream is
+ * copied bit-for-bit, so this is fast (I/O bound) and lossless. Only the audio
+ * is re-encoded, and only when the container can't hold it as-is. Produces the
+ * browser-playable archive that replaces the original MKV.
+ */
+export async function remuxToMp4(
   inputPath: string,
   outputPath: string,
   opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const cmd = ffmpeg(inputPath)
-      .videoCodec('libx264')
-      .videoBitrate(env.ARCHIVE_VIDEO_BITRATE)
-      .audioCodec('aac')
-      .audioBitrate(env.ARCHIVE_AUDIO_BITRATE)
-      .outputOptions(['-movflags', '+faststart']);
+  const { audioCodec, videoCodec } = await probeStreams(inputPath);
 
-    applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
+  const cmd = ffmpeg(inputPath).outputOptions(['-map', '0', '-c:v', 'copy']);
 
-    cmd.output(outputPath);
+  // A plain HEVC copy is tagged 'hev1', which Safari/QuickTime refuse to play.
+  // 'hvc1' is the same bitstream under the tag those players accept.
+  if (videoCodec === 'hevc') cmd.outputOptions(['-tag:v', 'hvc1']);
 
-    if (opts?.onProgress) {
-      cmd.on('progress', (p: { percent?: number }) => {
-        opts.onProgress!(Math.min(99, Math.round(p.percent ?? 0)));
-      });
-    }
+  if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
+    cmd.audioCodec('copy');
+  } else {
+    cmd.audioCodec('aac').audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
+  }
 
-    cmd.on('end', () => resolve()).on('error', reject).run();
-  });
+  applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
+
+  cmd.outputOptions(['-movflags', '+faststart']);
+  cmd.output(outputPath);
+
+  return runCommand(cmd, opts?.onProgress);
 }
 
 // Fast trim without re-encoding (stream copy). Keyframe-aligned start (may be a
@@ -134,15 +191,10 @@ export async function trimVideoCopy(
   output: string,
   opts: { trimStart?: string | null; trimEnd?: string | null }
 ): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const cmd = ffmpeg(input);
-    applyTrim(cmd, opts.trimStart, opts.trimEnd);
-    cmd.outputOptions(['-c', 'copy', '-map', '0'])
-      .output(output)
-      .on('end', () => resolve())
-      .on('error', reject)
-      .run();
-  });
+  const cmd = ffmpeg(input);
+  applyTrim(cmd, opts.trimStart, opts.trimEnd);
+  cmd.outputOptions(['-c', 'copy', '-map', '0']).output(output);
+  return runCommand(cmd);
 }
 
 function secondsToHms(total: number): string {
