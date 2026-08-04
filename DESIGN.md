@@ -8,9 +8,22 @@ archived sets. Utilitarian, high-contrast, no decoration.
 Product. Reference: https://coming-soon.space (stark B/W, mono, dithered, boxed, lowercase).
 
 ## Theme
-Light, near-achromatic. White page, near-black ink. Surfaces, type and structure
-stay monochrome — emphasis by inversion (black fill, white text) and hard black
-borders. The one exception is **button colour, which is functional** (below).
+Light and flat — no shadows, no gradients — but **not uniform**. Read literally,
+the original spec produced a page where the background, the cards and the
+dividers all sat within a few percent of each other and every piece of text was
+as loud as every other. Flat was the intent; featureless wasn't. Hierarchy is
+carried by real steps:
+
+- The page is a shade, cards are white. That alone makes a list read as a list
+  of objects, and costs nothing.
+- A card's own edge is darker than the hairlines inside it.
+- Show titles are 17px/700 against 13px body — the thing you scan for looks like
+  the thing you scan for.
+- Group labels are uppercase and tracked (`LABEL_SX`), so a label never reads as
+  content. Applied deliberately, not by restyling `caption` — that also carries
+  prose hints, which must stay sentences.
+- Emphasis by inversion (black fill, white text) for the one primary action per
+  screen; **button colour is functional** (below).
 
 Implemented as an MUI theme in `ui/src/theme.ts`. That file is the source of
 truth: change colours, spacing and component defaults there, not at the call
