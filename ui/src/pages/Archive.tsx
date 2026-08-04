@@ -359,28 +359,45 @@ function AudioState({ upload, as }: { upload: UploadWithJobs; as: 'link' | 'acti
 }
 
 /**
- * One labelled row of a card: a fixed label column and whatever controls belong
- * to it. Two columns from `sm` up; on a phone the label sits on its own line
- * above, because a 116px column would leave the values squeezed into nothing.
+ * One labelled group in a card: its label above, its controls below. Meant to
+ * sit in a `<Columns>` grid — side by side these read at a glance, where the
+ * same content as full-width rows made every card six lines tall.
  */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Box sx={{ minWidth: 0 }}>
+      <Typography variant="caption" color="text.disabled" sx={{ mb: 0.5, display: 'block' }}>
+        {label}
+      </Typography>
+      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.75, minWidth: 0 }}>
+        {children}
+      </Stack>
+    </Box>
+  );
+}
+
+/**
+ * Groups side by side on a desktop, two-up on a tablet, stacked on a phone.
+ *
+ * `minmax(0, 1fr)` rather than plain `1fr`: a long filename or platform label
+ * would otherwise force its column past its share and push the whole card into
+ * a horizontal scroll.
+ */
+function Columns({ children, count = 4 }: { children: React.ReactNode; count?: number }) {
   return (
     <Box
       sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', sm: '116px 1fr' },
-        columnGap: 2,
-        rowGap: 0.25,
-        alignItems: 'baseline',
-        py: 0.25,
+        gridTemplateColumns: {
+          xs: '1fr',
+          sm: 'repeat(2, minmax(0, 1fr))',
+          md: `repeat(${count}, minmax(0, 1fr))`,
+        },
+        columnGap: 3,
+        rowGap: 2,
       }}
     >
-      <Typography variant="caption" color="text.disabled">
-        {label}
-      </Typography>
-      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, minWidth: 0 }}>
-        {children}
-      </Stack>
+      {children}
     </Box>
   );
 }
@@ -441,99 +458,124 @@ function ArchiveCard({
         </Box>
       </Stack>
 
-      {/* One labelled row per kind of thing. The card used to be two runs of
-          mixed controls where you had to read every label to find the one you
-          wanted; now the left column tells you which row to look at, and the
-          rows are always in the same order whatever state the show is in. */}
-      <Stack spacing={0.5} sx={{ mt: 2 }}>
-        {playable && (
+      {/* One labelled group per kind of thing, in columns. The card used to be
+          runs of mixed controls where finding one meant reading all of them;
+          the groups now sit in the same place on every card whatever state the
+          show is in, so the eye learns one position per kind of action. */}
+      <Box sx={{ mt: 2 }}>
+        <Columns count={4}>
+          {/* Always rendered, even when there's nothing to play: a column that
+              appears and disappears shifts every other one along with it, and
+              the whole point of the layout is that a given thing is always in
+              the same place. The empty state also answers "why can't I watch
+              this one" — it's still in its original container. */}
           <Field label="preview">
-            <Button color={ROLE.commit} onClick={() => setPlayerOpen((v) => !v)} sx={actionSx}>
-              {playerOpen ? '× close player' : '▸ watch'}
-            </Button>
+            {playable ? (
+              <Button color={ROLE.commit} onClick={() => setPlayerOpen((v) => !v)} sx={actionSx}>
+                {playerOpen ? '× close player' : '▸ watch'}
+              </Button>
+            ) : (
+              <Tooltip title="only mp4 plays in a browser — convert this recording to watch it here">
+                <Typography variant="body2" color="text.disabled">
+                  download only
+                </Typography>
+              </Tooltip>
+            )}
           </Field>
-        )}
 
-        {pub.length > 0 && (
           <Field label="platform links">
-            {pub.map((j) => (
-              <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
-            ))}
+            {pub.length > 0 ? (
+              pub.map((j) => <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />)
+            ) : (
+              <Typography variant="body2" color="text.disabled">
+                —
+              </Typography>
+            )}
           </Field>
-        )}
 
-        <Field label="downloads">
-          <DownloadLink url={upload.video_url} label="video" />
-          <AudioState upload={upload} as="link" />
-          <AudioState upload={upload} as="action" />
-        </Field>
+          <Field label="downloads">
+            <DownloadLink url={upload.video_url} label="video" />
+            <AudioState upload={upload} as="link" />
+            <AudioState upload={upload} as="action" />
+          </Field>
 
-        <Field label="source file">
-          <SourceVideo upload={upload} />
-        </Field>
-      </Stack>
+          <Field label="source file">
+            <SourceVideo upload={upload} />
+          </Field>
+        </Columns>
+      </Box>
 
       {/* Managing the record, kept behind a rule so the destructive half never
           sits inline with the links you click all day. */}
-      <Stack spacing={0.5} sx={{ mt: 1.75, pt: 1.5, borderTop: `1px solid ${c.line}` }}>
-        <Field label="website">
-          <Tooltip title={live ? 'this show is live on the main website' : 'draft — not visible on the main website'}>
-            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-              <Box
-                aria-hidden
-                sx={{ width: 6, height: 6, borderRadius: '999px', flexShrink: 0, bgcolor: live ? c.ok : c.line }}
-              />
-              <Typography variant="body2" sx={{ color: live ? c.ok : c.faint }}>
-                {live ? 'on main website' : 'draft'}
-              </Typography>
-            </Stack>
-          </Tooltip>
-
-          {live ? (
-            <ConfirmAction
-              label="unpublish"
-              question="back to draft?"
-              pending={unpublish.isPending}
-              pendingLabel="unpublishing…"
-              onConfirm={() => unpublish.mutate(upload.id)}
-              title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
-            />
-          ) : (
-            <Tooltip title="set the agenda record to published — makes it live on the main website">
-              <Button
-                onClick={() => publish.mutate(upload.id)}
-                disabled={publish.isPending}
-                color={ROLE.write}
-                sx={actionSx}
-              >
-                {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
-              </Button>
-            </Tooltip>
-          )}
-        </Field>
-
-        <Field label="manage">
-          <Button
-            variant="text"
-            onClick={() => setSyncOpen((v) => !v)}
-            sx={{ fontSize: '0.8125rem', minHeight: 32, color: c.muted, textDecoration: 'underline', textUnderlineOffset: '2px' }}
-          >
-            {syncOpen ? 'close sync panel' : 'sync platforms'}
-          </Button>
-          <Tooltip title="edit this record in the agenda (PocketBase is the master)">
-            <MuiLink
-              href={agendaUrl}
-              target="_blank"
-              rel="noreferrer"
-              variant="body2"
-              color={ROLE.navigate}
-              sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32 }}
+      <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${c.line}` }}>
+        <Columns count={2}>
+          <Field label="website">
+            <Tooltip
+              title={live ? 'this show is live on the main website' : 'draft — not visible on the main website'}
             >
-              edit in agenda ↗
-            </MuiLink>
-          </Tooltip>
-        </Field>
-      </Stack>
+              <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                <Box
+                  aria-hidden
+                  sx={{ width: 6, height: 6, borderRadius: '999px', flexShrink: 0, bgcolor: live ? c.ok : c.line }}
+                />
+                <Typography variant="body2" sx={{ color: live ? c.ok : c.faint }}>
+                  {live ? 'on main website' : 'draft'}
+                </Typography>
+              </Stack>
+            </Tooltip>
+
+            {live ? (
+              <ConfirmAction
+                label="unpublish"
+                question="back to draft?"
+                pending={unpublish.isPending}
+                pendingLabel="unpublishing…"
+                onConfirm={() => unpublish.mutate(upload.id)}
+                title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
+              />
+            ) : (
+              <Tooltip title="set the agenda record to published — makes it live on the main website">
+                <Button
+                  onClick={() => publish.mutate(upload.id)}
+                  disabled={publish.isPending}
+                  color={ROLE.write}
+                  sx={actionSx}
+                >
+                  {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
+                </Button>
+              </Tooltip>
+            )}
+          </Field>
+
+          <Field label="manage">
+            <Button
+              variant="text"
+              onClick={() => setSyncOpen((v) => !v)}
+              sx={{
+                fontSize: '0.8125rem',
+                minHeight: 32,
+                color: c.muted,
+                textDecoration: 'underline',
+                textUnderlineOffset: '2px',
+              }}
+            >
+              {syncOpen ? 'close sync panel' : 'sync platforms'}
+            </Button>
+            <Tooltip title="edit this record in the agenda (PocketBase is the master)">
+              <MuiLink
+                href={agendaUrl}
+                target="_blank"
+                rel="noreferrer"
+                variant="body2"
+                color={ROLE.navigate}
+                sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32 }}
+              >
+                edit in agenda ↗
+              </MuiLink>
+            </Tooltip>
+          </Field>
+        </Columns>
+      </Box>
 
       {/* A failed unpublish used to be silent — the button just reappeared,
           and the operator assumed the show came off the website. */}
