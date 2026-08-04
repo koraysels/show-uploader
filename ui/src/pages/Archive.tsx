@@ -31,7 +31,7 @@ import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
 import type { UploadWithJobs } from '../api/client';
-import { c, ROLE } from '../theme';
+import { c, ROLE, LABEL_SX } from '../theme';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
 
@@ -363,13 +363,30 @@ function AudioState({ upload, as }: { upload: UploadWithJobs; as: 'link' | 'acti
  * sit in a `<Columns>` grid — side by side these read at a glance, where the
  * same content as full-width rows made every card six lines tall.
  */
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({
+  label,
+  children,
+  // A column is narrow: anything that can't sit on one line reads better as a
+  // list than as a row that wraps at an arbitrary point.
+  stacked,
+}: {
+  label: string;
+  children: React.ReactNode;
+  stacked?: boolean;
+}) {
   return (
     <Box sx={{ minWidth: 0 }}>
-      <Typography variant="caption" color="text.disabled" sx={{ mb: 0.5, display: 'block' }}>
-        {label}
-      </Typography>
-      <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.75, minWidth: 0 }}>
+      <Typography sx={{ ...LABEL_SX, mb: 0.75, display: 'block' }}>{label}</Typography>
+      <Stack
+        direction={stacked ? 'column' : 'row'}
+        spacing={stacked ? 0.25 : 1.5}
+        sx={{
+          alignItems: stacked ? 'flex-start' : 'center',
+          flexWrap: 'wrap',
+          rowGap: 0.75,
+          minWidth: 0,
+        }}
+      >
         {children}
       </Stack>
     </Box>
@@ -428,7 +445,7 @@ function ArchiveCard({
   const links = pub.map((j) => ({ label: PLATFORM_LABELS[j.platform] ?? j.platform, url: j.result_url! }));
 
   return (
-    <Paper variant="outlined" sx={{ p: { xs: 1.75, sm: 2.5 } }}>
+    <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
       {/* Cover + title share a row at every width — a 56px thumbnail is small
           enough to leave the title readable on a 360px screen — but the meta
           below it stacks instead of fighting for the same line. */}
@@ -445,14 +462,18 @@ function ArchiveCard({
               width: { xs: 56, sm: 64 },
               height: { xs: 56, sm: 64 },
               flexShrink: 0,
-              border: `1px solid ${c.line}`,
+              border: `1px solid ${c.border}`,
               objectFit: 'cover',
             }}
           />
         )}
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{upload.title}</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
+          <Typography
+            sx={{ fontSize: '1.0625rem', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' }}
+          >
+            {upload.title}
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {new Date(upload.created_at).toLocaleString()}
           </Typography>
         </Box>
@@ -483,7 +504,7 @@ function ArchiveCard({
             )}
           </Field>
 
-          <Field label="platform links">
+          <Field label="platform links" stacked>
             {pub.length > 0 ? (
               pub.map((j) => <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />)
             ) : (
@@ -507,7 +528,7 @@ function ArchiveCard({
 
       {/* Managing the record, kept behind a rule so the destructive half never
           sits inline with the links you click all day. */}
-      <Box sx={{ mt: 2, pt: 2, borderTop: `1px solid ${c.line}` }}>
+      <Box sx={{ mt: 2.5, pt: 2.5, borderTop: `1px solid ${c.line}` }}>
         <Columns count={2}>
           <Field label="website">
             <Tooltip
@@ -674,7 +695,7 @@ export default function Archive() {
         <Typography color="text.secondary">no published shows yet.</Typography>
       ) : (
         <>
-          <Stack spacing={1.5}>
+          <Stack spacing={2}>
             {paged.slice.map((u) => (
               <ArchiveCard
                 key={u.id}

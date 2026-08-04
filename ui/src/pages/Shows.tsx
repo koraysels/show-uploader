@@ -33,7 +33,7 @@ import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
 import { shortName } from '../components/PresenceRoster';
 import PlatformIcon from '../components/PlatformIcon';
-import { c, ROLE } from '../theme';
+import { c, ROLE, LABEL_SX } from '../theme';
 
 const col = createColumnHelper<AgendaShow>();
 
@@ -401,12 +401,9 @@ export default function Shows() {
                           variant="text"
                           onClick={h.column.getToggleSortingHandler()}
                           sx={{
+                            ...LABEL_SX,
                             gap: 0.5,
                             minHeight: 32,
-                            fontSize: '0.6875rem',
-                            fontWeight: 600,
-                            letterSpacing: '0.09em',
-                            color: c.faint,
                             '&:hover': { color: c.ink, textDecoration: 'none' },
                           }}
                         >

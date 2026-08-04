@@ -27,7 +27,7 @@ import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
-import { c, ROLE } from '../theme';
+import { c, ROLE, LABEL_SX } from '../theme';
 
 // The agenda site hosts the archive record's admin detail page at
 // `<base>/#/archive/<recordId>`, and the record id is the same id we use as showId.
@@ -82,9 +82,7 @@ const tapLinkSx = { display: 'inline-flex', alignItems: 'center', minHeight: 32 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <Box component="section" sx={{ borderTop: `1px solid ${c.line}`, pt: 3 }}>
-      <Typography variant="caption" color="text.disabled" sx={{ mb: 2, display: 'block' }}>
-        {title}
-      </Typography>
+      <Typography sx={{ ...LABEL_SX, mb: 2, display: 'block' }}>{title}</Typography>
       {children}
     </Box>
   );

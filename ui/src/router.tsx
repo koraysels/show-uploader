@@ -80,8 +80,8 @@ function AuthedLayout() {
           position: 'sticky',
           top: 0,
           zIndex: 30,
-          borderBottom: `1px solid ${c.ink}`,
-          backgroundColor: withAlpha(c.paper, 0.9),
+          borderBottom: `2px solid ${c.ink}`,
+          backgroundColor: withAlpha(c.page, 0.92),
           backdropFilter: 'blur(8px)',
         }}
       >

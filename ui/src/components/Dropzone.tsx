@@ -48,7 +48,7 @@ export function FullPageDropzone({ children, showId }: { children: ReactNode; sh
             alignItems: 'center',
             justifyContent: 'center',
             pointerEvents: 'none',
-            backgroundColor: withAlpha(c.paper, 0.8),
+            backgroundColor: withAlpha(c.page, 0.85),
             backdropFilter: 'blur(4px)',
           }}
         >

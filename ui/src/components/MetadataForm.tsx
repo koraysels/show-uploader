@@ -9,7 +9,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useGenres, useUploadCover, useClearCover } from '../api/hooks';
 import TagInput from './TagInput';
-import { c, ROLE } from '../theme';
+import { c, ROLE, LABEL_SX } from '../theme';
 
 // The rich-text editor pulls in TipTap (~120 kB gzip) — load it only when a
 // MetadataForm actually renders (the upload page), not on every page.
@@ -30,9 +30,7 @@ type Props = {
 // Section label — replaces the old `.label` utility class.
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <Typography variant="caption" color="text.secondary" sx={{ mb: 0.75, display: 'block' }}>
-      {children}
-    </Typography>
+    <Typography sx={{ ...LABEL_SX, mb: 0.75, display: 'block' }}>{children}</Typography>
   );
 }
 

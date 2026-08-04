@@ -16,17 +16,17 @@ Implemented as an MUI theme in `ui/src/theme.ts`. That file is the source of
 truth: change colours, spacing and component defaults there, not at the call
 site. Anything that starts looking like stock Material is a gap in it.
 
-## Color (OKLCH, ~zero chroma)
-- paper `oklch(0.985 0 0)` · surface `oklch(0.998 0 0)`
-- ink `oklch(0.17 0 0)` · muted `oklch(0.42 0 0)` · faint `oklch(0.54 0 0)`
-- line `oklch(0.86 0 0)` (soft dividers) · border-ink for hard boxes
+## Color
+- page `#ebebeb` · surface (cards, inputs) `#ffffff`
+- ink `#0f0f0f` · muted `#454545` · faint `#676767`
+- line `#c9c9c9` (inside a card) · border `#a8a8a8` (a card's edge)
 
-Authored in OKLCH, shipped as the sRGB hex equivalents — MUI's colour helpers
-can't parse `oklch()` and throw at import if handed one.
+Shipped as sRGB hex — MUI's colour helpers can't parse `oklch()` and throw at
+import if handed one.
 
-`faint` is a step darker than the house token: at `oklch(0.58)` it was 4.1:1 on
-the paper and it carries 11px captions. Every text/background pair in the app
-clears 4.5:1.
+`faint` has been darkened twice against the original token: it carries 11px
+captions, and the grey page pulls contrast down. Every text/background pair in
+the app clears 4.5:1 — checked in a browser, not by eye.
 
 ## Shape and colour = what the control does
 Ease of use beats purity here — this is a tool someone drives at 1am on a phone,

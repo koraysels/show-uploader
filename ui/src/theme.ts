@@ -1,36 +1,36 @@
 import { createTheme } from '@mui/material/styles';
 
 /**
- * MUI configured to DESIGN.md, not to Material.
+ * The app's theme. This file is the source of truth — change a colour, a size or
+ * a component default here rather than at the call site.
  *
- * The house style is brutalist: sharp corners, monospace only, near-achromatic
- * palette, hard 1px borders, no shadows or gradients. Material's defaults are
- * the opposite of every one of those, so almost all of this file is overrides.
- * Anything Material-looking that shows up in the UI is a gap here, not a
- * decision — fix it in this file rather than patching it at the call site.
- */
-
-/**
- * The DESIGN.md ramp, as sRGB hex.
+ * It started as a literal reading of DESIGN.md (near-achromatic, everything the
+ * same weight, hairlines throughout) and that read as flat and unfinished: a
+ * page of shows where the cards, the page and the dividers all sat within a few
+ * percent of each other, and every piece of text was roughly as loud as every
+ * other. The house style is still monospace, still flat, still no shadows — but
+ * hierarchy is now carried by real steps in tone, size and weight.
  *
- * The tokens are authored in OKLCH (the comment on each line is the original),
- * but MUI's colour manipulators — alpha(), darken(), the hover overlays it
- * generates for Table rows and Buttons — parse only #nnn, #nnnnnn, rgb(), hsl()
- * and color(). Handing them an oklch() string throws at import time and takes
- * the whole app down, so these are the browser-computed sRGB equivalents.
- *
- * `faint` is the one deliberate departure: oklch(0.58) rendered at 4.1:1 against
- * the paper, under the 4.5:1 minimum, and it's used for 11px captions — the
- * text that most needs the contrast. It's a step darker here.
+ * Colours are sRGB hex, not the OKLCH the tokens were authored in: MUI's colour
+ * helpers — alpha(), darken(), the hover overlays it builds for Buttons and
+ * Table rows — parse only #nnn, #nnnnnn, rgb(), hsl() and color(). An oklch()
+ * string throws at import and takes the whole app down.
  */
 export const c = {
-  paper: '#fafafa', // oklch(0.985 0 0)
-  surface: '#fefefe', // oklch(0.998 0 0)
+  // The page is a shade, the cards are white. Both used to be within 1% of each
+  // other, so a card had to be found by its hairline border rather than seen —
+  // this is what makes a list of shows read as a list of objects, and it costs
+  // nothing (no shadows, still flat).
+  page: '#ebebeb',
+  surface: '#ffffff',
+  paper: '#ffffff', // text/fills on a dark background
   ink: '#0f0f0f', // oklch(0.17 0 0)
   inkHover: '#292929', // oklch(0.28 0 0)
-  muted: '#4d4d4d', // oklch(0.42 0 0)
-  faint: '#6b6b6b', // was oklch(0.58 0 0) → #7a7a7a, too low-contrast for captions
-  line: '#d1d1d1', // oklch(0.86 0 0)
+  muted: '#454545', // structural labels — a step darker than the old 0.42
+  faint: '#676767', // darkened twice: the grey page pulls contrast down, and this
+  //                   carries 11px captions, which need it most (4.75:1 now)
+  line: '#c9c9c9', // hairlines inside a card
+  border: '#a8a8a8', // a card's own edge, so it reads against the page
   accentSoft: '#e8e8e8', // oklch(0.93 0 0)
   ok: '#137738', // oklch(0.5 0.13 150)
   okSoft: '#dcf7e1', // oklch(0.95 0.04 150)
@@ -62,6 +62,20 @@ export const c = {
  * keep their confirm step — so this holds up in greyscale and for colour
  * blindness.
  */
+/**
+ * Structural labels: the word that names a group of controls ("platform links",
+ * "details"). Uppercase and tracked so a label never reads as content — but
+ * applied deliberately, not by restyling `caption`, which also carries prose
+ * hints that must stay sentences.
+ */
+export const LABEL_SX = {
+  fontSize: '0.6875rem',
+  fontWeight: 600,
+  letterSpacing: '0.09em',
+  textTransform: 'uppercase',
+  color: c.muted,
+} as const;
+
 export const ROLE = {
   commit: 'primary',
   navigate: 'info',
@@ -97,7 +111,7 @@ export const theme = createTheme({
   shadows: Array(25).fill('none') as never,
   palette: {
     mode: 'light',
-    background: { default: c.paper, paper: c.surface },
+    background: { default: c.page, paper: c.surface },
     text: { primary: c.ink, secondary: c.muted, disabled: c.faint },
     primary: { main: c.ink, contrastText: c.paper },
     secondary: { main: c.muted, contrastText: c.paper },
@@ -110,8 +124,8 @@ export const theme = createTheme({
     fontFamily: mono,
     // Tight ratio — product register, many type elements, exaggerated contrast
     // would just add noise.
-    h1: { fontFamily: mono, fontSize: '1.5rem', fontWeight: 600, letterSpacing: '-0.01em', textTransform: 'lowercase' },
-    h2: { fontFamily: mono, fontSize: '1.125rem', fontWeight: 600, textTransform: 'lowercase' },
+    h1: { fontFamily: mono, fontSize: '1.875rem', fontWeight: 700, letterSpacing: '-0.02em', textTransform: 'lowercase' },
+    h2: { fontFamily: mono, fontSize: '1.25rem', fontWeight: 700, textTransform: 'lowercase' },
     h3: { fontFamily: mono, fontSize: '1rem', fontWeight: 600 },
     body1: { fontFamily: mono, fontSize: '0.875rem' },
     body2: { fontFamily: mono, fontSize: '0.8125rem' },
@@ -121,7 +135,7 @@ export const theme = createTheme({
   components: {
     MuiCssBaseline: {
       styleOverrides: {
-        body: { backgroundColor: c.paper, color: c.ink, WebkitFontSmoothing: 'antialiased' },
+        body: { backgroundColor: c.page, color: c.ink, WebkitFontSmoothing: 'antialiased' },
         '::selection': { background: c.ink, color: c.paper },
         // Plain anchors (the TanStack Router links that can't take MUI's Link)
         // lose the browser default ring inside ButtonBase-heavy pages.
@@ -185,6 +199,10 @@ export const theme = createTheme({
         },
       },
     },
+    // Stack spaces its children with margin-left by default, which survives a
+    // wrap — so the second item on a new line sat indented under the first, and
+    // an `ml: auto` on a child was silently overridden. `gap` does neither.
+    MuiStack: { defaultProps: { useFlexGap: true } },
     MuiIconButton: { styleOverrides: { root: { borderRadius: 2 } } },
     MuiLink: {
       defaultProps: { underline: 'hover' },
@@ -236,7 +254,7 @@ export const theme = createTheme({
       defaultProps: { elevation: 0 },
       styleOverrides: {
         root: { backgroundImage: 'none', borderRadius: 2 },
-        outlined: { border: `1px solid ${c.line}` },
+        outlined: { border: `1px solid ${c.border}` },
       },
     },
     MuiDivider: { styleOverrides: { root: { borderColor: c.line } } },
