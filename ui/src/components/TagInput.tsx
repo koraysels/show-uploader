@@ -1,4 +1,6 @@
-import { useRef, useState } from 'react';
+import Autocomplete from '@mui/material/Autocomplete';
+import Chip from '@mui/material/Chip';
+import TextField from '@mui/material/TextField';
 
 type Props = {
   tags: string[];
@@ -8,84 +10,54 @@ type Props = {
   placeholder?: string;
 };
 
-// Chip editor with autocomplete: type to filter the genre vocabulary, Enter/comma
-// or click a suggestion to add, × or Backspace to remove. New (unknown) tags are
-// allowed too — they become new genres server-side.
+/**
+ * Chip editor with autocomplete over the genre vocabulary. Unknown tags are
+ * allowed (freeSolo) — they become new genres server-side.
+ *
+ * MUI's Autocomplete replaces a hand-rolled popup that positioned itself with
+ * absolute coordinates and closed on a blur timeout; that never behaved on
+ * touch. This one handles keyboard, screen readers and mobile properly.
+ */
 export default function TagInput({ tags, suggestions, onChange, placeholder }: Props) {
-  const [input, setInput] = useState('');
-  const [focused, setFocused] = useState(false);
-  const picking = useRef(false);
-
-  const addTag = (raw: string) => {
-    const t = raw.trim().replace(/,+$/, '').trim();
-    if (t && !tags.some((x) => x.toLowerCase() === t.toLowerCase())) onChange([...tags, t]);
-    setInput('');
+  const dedupe = (next: string[]) => {
+    const seen = new Set<string>();
+    return next
+      .map((t) => t.trim().replace(/,+$/, '').trim())
+      .filter((t) => {
+        const k = t.toLowerCase();
+        if (!t || seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
   };
-  const removeTag = (t: string) => onChange(tags.filter((x) => x !== t));
-
-  const q = input.trim().toLowerCase();
-  const matches = q
-    ? suggestions
-        .filter((s) => s.toLowerCase().includes(q) && !tags.some((t) => t.toLowerCase() === s.toLowerCase()))
-        .slice(0, 8)
-    : [];
 
   return (
-    <div className="relative">
-      <div className="field flex flex-wrap items-center gap-1.5 py-1.5">
-        {tags.map((t) => (
-          <span key={t} className="inline-flex items-center gap-1 border border-line bg-paper px-2 py-0.5 text-xs text-ink">
-            {t}
-            <button type="button" onClick={() => removeTag(t)} aria-label={`remove ${t}`} className="text-faint hover:text-danger">
-              ×
-            </button>
-          </span>
-        ))}
-        <input
-          className="min-w-[120px] flex-1 bg-transparent text-sm text-ink placeholder-faint outline-none"
+    <Autocomplete
+      multiple
+      freeSolo
+      autoHighlight
+      disableCloseOnSelect
+      options={suggestions}
+      value={tags}
+      onChange={(_e, next) => onChange(dedupe(next as string[]))}
+      filterOptions={(opts, state) => {
+        const q = state.inputValue.trim().toLowerCase();
+        if (!q) return [];
+        return opts
+          .filter((o) => o.toLowerCase().includes(q) && !tags.some((t) => t.toLowerCase() === o.toLowerCase()))
+          .slice(0, 8);
+      }}
+      renderValue={(value, getItemProps) =>
+        (value as string[]).map((option, index) => (
+          <Chip variant="outlined" label={option} {...getItemProps({ index })} key={option} />
+        ))
+      }
+      renderInput={(params) => (
+        <TextField
+          {...params}
           placeholder={placeholder ?? (tags.length ? 'add another…' : 'type a tag, press enter')}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ',') {
-              e.preventDefault();
-              addTag(matches.length === 1 ? matches[0] : input);
-            } else if (e.key === 'Backspace' && !input && tags.length) {
-              removeTag(tags[tags.length - 1]);
-            } else if (e.key === 'Escape') {
-              setFocused(false);
-            }
-          }}
-          onBlur={() => {
-            setTimeout(() => setFocused(false), 120);
-            // Skip the auto-commit if a suggestion was just clicked (it already added).
-            if (picking.current) {
-              picking.current = false;
-              return;
-            }
-            if (input.trim()) addTag(input);
-          }}
         />
-      </div>
-      {focused && matches.length > 0 && (
-        <div className="absolute left-0 right-0 z-20 mt-1 max-h-48 overflow-y-auto border border-ink bg-surface shadow-sm">
-          {matches.map((m) => (
-            <button
-              key={m}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                picking.current = true;
-                addTag(m);
-              }}
-              className="block w-full px-3 py-1.5 text-left text-sm text-ink hover:bg-accent-soft"
-            >
-              {m}
-            </button>
-          ))}
-        </div>
       )}
-    </div>
+    />
   );
 }

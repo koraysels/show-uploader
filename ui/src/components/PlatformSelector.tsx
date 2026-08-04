@@ -1,6 +1,18 @@
 import { useRef, useState } from 'react';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Checkbox from '@mui/material/Checkbox';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Link from '@mui/material/Link';
+import Paper from '@mui/material/Paper';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 import { trpcClient } from '../api/trpc';
 import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeStatus } from '../api/hooks';
+import ConfirmAction from './ConfirmAction';
+import PlatformIcon from './PlatformIcon';
+import { c, ROLE } from '../theme';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
 function JinglePreview() {
@@ -33,15 +45,21 @@ function JinglePreview() {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={toggle}
-        disabled={err}
-        title={err ? 'no jingle configured' : 'preview jingle'}
-        className="inline-flex h-5 w-5 items-center justify-center border border-line text-[11px] leading-none text-muted hover:border-ink hover:text-ink disabled:opacity-40"
-      >
-        {err ? '—' : loading ? '…' : playing ? '⏸' : '▶'}
-      </button>
+      <Tooltip title={err ? 'no jingle configured' : 'preview jingle'}>
+        {/* span wrapper: a disabled button fires no events, so the tooltip would
+            never show on exactly the state that needs explaining. */}
+        <Box component="span">
+          <Button
+            onClick={toggle}
+            disabled={err}
+            color={ROLE.navigate}
+            aria-label={err ? 'no jingle configured' : 'preview jingle'}
+            sx={{ minWidth: 36, height: 36, px: 0, fontSize: '0.6875rem', lineHeight: 1 }}
+          >
+            {err ? '—' : loading ? '…' : playing ? '⏸' : '▶'}
+          </Button>
+        </Box>
+      </Tooltip>
       <audio
         ref={audioRef}
         onPlay={() => setPlaying(true)}
@@ -92,77 +110,100 @@ function PublishedPlatform({
   const setPublic = usePlatformSetPublic();
   const remove = usePlatformRemove();
   const ytStatus = useYoutubeStatus(url, id === 'youtube');
-  const [confirming, setConfirming] = useState(false);
 
   const privacy = ytStatus.data?.privacyStatus ?? null; // public | unlisted | private | null
   const isPublic = privacy === 'public';
-  const btn = 'border border-line px-2.5 py-1 text-xs lowercase text-muted hover:border-ink hover:text-ink disabled:opacity-50';
 
   return (
-    <div className="rounded-lg border border-accent/40 bg-accent-soft/30 p-3.5">
-      <div className="flex items-center justify-between gap-2">
-        <a href={url} target="_blank" rel="noreferrer" className="text-sm font-medium text-ink hover:underline">
+    <Paper variant="outlined" sx={{ p: 1.75, backgroundColor: c.accentSoft, borderColor: c.line }}>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+        <Link
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          color={ROLE.navigate}
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.625, fontWeight: 500 }}
+        >
+          <PlatformIcon platform={id} />
           {label} ↗
-        </a>
-        <span className="text-[10px] lowercase text-ok">
+        </Link>
+        <Typography variant="caption" color="success.main" sx={{ flexShrink: 0 }}>
           ✓ published{id === 'youtube' && privacy ? ` · ${privacy}` : ''}
-        </span>
-      </div>
-      <div className="mt-2.5 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={update.isPending}
-          onClick={() => update.mutate({ platform: id as 'youtube' | 'mixcloud', url, ...meta })}
-          className={btn}
+        </Typography>
+      </Stack>
+
+      <Stack direction="row" spacing={1} sx={{ mt: 1.25, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
+        <Tooltip
           title={
             id === 'mixcloud'
               ? 'push the current title / description / tags + cover to MixCloud'
               : 'push the current title / description / tags to this platform'
           }
         >
-          {update.isPending ? 'updating…' : 'update'}
-        </button>
+          <Button
+            disabled={update.isPending}
+            color={ROLE.write}
+            onClick={() => update.mutate({ platform: id as 'youtube' | 'mixcloud', url, ...meta })}
+            sx={{ px: 1.25, py: 0.5, fontSize: '0.75rem', minHeight: 32 }}
+          >
+            {update.isPending ? 'updating…' : 'update'}
+          </Button>
+        </Tooltip>
+
         {id === 'youtube' &&
           (isPublic ? (
-            <span className="text-xs lowercase text-ok">✓ public</span>
+            <Typography variant="caption" color="success.main">
+              ✓ public
+            </Typography>
           ) : (
-            <button
-              type="button"
-              disabled={setPublic.isPending}
-              onClick={() => setPublic.mutate(url, { onSuccess: () => ytStatus.refetch() })}
-              className={btn}
-              title="make the video public on YouTube (needs the re-authorised token)"
-            >
-              {setPublic.isPending ? 'setting…' : 'set public'}
-            </button>
+            <Tooltip title="make the video public on YouTube (needs the re-authorised token)">
+              <Button
+                disabled={setPublic.isPending}
+                color={ROLE.write}
+                onClick={() => setPublic.mutate(url, { onSuccess: () => ytStatus.refetch() })}
+                sx={{ px: 1.25, py: 0.5, fontSize: '0.75rem', minHeight: 32 }}
+              >
+                {setPublic.isPending ? 'setting…' : 'set public'}
+              </Button>
+            </Tooltip>
           ))}
-        {!confirming ? (
-          <button type="button" onClick={() => setConfirming(true)} className={`${btn} hover:!border-danger hover:!text-danger`}>
-            remove
-          </button>
-        ) : (
-          <span className="inline-flex items-center gap-1.5 text-xs lowercase text-muted">
-            un-link?
-            <button
-              type="button"
-              disabled={remove.isPending}
-              onClick={() => remove.mutate({ showId, label })}
-              className="text-danger hover:underline disabled:opacity-50"
-            >
-              yes
-            </button>
-            <button type="button" onClick={() => setConfirming(false)} className="hover:text-ink">
-              no
-            </button>
-          </span>
-        )}
-      </div>
-      {update.data?.error && <p className="mt-2 text-[11px] text-danger">update: {update.data.error}</p>}
-      {update.data && !update.data.error && <p className="mt-2 text-[11px] text-ok">✓ metadata updated</p>}
-      {setPublic.data?.error && <p className="mt-2 text-[11px] text-danger">set public: {setPublic.data.error}</p>}
-      {setPublic.data && !setPublic.data.error && <p className="mt-2 text-[11px] text-ok">✓ now public</p>}
-      {remove.isError && <p className="mt-2 text-[11px] text-danger">remove failed — try again.</p>}
-    </div>
+
+        <ConfirmAction
+          label="remove"
+          question="un-link?"
+          pending={remove.isPending}
+          pendingLabel="removing…"
+          title={`remove the ${label} link from this record — the ${label} upload itself stays`}
+          onConfirm={() => remove.mutate({ showId, label })}
+        />
+      </Stack>
+
+      {update.data?.error && (
+        <Typography variant="caption" color="error.main" sx={{ mt: 1, display: 'block' }}>
+          update: {update.data.error}
+        </Typography>
+      )}
+      {update.data && !update.data.error && (
+        <Typography variant="caption" color="success.main" sx={{ mt: 1, display: 'block' }}>
+          ✓ metadata updated
+        </Typography>
+      )}
+      {setPublic.data?.error && (
+        <Typography variant="caption" color="error.main" sx={{ mt: 1, display: 'block' }}>
+          set public: {setPublic.data.error}
+        </Typography>
+      )}
+      {setPublic.data && !setPublic.data.error && (
+        <Typography variant="caption" color="success.main" sx={{ mt: 1, display: 'block' }}>
+          ✓ now public
+        </Typography>
+      )}
+      {remove.isError && (
+        <Typography variant="caption" color="error.main" sx={{ mt: 1, display: 'block' }}>
+          remove failed — try again.
+        </Typography>
+      )}
+    </Paper>
   );
 }
 
@@ -184,62 +225,66 @@ export default function PlatformSelector({
   const selectable = PLATFORMS.filter((p) => !linkFor(p.label));
 
   return (
-    <div className="space-y-4">
+    <Stack spacing={2}>
       {existingLinks.length > 0 && (
-        <div className="space-y-2">
+        <Stack spacing={1}>
           {PLATFORMS.map((p) => {
             const link = linkFor(p.label);
             if (!link) return null;
             return <PublishedPlatform key={p.id} id={p.id} label={p.label} url={link.url} showId={showId} meta={meta} />;
           })}
-        </div>
+        </Stack>
       )}
 
       {selectable.length > 0 && (
-        <div className="flex gap-2.5">
+        // Wraps on narrow screens rather than shrinking the targets below 44px.
+        <Stack direction="row" spacing={1.25} sx={{ flexWrap: 'wrap', rowGap: 1.25 }}>
           {selectable.map((p) => {
             const on = platforms.includes(p.id);
             return (
-              <button
+              <Button
                 key={p.id}
-                type="button"
+                variant={on ? 'contained' : 'outlined'}
                 onClick={() => toggle(p.id)}
                 aria-pressed={on}
-                className={`inline-flex items-center gap-2.5 rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                  on
-                    ? 'border-accent bg-accent text-white'
-                    : 'border-line bg-surface text-muted hover:border-line-strong hover:text-ink'
-                }`}
+                sx={{ gap: 1.25, px: 2, minHeight: 44, borderColor: on ? c.ink : c.line, color: on ? c.paper : c.muted }}
               >
-                <span
+                <Box
                   aria-hidden
-                  className={`flex h-4 w-4 items-center justify-center rounded-[3px] border text-[11px] font-bold leading-none ${
-                    on ? 'border-white bg-white text-accent' : 'border-line-strong text-transparent'
-                  }`}
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 16,
+                    height: 16,
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                    lineHeight: 1,
+                    border: `1px solid ${on ? c.paper : c.line}`,
+                    backgroundColor: on ? c.paper : 'transparent',
+                    color: on ? c.ink : 'transparent',
+                  }}
                 >
                   ✓
-                </span>
+                </Box>
+                <PlatformIcon platform={p.id} size={16} />
                 {p.label}
-              </button>
+              </Button>
             );
           })}
-        </div>
+        </Stack>
       )}
 
       {platforms.includes('mixcloud') && (
-        <div className="flex items-center gap-2.5">
-          <label className="flex cursor-pointer select-none items-center gap-2.5 text-sm text-muted">
-            <input
-              type="checkbox"
-              checked={includeJingle}
-              onChange={(e) => onJingleChange(e.target.checked)}
-              className="h-4 w-4 rounded border-line-strong text-accent focus:ring-accent"
-            />
-            Prepend jingle to the MixCloud audio
-          </label>
+        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+          <FormControlLabel
+            control={<Checkbox checked={includeJingle} onChange={(e) => onJingleChange(e.target.checked)} />}
+            label="prepend jingle to the mixcloud audio"
+            sx={{ ml: 0, mr: 0 }}
+          />
           <JinglePreview />
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }

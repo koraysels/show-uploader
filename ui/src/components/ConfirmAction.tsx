@@ -1,9 +1,16 @@
 import { useState } from 'react';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 
 /**
  * A destructive action behind one inline confirmation step — no modal, no
  * browser dialog. First click swaps the button for "<question> yes / no", so
  * nothing irreversible happens on a stray click.
+ *
+ * The hint uses a real Tooltip rather than `title`, which never appears on
+ * touch — on a phone that content was simply unreachable.
  */
 export default function ConfirmAction({
   label,
@@ -11,7 +18,6 @@ export default function ConfirmAction({
   onConfirm,
   pending,
   pendingLabel = 'working…',
-  className = '',
   title,
 }: {
   label: string;
@@ -19,41 +25,69 @@ export default function ConfirmAction({
   onConfirm: () => void;
   pending?: boolean;
   pendingLabel?: string;
-  className?: string;
   title?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
 
-  if (pending) return <span className="text-xs lowercase text-muted">{pendingLabel}</span>;
-
-  if (!confirming)
+  if (pending)
     return (
-      <button
-        type="button"
-        onClick={() => setConfirming(true)}
-        title={title}
-        className={`text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-danger hover:decoration-danger ${className}`}
-      >
-        {label}
-      </button>
+      <Typography variant="caption" color="text.secondary">
+        {pendingLabel}
+      </Typography>
     );
 
+  if (!confirming) {
+    const button = (
+      <Button
+        variant="text"
+        // Always red: this component only ever wraps something destructive, so
+        // the colour is part of the warning rather than a per-call-site choice.
+        color="error"
+        onClick={() => setConfirming(true)}
+        sx={{
+          // Buttons centre their label; in a stretched column (the archive
+          // header) that left the action floating mid-row. Pin it left and stop
+          // it growing to the container's width.
+          alignSelf: 'flex-start',
+          justifyContent: 'flex-start',
+          minHeight: 32,
+          fontSize: '0.6875rem',
+          textDecoration: 'underline',
+          textUnderlineOffset: '2px',
+          textAlign: 'left',
+        }}
+      >
+        {label}
+      </Button>
+    );
+    return title ? <Tooltip title={title}>{button}</Tooltip> : button;
+  }
+
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs lowercase text-muted">
-      {question}
-      <button
-        type="button"
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+      <Typography variant="caption" color="text.secondary">
+        {question}
+      </Typography>
+      {/* "yes" is the only red thing here — "no" stays neutral so the safe
+          choice never looks like the dangerous one. */}
+      <Button
+        variant="outlined"
+        color="error"
         onClick={() => {
           setConfirming(false);
           onConfirm();
         }}
-        className="text-danger hover:underline"
+        sx={{ minHeight: 32, px: 1.25, fontSize: '0.6875rem' }}
       >
         yes
-      </button>
-      <button type="button" onClick={() => setConfirming(false)} className="hover:text-ink">
+      </Button>
+      <Button
+        variant="text"
+        onClick={() => setConfirming(false)}
+        sx={{ minHeight: 32, fontSize: '0.6875rem', color: 'text.secondary' }}
+      >
         no
-      </button>
-    </span>
+      </Button>
+    </Stack>
   );
 }

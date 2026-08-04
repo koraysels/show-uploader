@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Link from '@mui/material/Link';
+import LinearProgress from '@mui/material/LinearProgress';
+import Typography from '@mui/material/Typography';
 import { useAuth } from '../auth/useAuth';
 import { useRetryJob } from '../api/hooks';
 import type { PlatformJob } from '../api/client';
+import { ROLE } from '../theme';
+import PlatformIcon from './PlatformIcon';
 
 type Props = {
   uploadId: string;
@@ -16,9 +24,9 @@ type JobState = {
 };
 
 const PLATFORM_LABELS: Record<string, string> = {
-  youtube: 'YouTube',
-  mixcloud: 'MixCloud',
-  archive: 'Archive',
+  youtube: 'youtube',
+  mixcloud: 'mixcloud',
+  archive: 'archive',
 };
 
 // Human-readable phase, derived from the platform + progress checkpoints the
@@ -33,8 +41,10 @@ function phaseLabel(platform: string, pct: number, status: string): string {
     return 'uploading to mixcloud';
   }
   if (platform === 'archive') {
-    if (pct < 15) return 'downloading';
-    if (pct < 95) return 'transcoding to mp4';
+    // Matches the worker's split: download → audio → remux → upload.
+    if (pct < 20) return 'downloading';
+    if (pct < 50) return 'extracting audio';
+    if (pct < 80) return 'remuxing to mp4';
     return 'storing archive';
   }
   return 'processing';
@@ -97,51 +107,70 @@ export default function JobProgress({ uploadId, jobs }: Props) {
   }, [uploadId, jobs, user?.access_token]);
 
   return (
-    <div className="space-y-3.5">
-      {Object.entries(state).map(([platform, s]) => (
-        <div key={platform}>
-          <div className="mb-1.5 flex items-center justify-between text-xs">
-            <span className="font-medium text-muted">{PLATFORM_LABELS[platform] ?? platform}</span>
-            <span
-              className={
-                s.status === 'done' ? 'text-ok' : s.status === 'failed' ? 'text-danger' : 'text-faint tabular-nums'
-              }
+    <Stack spacing={1.75}>
+      {Object.entries(state).map(([platform, s]) => {
+        const color = s.status === 'done' ? 'success' : s.status === 'failed' ? 'error' : 'primary';
+        return (
+          <Box key={platform}>
+            {/* Wraps rather than squeezing: a failed job's error text is long and
+                used to push the retry button off a narrow screen. */}
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ mb: 0.75, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
             >
+              <Stack direction="row" spacing={0.625} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                <PlatformIcon platform={platform} size={12} />
+                <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                  {PLATFORM_LABELS[platform] ?? platform}
+                </Typography>
+              </Stack>
+
               {s.status === 'done' && s.url ? (
-                <a href={s.url} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
-                  View ↗
-                </a>
+                <Link
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  variant="caption"
+                  color={ROLE.navigate}
+                  sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, fontWeight: 500 }}
+                >
+                  view ↗
+                </Link>
               ) : s.status === 'done' ? (
-                'Done'
+                <Typography variant="caption" color="success.main">
+                  done
+                </Typography>
               ) : s.status === 'failed' ? (
-                <span className="flex items-center gap-2">
-                  <span className="text-danger">{s.error ?? 'Failed'}</span>
-                  <button
-                    type="button"
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', minWidth: 0 }}>
+                  <Typography variant="caption" color="error.main" sx={{ overflowWrap: 'anywhere' }}>
+                    {s.error ?? 'failed'}
+                  </Typography>
+                  <Button
                     onClick={() => retry.mutate(platform as 'youtube' | 'mixcloud' | 'archive')}
                     disabled={retry.isPending}
-                    className="border border-line px-2 py-0.5 font-medium text-accent hover:bg-line disabled:opacity-50"
+                    color={ROLE.write}
+                    sx={{ px: 1.25, py: 0.25, fontSize: '0.6875rem', minHeight: 32, flexShrink: 0 }}
                   >
                     {retry.isPending ? 'retrying…' : 'retry'}
-                  </button>
-                </span>
+                  </Button>
+                </Stack>
               ) : (
-                <span className="lowercase">
+                <Typography variant="caption" color="text.disabled" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                   {phaseLabel(platform, s.pct, s.status)} · {s.pct}%
-                </span>
+                </Typography>
               )}
-            </span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                s.status === 'done' ? 'bg-ok' : s.status === 'failed' ? 'bg-danger' : 'bg-accent'
-              }`}
-              style={{ width: `${s.status === 'done' ? 100 : s.pct}%` }}
+            </Stack>
+
+            <LinearProgress
+              variant="determinate"
+              value={s.status === 'done' ? 100 : s.pct}
+              color={color}
+              sx={{ '& .MuiLinearProgress-bar': { transition: 'transform 0.5s ease' } }}
             />
-          </div>
-        </div>
-      ))}
-    </div>
+          </Box>
+        );
+      })}
+    </Stack>
   );
 }

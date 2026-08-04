@@ -10,15 +10,35 @@ import {
   useReactTable,
   type SortingState,
 } from '@tanstack/react-table';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import ButtonBase from '@mui/material/ButtonBase';
+import Chip from '@mui/material/Chip';
+import LinearProgress from '@mui/material/LinearProgress';
+import MenuItem from '@mui/material/MenuItem';
+import MuiLink from '@mui/material/Link';
+import Paper from '@mui/material/Paper';
+import Table from '@mui/material/Table';
+import TableBody from '@mui/material/TableBody';
+import TableCell from '@mui/material/TableCell';
+import TableHead from '@mui/material/TableHead';
+import TableRow from '@mui/material/TableRow';
+import TextField from '@mui/material/TextField';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 import { useShows, useStagedShowIds, useUploads, useUploadingProgress } from '../api/hooks';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
 import { shortName } from '../components/PresenceRoster';
+import PlatformIcon from '../components/PlatformIcon';
+import { c, ROLE, LABEL_SX } from '../theme';
 
 const col = createColumnHelper<AgendaShow>();
 
 const SHORT: Record<string, string> = { YouTube: 'YT', MixCloud: 'MC' };
+const LABEL_TO_PLATFORM: Record<string, string> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
 
 // Per-show video state in the table: live upload progress, "ready" when a
 // recording is staged (uploaded, not yet published), "uploaded" when it's already
@@ -40,88 +60,114 @@ function VideoCell({
   uploadingElsewhere: Map<string, number | null>;
 }) {
   const item = uploads[showId];
+
   if (item?.status === 'uploading') {
     const pct = Math.round(item.fraction * 100);
     return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft/50 px-2.5 py-1 text-accent">
-        <span className="h-2 w-16 overflow-hidden rounded-full bg-line">
-          <span className="block h-full rounded-full bg-accent transition-all" style={{ width: `${pct}%` }} />
-        </span>
-        <span className="text-sm font-semibold tabular-nums">{pct}%</span>
-      </span>
+      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+        <LinearProgress variant="determinate" value={pct} sx={{ width: 64, height: 6, flexShrink: 0 }} />
+        <Typography variant="body2" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+          {pct}%
+        </Typography>
+      </Stack>
     );
   }
   if (item?.status === 'error') {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-danger/40 bg-danger-soft px-2.5 py-1 text-sm font-medium lowercase text-danger" title={item.error ?? undefined}>
-        ✕ failed
-      </span>
+      <Tooltip title={item.error ?? 'upload failed'}>
+        <Chip label="✕ failed" sx={{ borderColor: c.danger, color: c.danger, bgcolor: c.dangerSoft }} />
+      </Tooltip>
     );
   }
   if (item?.status === 'done' || staged.has(showId)) {
     return (
-      <span className="inline-flex items-center gap-2 rounded-full border border-ok/40 bg-ok-soft px-3 py-1 text-sm font-semibold lowercase text-ok" title="recording ready to publish">
-        <span className="h-2 w-2 rounded-full bg-ok" aria-hidden />
-        ready
-      </span>
+      <Tooltip title="recording ready to publish">
+        <Chip
+          label="● ready"
+          sx={{ borderColor: c.ok, color: c.ok, bgcolor: c.okSoft, fontWeight: 600 }}
+        />
+      </Tooltip>
     );
   }
   if (uploaded.has(showId)) {
     return (
-      <span
-        className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 py-1 text-sm lowercase text-muted"
-        title="already uploaded — the archived video is available on the archive page"
-      >
-        <span className="h-2 w-2 rounded-full bg-muted" aria-hidden />
-        uploaded
-      </span>
+      <Tooltip title="already uploaded — the archived video is available on the archive page">
+        <Chip label="● uploaded" sx={{ color: c.muted }} />
+      </Tooltip>
     );
   }
   // A browser elsewhere is mid-upload — show the server-computed %.
   if (uploadingElsewhere.has(showId)) {
     const pct = uploadingElsewhere.get(showId);
     return (
-      <span
-        className="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent-soft/40 px-3 py-1 text-sm lowercase text-accent"
-        title="a recording is being uploaded on another machine"
-      >
-        <span className="h-2 w-2 animate-pulse rounded-full bg-accent" aria-hidden />
-        uploading elsewhere{typeof pct === 'number' ? ` · ${pct}%` : ''}
-      </span>
+      <Tooltip title="a recording is being uploaded on another machine">
+        <Chip
+          label={`● uploading elsewhere${typeof pct === 'number' ? ` · ${pct}%` : ''}`}
+          sx={{ borderColor: c.ink, color: c.ink }}
+        />
+      </Tooltip>
     );
   }
-  return <span className="text-sm text-faint">— no video</span>;
+  return (
+    <Typography variant="body2" color="text.disabled">
+      — no video
+    </Typography>
+  );
 }
 
 function LinksCell({ show }: { show: AgendaShow }) {
   const links = show.mediaLinks ?? [];
-  if (!links.length) return <span className="text-faint">—</span>;
+  if (!links.length)
+    return (
+      <Typography component="span" color="text.disabled">
+        —
+      </Typography>
+    );
   return (
-    <div className="flex gap-1">
+    // 12px, not 4: "YT ↗" and "MC ↗" ran together into one word at the
+    // tighter gap, since the arrow eats the visual space between them.
+    <Stack direction="row" spacing={1.5}>
       {links.map((l) => (
-        <a
-          key={l.label + l.url}
-          href={l.url}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          title={l.url}
-          className="border border-line px-2 py-0.5 text-xs font-medium lowercase text-muted hover:border-ink hover:text-ink"
-        >
-          {SHORT[l.label] ?? l.label}
-        </a>
+        <Tooltip key={l.label + l.url} title={l.url}>
+          {/* A link, not a button — it opens the platform. Boxing these made
+              every row look like it had two pending actions in it. */}
+          <MuiLink
+            href={l.url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            color={ROLE.navigate}
+            variant="body2"
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minHeight: 32, fontWeight: 500 }}
+          >
+            <PlatformIcon platform={LABEL_TO_PLATFORM[l.label] ?? ''} />
+            {SHORT[l.label] ?? l.label} ↗
+          </MuiLink>
+        </Tooltip>
       ))}
-    </div>
+    </Stack>
   );
 }
 
 function ClaimBadge({ claim, mine }: { claim: ClaimView | undefined; mine: boolean }) {
-  if (!claim) return <span className="text-faint">—</span>;
-  if (mine) return <span className="lowercase text-ok">you</span>;
+  if (!claim)
+    return (
+      <Typography component="span" color="text.disabled">
+        —
+      </Typography>
+    );
+  if (mine)
+    return (
+      <Typography component="span" color="success.main">
+        you
+      </Typography>
+    );
   return (
-    <span className="inline-flex items-center gap-1 lowercase text-muted" title={`claimed by ${claim.userName}`}>
-      <span aria-hidden>⚠</span> {shortName(claim.userName)}
-    </span>
+    <Tooltip title={`claimed by ${claim.userName}`}>
+      <Typography component="span" color="text.secondary" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5 }}>
+        <span aria-hidden>⚠</span> {shortName(claim.userName)}
+      </Typography>
+    </Tooltip>
   );
 }
 
@@ -148,11 +194,25 @@ export default function Shows() {
 
   const columns = useMemo(
     () => [
-      col.accessor('date', { header: 'Date', cell: (c) => <span className="font-mono text-[13px] text-muted">{c.getValue()}</span> }),
-      col.accessor('startTime', { header: 'Time', cell: (c) => <span className="font-mono text-[13px] text-muted">{c.getValue()}</span> }),
+      col.accessor('date', {
+        header: 'date',
+        cell: (c) => (
+          <Typography variant="body2" color="text.secondary">
+            {c.getValue()}
+          </Typography>
+        ),
+      }),
+      col.accessor('startTime', {
+        header: 'time',
+        cell: (c) => (
+          <Typography variant="body2" color="text.secondary">
+            {c.getValue()}
+          </Typography>
+        ),
+      }),
       col.accessor('title', {
-        header: 'Show',
-        cell: (c) => <span className="font-medium text-ink">{c.getValue()}</span>,
+        header: 'show',
+        cell: (c) => <Typography sx={{ fontWeight: 500 }}>{c.getValue()}</Typography>,
       }),
       col.accessor(
         (s) =>
@@ -167,7 +227,7 @@ export default function Shows() {
             : 0,
         {
           id: 'video',
-          header: 'Video',
+          header: 'video',
           cell: (c) => (
             <VideoCell
               showId={c.row.original.id}
@@ -181,17 +241,21 @@ export default function Shows() {
       ),
       col.accessor((s) => s.mediaLinks?.length ?? 0, {
         id: 'links',
-        header: 'Links',
+        header: 'links',
         cell: (c) => <LinksCell show={c.row.original} />,
       }),
       col.accessor((s) => s.tags?.length ?? 0, {
         id: 'tags',
-        header: 'Tags',
-        cell: (c) => <span className="text-muted tabular-nums">{c.getValue() || '—'}</span>,
+        header: 'tags',
+        cell: (c) => (
+          <Typography component="span" color="text.secondary" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+            {c.getValue() || '—'}
+          </Typography>
+        ),
       }),
       col.accessor((s) => (claims[s.id] ? (claims[s.id].userSub === myUserId ? 0 : 1) : 2), {
         id: 'status',
-        header: 'Who',
+        header: 'who',
         cell: (c) => {
           const claim = claims[c.row.original.id];
           return <ClaimBadge claim={claim} mine={!!claim && claim.userSub === myUserId} />;
@@ -217,104 +281,215 @@ export default function Shows() {
   const rows = table.getRowModel().rows;
   const pageIndex = table.getState().pagination.pageIndex;
   const pageCount = table.getPageCount();
+  const sortId = sorting[0]?.id ?? 'date';
+  const sortDesc = sorting[0]?.desc ?? true;
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold lowercase tracking-tight text-ink">to process</h1>
-          <p className="mt-1 text-sm text-muted">draft archive records. pick one to publish its recording.</p>
-        </div>
-        <input
+    <Stack spacing={3}>
+      <Stack
+        component="header"
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={2}
+        sx={{ alignItems: { sm: 'flex-end' }, justifyContent: 'space-between' }}
+      >
+        <Box>
+          <Typography variant="h1">to process</Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            draft archive records. pick one to publish its recording.
+          </Typography>
+        </Box>
+        <TextField
+          size="small"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter shows…"
-          className="field w-full sm:w-64"
+          placeholder="filter shows…"
+          sx={{ width: { xs: '100%', sm: 256 } }}
         />
-      </header>
+      </Stack>
 
       {isLoading ? (
-        <p className="text-sm text-muted">Loading shows…</p>
+        <Typography color="text.secondary">loading shows…</Typography>
       ) : isError ? (
-        <p className="text-sm text-danger">Couldn't load shows. Check the schedule connection.</p>
+        <Typography color="error.main">couldn't load shows. check the schedule connection.</Typography>
       ) : (
-        <div className="overflow-x-auto border border-ink bg-surface">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id} className="border-b border-ink text-left">
-                  {hg.headers.map((h) => (
-                    <th key={h.id} className="px-4 py-3 font-medium sm:px-5">
-                      <button
-                        type="button"
-                        onClick={h.column.getToggleSortingHandler()}
-                        className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-faint hover:text-ink"
-                      >
-                        {flexRender(h.column.columnDef.header, h.getContext())}
-                        <span className="text-accent">
-                          {{ asc: '↑', desc: '↓' }[h.column.getIsSorted() as string] ?? ''}
-                        </span>
-                      </button>
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-            <tbody>
-              {rows.map((row) => (
-                <tr
+        <>
+          {/* Phones get cards. The table needed 640px of width, so on a phone it
+              was a horizontal-scroll puzzle — the thing that made this page
+              unusable on mobile. Both views read the same sorted/filtered rows. */}
+          <Stack spacing={1.5} sx={{ display: { xs: 'flex', md: 'none' } }}>
+            <TextField
+              select
+              size="small"
+              label="sort by"
+              value={`${sortId}:${sortDesc ? 'desc' : 'asc'}`}
+              onChange={(e) => {
+                const [id, dir] = e.target.value.split(':');
+                setSorting([{ id, desc: dir === 'desc' }]);
+              }}
+              slotProps={{ inputLabel: { shrink: true } }}
+            >
+              <MenuItem value="date:desc">date · newest</MenuItem>
+              <MenuItem value="date:asc">date · oldest</MenuItem>
+              <MenuItem value="title:asc">show · a–z</MenuItem>
+              <MenuItem value="video:desc">video · ready first</MenuItem>
+              <MenuItem value="status:asc">who · claimed first</MenuItem>
+            </TextField>
+
+            {rows.map((row) => {
+              const s = row.original;
+              const claim = claims[s.id];
+              return (
+                <ButtonBase
                   key={row.id}
-                  onClick={() => navigate({ to: '/upload/$showId', params: { showId: row.original.id } })}
-                  className="group cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-accent-soft"
+                  onClick={() => navigate({ to: '/upload/$showId', params: { showId: s.id } })}
+                  sx={{
+                    display: 'block',
+                    width: '100%',
+                    textAlign: 'left',
+                    border: `1px solid ${c.line}`,
+                    backgroundColor: c.surface,
+                    p: 2,
+                    '&:hover': { borderColor: c.ink },
+                  }}
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="whitespace-nowrap px-4 py-3.5 sm:px-5">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={columns.length} className="px-5 py-10 text-center text-sm text-muted">
-                    No shows match “{filter}”.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{s.title}</Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, display: 'block' }}>
+                    {s.date} · {s.startTime}
+                    {s.tags?.length ? ` · ${s.tags.length} tags` : ''}
+                  </Typography>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{ mt: 1.25, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+                  >
+                    <VideoCell
+                      showId={s.id}
+                      uploads={uploads}
+                      staged={staged}
+                      uploaded={uploaded}
+                      uploadingElsewhere={uploadingElsewhere}
+                    />
+                    <Box sx={{ flex: 1 }} />
+                    {claim && <ClaimBadge claim={claim} mine={claim.userSub === myUserId} />}
+                  </Stack>
+                  {!!s.mediaLinks?.length && (
+                    <Box sx={{ mt: 1.25 }}>
+                      <LinksCell show={s} />
+                    </Box>
+                  )}
+                </ButtonBase>
+              );
+            })}
+            {rows.length === 0 && (
+              <Typography color="text.secondary" sx={{ py: 5, textAlign: 'center' }}>
+                no shows match “{filter}”.
+              </Typography>
+            )}
+          </Stack>
+
+          <Paper
+            variant="outlined"
+            sx={{ display: { xs: 'none', md: 'block' }, borderColor: c.ink, overflowX: 'auto' }}
+          >
+            <Table size="small" sx={{ minWidth: 640, tableLayout: 'auto' }}>
+              <TableHead>
+                {table.getHeaderGroups().map((hg) => (
+                  <TableRow key={hg.id} sx={{ '& th': { borderBottom: `1px solid ${c.ink}` } }}>
+                    {hg.headers.map((h) => (
+                      <TableCell key={h.id} sx={{ px: { xs: 2, sm: 2.5 }, py: 1.5 }}>
+                        <Button
+                          variant="text"
+                          onClick={h.column.getToggleSortingHandler()}
+                          sx={{
+                            ...LABEL_SX,
+                            gap: 0.5,
+                            minHeight: 32,
+                            '&:hover': { color: c.ink, textDecoration: 'none' },
+                          }}
+                        >
+                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          <Box component="span" sx={{ color: c.ink }}>
+                            {{ asc: '↑', desc: '↓' }[h.column.getIsSorted() as string] ?? ''}
+                          </Box>
+                        </Button>
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHead>
+              <TableBody>
+                {rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    hover
+                    onClick={() => navigate({ to: '/upload/$showId', params: { showId: row.original.id } })}
+                    sx={{ cursor: 'pointer', '&:last-child td': { borderBottom: 0 } }}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      // Only the show title may wrap. Everything else is short
+                      // and reads better on one line — but leaving the title
+                      // nowrap too let one long name push `tags` and `who` off
+                      // the right edge into a scroll nobody looks for.
+                      const isTitle = cell.column.id === 'title';
+                      return (
+                        <TableCell
+                          key={cell.id}
+                          sx={{
+                            px: { xs: 2, sm: 2.5 },
+                            py: 1.75,
+                            whiteSpace: isTitle ? 'normal' : 'nowrap',
+                            ...(isTitle ? { minWidth: 200, maxWidth: 380 } : null),
+                          }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                ))}
+                {rows.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={columns.length} sx={{ px: 2.5, py: 5, textAlign: 'center' }}>
+                      <Typography color="text.secondary">no shows match “{filter}”.</Typography>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Paper>
+        </>
       )}
+
       {!isLoading && !isError && (
-        <div className="flex items-center justify-between text-xs text-faint">
-          <span>
+        <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="caption" color="text.disabled">
             {table.getFilteredRowModel().rows.length} of {shows.length} shows
-          </span>
+          </Typography>
           {pageCount > 1 && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
+            <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+              <Button
+                variant="text"
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
-                className="lowercase hover:text-ink disabled:opacity-40"
+                sx={{ fontSize: '0.6875rem', color: c.faint, minHeight: 36 }}
               >
                 ← prev
-              </button>
-              <span className="tabular-nums">
+              </Button>
+              <Typography variant="caption" color="text.disabled" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                 {pageIndex + 1} / {pageCount}
-              </span>
-              <button
-                type="button"
+              </Typography>
+              <Button
+                variant="text"
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
-                className="lowercase hover:text-ink disabled:opacity-40"
+                sx={{ fontSize: '0.6875rem', color: c.faint, minHeight: 36 }}
               >
                 next →
-              </button>
-            </div>
+              </Button>
+            </Stack>
           )}
-        </div>
+        </Stack>
       )}
-    </div>
+    </Stack>
   );
 }

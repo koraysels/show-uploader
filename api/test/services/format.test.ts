@@ -69,4 +69,39 @@ describe('htmlToText — rich-text description → plain text for platforms', ()
     expect(htmlToText('just plain text')).toBe('just plain text');
     expect(htmlToText('')).toBe('');
   });
+
+  // Platform descriptions are plain text, so a link's address has to be written
+  // out — otherwise "our mixcloud" arrives as dead words on YouTube.
+  describe('links', () => {
+    it('writes the address out after the anchor text', () => {
+      expect(htmlToText('<p>find us on <a href="https://mixcloud.com/cs">mixcloud</a></p>')).toBe(
+        'find us on mixcloud (https://mixcloud.com/cs)'
+      );
+    });
+
+    it("doesn't repeat an address that is already the anchor text", () => {
+      expect(htmlToText('<p><a href="https://mixcloud.com/cs">https://mixcloud.com/cs</a></p>')).toBe(
+        'https://mixcloud.com/cs'
+      );
+      expect(htmlToText('<p><a href="https://mixcloud.com/cs">mixcloud.com/cs</a></p>')).toBe(
+        'https://mixcloud.com/cs'
+      );
+    });
+
+    it('keeps query strings intact through entity decoding', () => {
+      expect(htmlToText('<p><a href="https://x.be/a?b=1&amp;c=2">tickets</a></p>')).toBe(
+        'tickets (https://x.be/a?b=1&c=2)'
+      );
+    });
+
+    it('handles several links and markup inside the anchor', () => {
+      expect(
+        htmlToText('<p><a href="https://a.be">A</a> and <a href="https://b.be"><strong>B</strong></a></p>')
+      ).toBe('A (https://a.be) and B (https://b.be)');
+    });
+
+    it('falls back to the text when there is no address', () => {
+      expect(htmlToText('<p><a href="">nothing</a></p>')).toBe('nothing');
+    });
+  });
 });

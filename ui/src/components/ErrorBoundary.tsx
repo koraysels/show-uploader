@@ -1,4 +1,8 @@
 import { Component, type ReactNode } from 'react';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Typography from '@mui/material/Typography';
 import { userManager } from '../auth/AuthProvider';
 
 type Props = { children: ReactNode };
@@ -21,23 +25,25 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="mx-auto max-w-md space-y-4 py-20 text-center">
-        <p className="text-[11px] lowercase tracking-wide text-faint">something went wrong</p>
-        <h1 className="text-xl font-semibold lowercase text-ink">the page hit an error</h1>
-        <p className="break-words text-sm text-muted">{this.state.error.message || 'unexpected error'}</p>
-        <div className="flex justify-center gap-2 pt-2">
-          <button type="button" onClick={() => window.location.reload()} className="btn-primary px-4 py-2">
+      <Box sx={{ mx: 'auto', maxWidth: 448, py: 10, px: 3, textAlign: 'center' }}>
+        <Typography variant="caption" color="text.disabled" sx={{ display: 'block' }}>
+          something went wrong
+        </Typography>
+        <Typography variant="h1" sx={{ mt: 1, fontSize: '1.25rem' }}>
+          the page hit an error
+        </Typography>
+        <Typography variant="body1" color="text.secondary" sx={{ mt: 2, overflowWrap: 'break-word' }}>
+          {this.state.error.message || 'unexpected error'}
+        </Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 3, justifyContent: 'center' }}>
+          <Button variant="contained" onClick={() => window.location.reload()}>
             reload
-          </button>
-          <button
-            type="button"
-            onClick={() => void userManager.signinRedirect({ prompt: 'login' })}
-            className="btn-ghost px-4 py-2"
-          >
+          </Button>
+          <Button variant="outlined" onClick={() => void userManager.signinRedirect({ prompt: 'login' })}>
             sign in again
-          </button>
-        </div>
-      </div>
+          </Button>
+        </Stack>
+      </Box>
     );
   }
 }

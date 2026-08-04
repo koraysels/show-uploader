@@ -5,9 +5,17 @@ import {
   createRouter,
   Link,
   Outlet,
+  useRouterState,
 } from '@tanstack/react-router';
+import Box from '@mui/material/Box';
+import Stack from '@mui/material/Stack';
+import Button from '@mui/material/Button';
+import Divider from '@mui/material/Divider';
+import Tooltip from '@mui/material/Tooltip';
+import Typography from '@mui/material/Typography';
 import { useAuth } from './auth/useAuth';
 import { useAuthCheck } from './api/hooks';
+import { c, withAlpha } from './theme';
 import NewUpload from './pages/NewUpload';
 import Shows from './pages/Shows';
 import History from './pages/History';
@@ -22,6 +30,7 @@ import AccessDenied from './pages/AccessDenied';
 function AuthedLayout() {
   const { user, loading, userManager } = useAuth();
   const authCheck = useAuthCheck(!!user);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     if (!loading && !user) void userManager.signinRedirect();
@@ -33,9 +42,6 @@ function AuthedLayout() {
   if (!user) return <PageLoading label="signing in…" />;
   if (authCheck.isError && authCheck.error.message.includes('403')) return <AccessDenied />;
   if (authCheck.isPending) return <PageLoading label="checking access…" />;
-
-  const navLink = 'px-3 py-1.5 text-sm lowercase text-muted hover:text-ink transition-colors';
-  const navActive = 'px-3 py-1.5 text-sm lowercase text-paper bg-ink';
 
   const displayName =
     (user.profile.name as string) ||
@@ -52,12 +58,62 @@ function AuthedLayout() {
     await userManager.signinRedirect({ prompt: 'login' });
   };
 
+  // Inverted fill marks the current tab — DESIGN.md's emphasis mechanism, since
+  // there's no accent colour to lean on.
+  const navSx = {
+    px: 1.5,
+    py: 0.75,
+    minHeight: 36,
+    fontSize: '0.875rem',
+    color: c.muted,
+    border: 'none',
+    backgroundColor: 'transparent',
+    '&:hover': { backgroundColor: 'transparent', color: c.ink, textDecoration: 'none' },
+  };
+  const navActiveSx = { ...navSx, color: c.paper, backgroundColor: c.ink, '&:hover': { backgroundColor: c.inkHover, color: c.paper } };
+
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-ink bg-paper/90 backdrop-blur">
-        <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2 sm:gap-x-6 sm:px-6">
-          <Link to="/" className="flex items-center gap-2 text-base font-semibold lowercase tracking-tight text-ink">
-            <svg viewBox="0 0 32 32" className="h-5 w-5 text-ink" fill="currentColor" aria-hidden>
+    <Box sx={{ minHeight: '100vh' }}>
+      <Box
+        component="header"
+        sx={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 30,
+          borderBottom: `2px solid ${c.ink}`,
+          backgroundColor: withAlpha(c.page, 0.92),
+          backdropFilter: 'blur(8px)',
+        }}
+      >
+        <Stack
+          direction="row"
+          sx={{
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            mx: 'auto',
+            maxWidth: 1152,
+            minHeight: 64,
+            px: { xs: 2, sm: 3 },
+            py: 1,
+            columnGap: { xs: 2, sm: 3 },
+            rowGap: 1,
+          }}
+        >
+          <Button
+            component={Link}
+            to="/"
+            variant="text"
+            sx={{
+              ...navSx,
+              px: 0,
+              gap: 1,
+              fontSize: '1rem',
+              fontWeight: 600,
+              color: c.ink,
+              letterSpacing: '-0.01em',
+            }}
+          >
+            <Box component="svg" viewBox="0 0 32 32" sx={{ width: 20, height: 20 }} fill="currentColor" aria-hidden>
               <path d="M16 8 L21 14 H17.5 V19 H14.5 V14 H11 Z" />
               <g opacity="0.9">
                 <rect x="8" y="22" width="2" height="3" rx="1" />
@@ -66,46 +122,63 @@ function AuthedLayout() {
                 <rect x="20" y="20" width="2" height="6" rx="1" />
                 <rect x="24" y="22" width="2" height="3" rx="1" />
               </g>
-            </svg>
+            </Box>
             show uploader
-          </Link>
-          <nav className="flex items-center gap-0.5">
-            <Link to="/" activeOptions={{ exact: true }} className={navLink} activeProps={{ className: navActive }}>
+          </Button>
+
+          <Stack component="nav" direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
+            <Button component={Link} to="/" variant="text" sx={pathname === '/' ? navActiveSx : navSx}>
               upload
-            </Link>
-            <Link to="/history" className={navLink} activeProps={{ className: navActive }}>
+            </Button>
+            <Button component={Link} to="/history" variant="text" sx={pathname.startsWith('/history') ? navActiveSx : navSx}>
               jobs queue
-            </Link>
-            <Link to="/archive" className={navLink} activeProps={{ className: navActive }}>
+            </Button>
+            <Button component={Link} to="/archive" variant="text" sx={pathname.startsWith('/archive') ? navActiveSx : navSx}>
               archive
-            </Link>
-          </nav>
-          <div className="ml-auto flex items-center gap-3 sm:gap-5">
+            </Button>
+          </Stack>
+
+          {/* Identity block drops to its own full-width line on phones instead
+              of squeezing the nav off the edge. */}
+          <Stack
+            direction="row"
+            spacing={{ xs: 1.5, sm: 2.5 }}
+            sx={{ alignItems: 'center', ml: { sm: 'auto' }, width: { xs: '100%', sm: 'auto' } }}
+          >
             <PresenceRoster />
             <UploadIndicator />
-            <div className="flex items-center gap-2 border-l border-line pl-4">
-              <span className="max-w-[140px] truncate text-xs lowercase text-muted" title={displayName}>
-                {displayName}
-              </span>
-              <button
-                type="button"
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', ml: { xs: 'auto', sm: 0 } }}>
+              <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+              <Tooltip title={displayName}>
+                <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 140 }}>
+                  {displayName}
+                </Typography>
+              </Tooltip>
+              <Button
+                variant="text"
                 onClick={handleLogout}
-                className="text-xs lowercase text-faint underline decoration-line underline-offset-2 hover:text-ink hover:decoration-ink"
+                sx={{
+                  minHeight: 32,
+                  fontSize: '0.6875rem',
+                  color: c.faint,
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
+                }}
               >
                 log out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+              </Button>
+            </Stack>
+          </Stack>
+        </Stack>
+      </Box>
+      <Box component="main" sx={{ mx: 'auto', maxWidth: 1152, px: { xs: 2, sm: 3 }, py: { xs: 4, sm: 5 } }}>
         {/* Page-level boundary: a crash in one page keeps the header/nav + is
             recoverable, instead of blanking the whole app. */}
         <ErrorBoundary>
           <Outlet />
         </ErrorBoundary>
-      </main>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
