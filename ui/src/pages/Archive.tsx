@@ -288,14 +288,16 @@ function SourceVideo({ upload }: { upload: UploadWithJobs }) {
   const { exists, size, filename } = info.data;
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+      {/* The row's label already says "source file" — repeating it in the value
+          just made the line longer. */}
       <Tooltip title={exists ? filename : `${filename} is not in the bucket`}>
         <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
           <Box
             aria-hidden
             sx={{ width: 6, height: 6, borderRadius: '999px', bgcolor: exists ? c.muted : c.danger, flexShrink: 0 }}
           />
-          <Typography variant="caption" sx={{ color: exists ? c.muted : c.danger }}>
-            {exists ? `source file${size ? ` · ${humanSize(size)}` : ''}` : 'source file missing'}
+          <Typography variant="body2" sx={{ color: exists ? c.muted : c.danger }}>
+            {exists ? (size ? humanSize(size) : 'on s3') : 'missing from s3'}
           </Typography>
         </Stack>
       </Tooltip>
@@ -356,6 +358,33 @@ function AudioState({ upload, as }: { upload: UploadWithJobs; as: 'link' | 'acti
   );
 }
 
+/**
+ * One labelled row of a card: a fixed label column and whatever controls belong
+ * to it. Two columns from `sm` up; on a phone the label sits on its own line
+ * above, because a 116px column would leave the values squeezed into nothing.
+ */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', sm: '116px 1fr' },
+        columnGap: 2,
+        rowGap: 0.25,
+        alignItems: 'baseline',
+        py: 0.25,
+      }}
+    >
+      <Typography variant="caption" color="text.disabled">
+        {label}
+      </Typography>
+      <Stack direction="row" spacing={2} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5, minWidth: 0 }}>
+        {children}
+      </Stack>
+    </Box>
+  );
+}
+
 // coverUrl comes from the PocketBase record (the master), not the stored
 // upload.image_url snapshot — so the thumbnail is always the current agenda image.
 function ArchiveCard({
@@ -412,106 +441,98 @@ function ArchiveCard({
         </Box>
       </Stack>
 
-      {/* Tier one, split by kind rather than lined up as identical boxes:
-          the things that DO something on this page get a border, the things
-          that just take you somewhere or hand you a file stay as links. */}
-      {(playable || !upload.audio_url) && (
-        <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 1 }}>
-          {playable && (
+      {/* One labelled row per kind of thing. The card used to be two runs of
+          mixed controls where you had to read every label to find the one you
+          wanted; now the left column tells you which row to look at, and the
+          rows are always in the same order whatever state the show is in. */}
+      <Stack spacing={0.5} sx={{ mt: 2 }}>
+        {playable && (
+          <Field label="preview">
             <Button color={ROLE.commit} onClick={() => setPlayerOpen((v) => !v)} sx={actionSx}>
               {playerOpen ? '× close player' : '▸ watch'}
             </Button>
-          )}
-          <AudioState upload={upload} as="action" />
-        </Stack>
-      )}
-
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{ mt: 1.25, alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
-      >
-        {pub.map((j) => (
-          <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
-        ))}
-        {pub.length > 0 && <Divider orientation="vertical" flexItem sx={{ my: 0.75 }} />}
-        <Typography variant="caption" color="text.disabled">
-          download
-        </Typography>
-        <DownloadLink url={upload.video_url} label="video" />
-        <AudioState upload={upload} as="link" />
-      </Stack>
-
-      {/* Tier two: managing the record. Quieter, and separated by a rule so
-          the destructive half never sits inline with the download links. */}
-      <Stack
-        direction="row"
-        spacing={2}
-        sx={{ mt: 1.75, pt: 1.5, alignItems: 'center', flexWrap: 'wrap', rowGap: 1.25, borderTop: `1px solid ${c.line}` }}
-      >
-        <Tooltip title={live ? 'this show is live on the main website' : 'draft — not visible on the main website'}>
-          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
-            <Box
-              aria-hidden
-              sx={{ width: 6, height: 6, borderRadius: '999px', flexShrink: 0, bgcolor: live ? c.ok : c.line }}
-            />
-            <Typography variant="caption" sx={{ color: live ? c.ok : c.faint }}>
-              {live ? 'on main website' : 'draft'}
-            </Typography>
-          </Stack>
-        </Tooltip>
-
-        {live ? (
-          <ConfirmAction
-            label="unpublish"
-            question="back to draft?"
-            pending={unpublish.isPending}
-            pendingLabel="unpublishing…"
-            onConfirm={() => unpublish.mutate(upload.id)}
-            title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
-          />
-        ) : (
-          <Tooltip title="set the agenda record to published — makes it live on the main website">
-            <Button
-              onClick={() => publish.mutate(upload.id)}
-              disabled={publish.isPending}
-              color={ROLE.write}
-              sx={actionSx}
-            >
-              {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
-            </Button>
-          </Tooltip>
+          </Field>
         )}
 
-        <SourceVideo upload={upload} />
+        {pub.length > 0 && (
+          <Field label="platform links">
+            {pub.map((j) => (
+              <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
+            ))}
+          </Field>
+        )}
 
-        {/* Explicit spacer rather than ml:auto — Stack's own spacing rules win
-            over a margin set on the child, so auto-margin silently did nothing. */}
-        <Box sx={{ flex: 1, display: { xs: 'none', sm: 'block' } }} />
+        <Field label="downloads">
+          <DownloadLink url={upload.video_url} label="video" />
+          <AudioState upload={upload} as="link" />
+          <AudioState upload={upload} as="action" />
+        </Field>
 
-        {/* Own line on phones: inline with the source-file state it made one
-            dense, unreadable run of small links. */}
-        <Stack direction="row" spacing={2} sx={{ alignItems: 'center', width: { xs: '100%', sm: 'auto' } }}>
+        <Field label="source file">
+          <SourceVideo upload={upload} />
+        </Field>
+      </Stack>
+
+      {/* Managing the record, kept behind a rule so the destructive half never
+          sits inline with the links you click all day. */}
+      <Stack spacing={0.5} sx={{ mt: 1.75, pt: 1.5, borderTop: `1px solid ${c.line}` }}>
+        <Field label="website">
+          <Tooltip title={live ? 'this show is live on the main website' : 'draft — not visible on the main website'}>
+            <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+              <Box
+                aria-hidden
+                sx={{ width: 6, height: 6, borderRadius: '999px', flexShrink: 0, bgcolor: live ? c.ok : c.line }}
+              />
+              <Typography variant="body2" sx={{ color: live ? c.ok : c.faint }}>
+                {live ? 'on main website' : 'draft'}
+              </Typography>
+            </Stack>
+          </Tooltip>
+
+          {live ? (
+            <ConfirmAction
+              label="unpublish"
+              question="back to draft?"
+              pending={unpublish.isPending}
+              pendingLabel="unpublishing…"
+              onConfirm={() => unpublish.mutate(upload.id)}
+              title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
+            />
+          ) : (
+            <Tooltip title="set the agenda record to published — makes it live on the main website">
+              <Button
+                onClick={() => publish.mutate(upload.id)}
+                disabled={publish.isPending}
+                color={ROLE.write}
+                sx={actionSx}
+              >
+                {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
+              </Button>
+            </Tooltip>
+          )}
+        </Field>
+
+        <Field label="manage">
           <Button
             variant="text"
             onClick={() => setSyncOpen((v) => !v)}
-            sx={{ fontSize: '0.6875rem', minHeight: 32, color: c.faint, textDecoration: 'underline', textUnderlineOffset: '2px' }}
+            sx={{ fontSize: '0.8125rem', minHeight: 32, color: c.muted, textDecoration: 'underline', textUnderlineOffset: '2px' }}
           >
-            {syncOpen ? 'close' : 'sync platforms'}
+            {syncOpen ? 'close sync panel' : 'sync platforms'}
           </Button>
           <Tooltip title="edit this record in the agenda (PocketBase is the master)">
             <MuiLink
               href={agendaUrl}
               target="_blank"
               rel="noreferrer"
-              variant="caption"
+              variant="body2"
               color={ROLE.navigate}
               sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32 }}
             >
-              edit ↗
+              edit in agenda ↗
             </MuiLink>
           </Tooltip>
-        </Stack>
+        </Field>
       </Stack>
 
       {/* A failed unpublish used to be silent — the button just reappeared,
