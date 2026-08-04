@@ -9,7 +9,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useGenres, useUploadCover, useClearCover } from '../api/hooks';
 import TagInput from './TagInput';
-import { c } from '../theme';
+import { c, ROLE } from '../theme';
 
 // The rich-text editor pulls in TipTap (~120 kB gzip) — load it only when a
 // MetadataForm actually renders (the upload page), not on every page.
@@ -169,15 +169,16 @@ export default function MetadataForm({
               e.target.value = '';
             }}
           />
-          <Button disabled={busy} onClick={() => fileRef.current?.click()} sx={{ minHeight: 40 }}>
+          <Button disabled={busy} color={ROLE.write} onClick={() => fileRef.current?.click()} sx={{ minHeight: 40 }}>
             {uploadCover.isPending ? 'uploading…' : imageUrl ? 'replace cover' : 'upload cover'}
           </Button>
           {imageUrl && !busy && (
             <Tooltip title="clears the image on the pocketbase record">
               <Button
                 variant="text"
+                color={ROLE.destroy}
                 onClick={removeCover}
-                sx={{ fontSize: '0.6875rem', color: c.faint, '&:hover': { color: c.danger } }}
+                sx={{ minHeight: 32, fontSize: '0.6875rem' }}
               >
                 remove
               </Button>

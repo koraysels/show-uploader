@@ -13,7 +13,7 @@ import Popover from '@mui/material/Popover';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
-import { c, withAlpha } from '../theme';
+import { c, withAlpha, ROLE } from '../theme';
 
 const OpenContext = createContext<() => void>(() => {});
 
@@ -91,7 +91,8 @@ export function UploadControl({ showId }: { showId: string }) {
           <Button
             variant="text"
             onClick={() => cancel(showId)}
-            sx={{ flexShrink: 0, fontSize: '0.6875rem', color: c.faint, '&:hover': { color: c.danger } }}
+            color={ROLE.destroy}
+            sx={{ flexShrink: 0, minHeight: 32, fontSize: '0.6875rem' }}
           >
             cancel
           </Button>
@@ -208,7 +209,8 @@ function IndicatorRow({ item, compact }: { item: UploadItem; compact?: boolean }
           variant="text"
           onClick={() => cancel(item.showId)}
           aria-label={`cancel upload of ${item.filename}`}
-          sx={{ flexShrink: 0, minWidth: 24, color: c.faint, '&:hover': { color: c.danger } }}
+          color={ROLE.destroy}
+          sx={{ flexShrink: 0, minWidth: 24 }}
         >
           ✕
         </Button>

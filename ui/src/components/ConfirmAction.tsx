@@ -40,6 +40,9 @@ export default function ConfirmAction({
     const button = (
       <Button
         variant="text"
+        // Always red: this component only ever wraps something destructive, so
+        // the colour is part of the warning rather than a per-call-site choice.
+        color="error"
         onClick={() => setConfirming(true)}
         sx={{
           // Buttons centre their label; in a stretched column (the archive
@@ -49,11 +52,9 @@ export default function ConfirmAction({
           justifyContent: 'flex-start',
           minHeight: 32,
           fontSize: '0.6875rem',
-          color: 'text.disabled',
           textDecoration: 'underline',
           textUnderlineOffset: '2px',
           textAlign: 'left',
-          '&:hover': { color: 'error.main', textDecoration: 'underline' },
         }}
       >
         {label}
@@ -67,20 +68,23 @@ export default function ConfirmAction({
       <Typography variant="caption" color="text.secondary">
         {question}
       </Typography>
+      {/* "yes" is the only red thing here — "no" stays neutral so the safe
+          choice never looks like the dangerous one. */}
       <Button
-        variant="text"
+        variant="outlined"
+        color="error"
         onClick={() => {
           setConfirming(false);
           onConfirm();
         }}
-        sx={{ fontSize: '0.6875rem', color: 'error.main', '&:hover': { color: 'error.main' } }}
+        sx={{ minHeight: 32, px: 1.25, fontSize: '0.6875rem' }}
       >
         yes
       </Button>
       <Button
         variant="text"
         onClick={() => setConfirming(false)}
-        sx={{ fontSize: '0.6875rem', color: 'text.secondary' }}
+        sx={{ minHeight: 32, fontSize: '0.6875rem', color: 'text.secondary' }}
       >
         no
       </Button>

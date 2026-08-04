@@ -31,7 +31,7 @@ import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
 import { shortName } from '../components/PresenceRoster';
-import { c } from '../theme';
+import { c, ROLE } from '../theme';
 
 const col = createColumnHelper<AgendaShow>();
 
@@ -130,7 +130,8 @@ function LinksCell({ show }: { show: AgendaShow }) {
             target="_blank"
             rel="noreferrer"
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
-            sx={{ px: 1.25, py: 0.25, minHeight: 32, fontSize: '0.75rem', borderColor: c.line, color: c.muted }}
+            color={ROLE.navigate}
+            sx={{ px: 1.25, py: 0.25, minHeight: 32, fontSize: '0.75rem' }}
           >
             {SHORT[l.label] ?? l.label}
           </Button>

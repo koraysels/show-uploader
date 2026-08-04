@@ -10,6 +10,17 @@ import type { AgendaShow, UploadWithJobs } from '../api/client';
 
 const day = (n: number) => new Date(Date.now() - n * 864e5).toISOString();
 
+/**
+ * Stand-in cover art as an inline SVG data URI. Real covers come from
+ * PocketBase; the mock has no network, so a remote URL would just 404 and the
+ * card's onError handler would hide it — making it look like covers had stopped
+ * working rather than being absent from the fixtures.
+ */
+function cover(label: string, bg: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160"><rect width="160" height="160" fill="${bg}"/><text x="80" y="96" font-family="monospace" font-size="64" font-weight="600" fill="#fafafa" text-anchor="middle">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
 export const shows: AgendaShow[] = [
   {
     id: 'show_zonderdak',
@@ -18,7 +29,7 @@ export const shows: AgendaShow[] = [
     date: '2026-07-31',
     startTime: '20:00',
     endTime: '22:00',
-    imageUrl: null,
+    imageUrl: cover('RZ', '#137738'),
     tags: ['talk', 'community'],
     mediaLinks: [],
     showDescription: 'A monthly programme made with and by people without a roof.',
@@ -30,7 +41,7 @@ export const shows: AgendaShow[] = [
     date: '2026-07-28',
     startTime: '23:00',
     endTime: '01:00',
-    imageUrl: null,
+    imageUrl: cover('LN', '#4d4d4d'),
     tags: ['ambient', 'tape', 'experimental', 'drone', 'field recordings'],
     mediaLinks: [{ label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' }],
     showDescription: null,
@@ -42,7 +53,7 @@ export const shows: AgendaShow[] = [
     date: '2026-07-25',
     startTime: '09:00',
     endTime: '11:00',
-    imageUrl: null,
+    imageUrl: cover('BC', '#0f0f0f'),
     tags: null,
     mediaLinks: [
       { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo2' },
@@ -160,10 +171,11 @@ export const uploads: UploadWithJobs[] = [
   },
 ];
 
+// One record deliberately has no cover — the card has to survive that too.
 export const archiveStates: Record<string, { cover: string | null; status: 'draft' | 'published' }> = {
-  show_breakfast: { cover: null, status: 'published' },
-  show_latenight: { cover: null, status: 'draft' },
-  show_zonderdak: { cover: null, status: 'draft' },
+  show_breakfast: { cover: cover('BC', '#0f0f0f'), status: 'published' },
+  show_latenight: { cover: cover('LN', '#4d4d4d'), status: 'draft' },
+  show_zonderdak: { cover: cover('RZ', '#137738'), status: 'draft' },
   show_dubplate: { cover: null, status: 'draft' },
 };
 

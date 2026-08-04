@@ -27,7 +27,7 @@ import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
-import { c } from '../theme';
+import { c, ROLE } from '../theme';
 
 // The agenda site hosts the archive record's admin detail page at
 // `<base>/#/archive/<recordId>`, and the record id is the same id we use as showId.
@@ -304,7 +304,12 @@ export default function NewUpload() {
           </Typography>
           {/* Stacks on phones — side by side these two fell under 44px each. */}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-            <Button variant="contained" onClick={() => setAckSteal(true)} sx={{ flex: 1, minHeight: 44 }}>
+            <Button
+              variant="contained"
+              color={ROLE.destroy}
+              onClick={() => setAckSteal(true)}
+              sx={{ flex: 1, minHeight: 44 }}
+            >
               open anyway
             </Button>
             <Button component={Link} to="/" sx={{ flex: 1, minHeight: 44 }}>
@@ -357,7 +362,7 @@ export default function NewUpload() {
                   display: 'inline-flex',
                   alignItems: 'center',
                   minHeight: 32,
-                  color: c.muted,
+                  color: c.link,
                   textDecoration: 'underline',
                   textUnderlineOffset: '2px',
                 },
@@ -372,7 +377,7 @@ export default function NewUpload() {
         )}
 
         <Box>
-          <MuiLink component={Link} to="/" color="text.secondary" sx={tapLinkSx}>
+          <MuiLink component={Link} to="/" color={ROLE.navigate} sx={tapLinkSx}>
             ← to process
           </MuiLink>
           <Typography variant="h1" sx={{ mt: 1, textTransform: 'none' }}>
@@ -387,7 +392,7 @@ export default function NewUpload() {
               target="_blank"
               rel="noreferrer"
               variant="body2"
-              color="text.secondary"
+              color={ROLE.navigate}
               sx={tapLinkSx}
             >
               ↗ open in agenda
@@ -466,8 +471,9 @@ export default function NewUpload() {
           >
             <Button
               disabled={saveMeta.isPending || !title.trim()}
+              color={ROLE.write}
               onClick={() => saveMeta.mutate({ id: selectedShow.id, title, description, tags })}
-              sx={{ minHeight: 40, borderColor: c.line, color: c.muted }}
+              sx={{ minHeight: 40 }}
             >
               {saveMeta.isPending ? 'saving…' : 'save to agenda'}
             </Button>
@@ -506,8 +512,9 @@ export default function NewUpload() {
               </Typography>
               <Button
                 variant="text"
+                color={ROLE.destroy}
                 onClick={handleReplace}
-                sx={{ flexShrink: 0, minHeight: 32, fontSize: '0.6875rem', color: c.faint, '&:hover': { color: c.danger } }}
+                sx={{ flexShrink: 0, minHeight: 32, fontSize: '0.6875rem' }}
               >
                 replace
               </Button>

@@ -30,7 +30,7 @@ import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import type { UploadWithJobs } from '../api/client';
-import { c } from '../theme';
+import { c, ROLE } from '../theme';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
 
@@ -66,6 +66,7 @@ function PublishedLink({ platform, url }: { platform: string; url: string }) {
       href={url}
       target="_blank"
       rel="noreferrer"
+      color={ROLE.navigate}
       sx={{ ...actionSx, gap: 0.75, fontWeight: 500 }}
     >
       {PLATFORM_LABELS[platform] ?? platform} ↗
@@ -162,6 +163,7 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
                     <Tooltip title="make this video public on YouTube">
                       <Button
                         disabled={setPublic.isPending}
+                        color={ROLE.write}
                         onClick={() => setPublic.mutate(ytLink.url, { onSuccess: () => ytStatus.refetch() })}
                         sx={actionSx}
                       >
@@ -184,6 +186,7 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
           <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}>
             <Button
               variant="contained"
+              color={ROLE.write}
               disabled={sync.isPending || selected.length === 0}
               onClick={() => sync.mutate({ id: showId, platforms: selected })}
               sx={{ minHeight: 44 }}
@@ -222,7 +225,14 @@ function DownloadLink({ url, label }: { url: string | null; label: string }) {
       </Typography>
     );
   return (
-    <Button component="a" href={url} target="_blank" rel="noreferrer" sx={{ ...actionSx, fontWeight: 500 }}>
+    <Button
+      component="a"
+      href={url}
+      target="_blank"
+      rel="noreferrer"
+      color={ROLE.navigate}
+      sx={{ ...actionSx, fontWeight: 500 }}
+    >
       {label} ↓
     </Button>
   );
@@ -298,7 +308,7 @@ function SourceVideo({ upload }: { upload: UploadWithJobs }) {
               display: 'inline-flex',
               alignItems: 'center',
               minHeight: 32,
-              color: c.faint,
+              color: c.link,
               textDecoration: 'underline',
               textUnderlineOffset: '2px',
             },
@@ -332,7 +342,7 @@ function AudioCell({ upload }: { upload: UploadWithJobs }) {
   // No audio yet — offer to (re)generate it.
   return (
     <Tooltip title={job?.status === 'failed' ? job.error ?? 'retry' : 'extract the downloadable audio'}>
-      <Button onClick={() => gen.mutate(upload.id)} sx={{ ...actionSx, fontWeight: 500 }}>
+      <Button color={ROLE.write} onClick={() => gen.mutate(upload.id)} sx={{ ...actionSx, fontWeight: 500 }}>
         {job?.status === 'failed' ? 'retry audio' : 'generate audio'}
       </Button>
     </Tooltip>
@@ -407,7 +417,7 @@ function ArchiveCard({
         ))}
         {pub.length > 0 && <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />}
         {playable && (
-          <Button onClick={() => setPlayerOpen((v) => !v)} sx={{ ...actionSx, fontWeight: 500 }}>
+          <Button color={ROLE.navigate} onClick={() => setPlayerOpen((v) => !v)} sx={{ ...actionSx, fontWeight: 500 }}>
             {playerOpen ? 'close player' : 'watch ▸'}
           </Button>
         )}
@@ -448,7 +458,8 @@ function ArchiveCard({
             <Button
               onClick={() => publish.mutate(upload.id)}
               disabled={publish.isPending}
-              sx={{ ...actionSx, borderColor: c.ink }}
+              color={ROLE.write}
+              sx={actionSx}
             >
               {publish.isPending ? 'publishing…' : publish.isError ? 'retry publish' : 'publish to main website'}
             </Button>
@@ -477,7 +488,8 @@ function ArchiveCard({
               target="_blank"
               rel="noreferrer"
               variant="caption"
-              sx={{ color: c.faint, display: 'inline-flex', alignItems: 'center', minHeight: 32, '&:hover': { color: c.ink } }}
+              color={ROLE.navigate}
+              sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32 }}
             >
               edit ↗
             </MuiLink>

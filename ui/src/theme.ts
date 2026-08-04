@@ -36,6 +36,29 @@ export const c = {
   okSoft: '#dcf7e1', // oklch(0.95 0.04 150)
   danger: '#bb0916', // oklch(0.5 0.2 27)
   dangerSoft: '#ffe3dd', // oklch(0.95 0.05 27)
+  link: '#0b57d0', // oklch(0.5 0.19 260)
+  linkSoft: '#e4edfd',
+} as const;
+
+/**
+ * What a button's colour means. Every button in the app picks one — reading the
+ * label should never be the only way to know whether something publishes,
+ * downloads or deletes.
+ *
+ *   primary (ink)   the page's own commit action — one per screen, filled
+ *   info    (blue)  goes somewhere or fetches something; changes nothing
+ *   success (green) writes to a record: publish, sync, save, generate
+ *   error   (red)   destroys or reverses: delete, unpublish, remove, replace
+ *
+ * Colour is never the only signal — the labels stay explicit and the
+ * destructive ones keep their confirm step — so this survives colour blindness
+ * and greyscale. It just makes the common case readable at a glance.
+ */
+export const ROLE = {
+  commit: 'primary',
+  navigate: 'info',
+  write: 'success',
+  destroy: 'error',
 } as const;
 
 const mono = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
@@ -46,6 +69,14 @@ const mono = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
 export function withAlpha(hex: string, alpha: number): string {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+/** The `main` colour for whatever palette a component was given. `inherit` and
+ *  the odd unset case fall back to ink. */
+function paletteMain(theme: { palette: unknown }, color?: string): string {
+  if (!color || color === 'inherit') return c.ink;
+  const entry = (theme.palette as Record<string, { main?: string } | undefined>)[color];
+  return entry?.main ?? c.ink;
 }
 
 export const theme = createTheme({
@@ -61,6 +92,7 @@ export const theme = createTheme({
     secondary: { main: c.muted, contrastText: c.paper },
     success: { main: c.ok, light: c.okSoft, contrastText: c.paper },
     error: { main: c.danger, light: c.dangerSoft, contrastText: c.paper },
+    info: { main: c.link, light: c.linkSoft, contrastText: c.paper },
     divider: c.line,
   },
   typography: {
@@ -107,25 +139,38 @@ export const theme = createTheme({
           padding: '8px 16px',
           transition: 'background-color 0.12s ease, color 0.12s ease',
         },
-        outlined: {
-          border: `1px solid ${c.ink}`,
-          color: c.ink,
-          backgroundColor: c.surface,
-          '&:hover': { border: `1px solid ${c.ink}`, backgroundColor: c.ink, color: c.paper },
-          '&.Mui-disabled': { border: `1px solid ${c.line}`, color: c.faint },
+        // Colour-aware: the border and label take the button's palette colour, so
+        // `color="error"` reads as destructive without any per-call-site styling.
+        // Hover still inverts to a solid fill — that's the house pattern, and it
+        // makes the role unmistakable at the moment of clicking.
+        outlined: ({ theme, ownerState }) => {
+          const main = paletteMain(theme, ownerState.color);
+          return {
+            border: `1px solid ${main}`,
+            color: main,
+            backgroundColor: c.surface,
+            '&:hover': { border: `1px solid ${main}`, backgroundColor: main, color: c.paper },
+            '&.Mui-disabled': { border: `1px solid ${c.line}`, color: c.faint },
+          };
         },
-        contained: {
-          backgroundColor: c.ink,
+        contained: ({ theme, ownerState }) => ({
+          backgroundColor: paletteMain(theme, ownerState.color),
           color: c.paper,
-          border: `1px solid ${c.ink}`,
-          '&:hover': { backgroundColor: c.inkHover },
+          border: `1px solid ${paletteMain(theme, ownerState.color)}`,
+          '&:hover': { filter: 'brightness(1.35)' },
           '&.Mui-disabled': { backgroundColor: c.line, borderColor: c.line, color: c.faint },
-        },
-        text: {
-          color: c.muted,
-          padding: 0,
-          minWidth: 0,
-          '&:hover': { backgroundColor: 'transparent', color: c.ink, textDecoration: 'underline' },
+        }),
+        // Text buttons are the quiet tier — a bare `color="error"` one still
+        // reads red, which is how "delete" and "unpublish" announce themselves
+        // without shouting a filled box at the operator.
+        text: ({ theme, ownerState }) => {
+          const main = ownerState.color && ownerState.color !== 'primary' ? paletteMain(theme, ownerState.color) : c.muted;
+          return {
+            color: main,
+            padding: 0,
+            minWidth: 0,
+            '&:hover': { backgroundColor: 'transparent', color: main, textDecoration: 'underline' },
+          };
         },
       },
     },
@@ -133,7 +178,17 @@ export const theme = createTheme({
     MuiLink: {
       defaultProps: { underline: 'hover' },
       styleOverrides: {
-        root: { color: c.ink, textUnderlineOffset: '2px', textDecorationColor: c.line },
+        // Ink by default (a link in running text shouldn't turn blue), but a
+        // palette colour on the prop still wins — `color="info"` is how the
+        // "open on YouTube" style of link marks itself as navigation.
+        root: ({ theme, ownerState }) => {
+          const named = typeof ownerState.color === 'string' && ownerState.color in theme.palette;
+          return {
+            color: named ? paletteMain(theme, ownerState.color as string) : c.ink,
+            textUnderlineOffset: '2px',
+            textDecorationColor: 'currentColor',
+          };
+        },
       },
     },
     // Inputs mirror the old `.field`: square, hard black border, inset focus

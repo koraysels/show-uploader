@@ -8,6 +8,7 @@ import Typography from '@mui/material/Typography';
 import { useAuth } from '../auth/useAuth';
 import { useRetryJob } from '../api/hooks';
 import type { PlatformJob } from '../api/client';
+import { ROLE } from '../theme';
 
 type Props = {
   uploadId: string;
@@ -127,6 +128,7 @@ export default function JobProgress({ uploadId, jobs }: Props) {
                   target="_blank"
                   rel="noreferrer"
                   variant="caption"
+                  color={ROLE.navigate}
                   sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, fontWeight: 500 }}
                 >
                   view ↗
@@ -143,6 +145,7 @@ export default function JobProgress({ uploadId, jobs }: Props) {
                   <Button
                     onClick={() => retry.mutate(platform as 'youtube' | 'mixcloud' | 'archive')}
                     disabled={retry.isPending}
+                    color={ROLE.write}
                     sx={{ px: 1.25, py: 0.25, fontSize: '0.6875rem', minHeight: 32, flexShrink: 0 }}
                   >
                     {retry.isPending ? 'retrying…' : 'retry'}

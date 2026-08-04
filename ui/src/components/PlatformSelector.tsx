@@ -11,7 +11,7 @@ import Typography from '@mui/material/Typography';
 import { trpcClient } from '../api/trpc';
 import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeStatus } from '../api/hooks';
 import ConfirmAction from './ConfirmAction';
-import { c } from '../theme';
+import { c, ROLE } from '../theme';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
 function JinglePreview() {
@@ -51,6 +51,7 @@ function JinglePreview() {
           <Button
             onClick={toggle}
             disabled={err}
+            color={ROLE.navigate}
             aria-label={err ? 'no jingle configured' : 'preview jingle'}
             sx={{ minWidth: 36, height: 36, px: 0, fontSize: '0.6875rem', lineHeight: 1 }}
           >
@@ -115,7 +116,7 @@ function PublishedPlatform({
   return (
     <Paper variant="outlined" sx={{ p: 1.75, backgroundColor: c.accentSoft, borderColor: c.line }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href={url} target="_blank" rel="noreferrer" sx={{ fontWeight: 500 }}>
+        <Link href={url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={{ fontWeight: 500 }}>
           {label} ↗
         </Link>
         <Typography variant="caption" color="success.main" sx={{ flexShrink: 0 }}>
@@ -133,6 +134,7 @@ function PublishedPlatform({
         >
           <Button
             disabled={update.isPending}
+            color={ROLE.write}
             onClick={() => update.mutate({ platform: id as 'youtube' | 'mixcloud', url, ...meta })}
             sx={{ px: 1.25, py: 0.5, fontSize: '0.75rem', minHeight: 32 }}
           >
@@ -149,6 +151,7 @@ function PublishedPlatform({
             <Tooltip title="make the video public on YouTube (needs the re-authorised token)">
               <Button
                 disabled={setPublic.isPending}
+                color={ROLE.write}
                 onClick={() => setPublic.mutate(url, { onSuccess: () => ytStatus.refetch() })}
                 sx={{ px: 1.25, py: 0.5, fontSize: '0.75rem', minHeight: 32 }}
               >
