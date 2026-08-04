@@ -28,25 +28,34 @@ can't parse `oklch()` and throw at import if handed one.
 the paper and it carries 11px captions. Every text/background pair in the app
 clears 4.5:1.
 
-## Button colour = what the button does
-Monochrome buttons meant the label was the only clue, and "publish to main
-website" looked exactly like "unpublish". Four roles, named in `ROLE`
-(`ui/src/theme.ts`) — always use the constant, never a raw palette key:
+## Shape and colour = what the control does
+Ease of use beats purity here — this is a tool someone drives at 1am on a phone,
+so it uses the conventions people already know rather than inventing any.
+
+**Shape first.** A bordered box is an action that happens *here*. Underlined text
+is a link that takes you somewhere. Don't box a link: five identical outlined
+rectangles in a row is worse than no styling at all, because nothing looks more
+important than anything else.
+
+**Colour second.** Four roles, named in `ROLE` (`ui/src/theme.ts`) — always use
+the constant, never a raw palette key:
 
 | Role | Colour | Meaning | Examples |
 |---|---|---|---|
-| `commit` | ink (filled) | the screen's own commit action, one per page | save & start platform uploads |
-| `navigate` | blue `oklch(0.5 0.19 260)` | goes somewhere or fetches; changes nothing | youtube ↗, video ↓, watch ▸, edit ↗, ← to process |
+| `commit` | ink | the thing you most likely came to do | ▸ watch, save & start platform uploads |
+| `navigate` | blue `oklch(0.45 0.13 262)` | goes somewhere or fetches; changes nothing | YouTube ↗, video ↓, edit ↗, ← to process |
 | `write` | green `oklch(0.5 0.13 150)` | writes to a record | publish to main website, sync selected, save to agenda, set public, retry |
 | `destroy` | red `oklch(0.5 0.2 27)` | destroys or reverses | delete, unpublish, remove, cancel, convert-to-mp4 backfill |
 
-Outlined by default; hover inverts to a solid fill of the same colour, so the
-role is unmistakable at the moment of clicking. Neutral grey is for disclosures
-that do nothing on their own ("sync platforms" opening a panel).
+Buttons are outlined by default; hover inverts to a solid fill of the same
+colour. Neutral grey is for disclosures that do nothing on their own ("sync
+platforms" opening a panel).
 
-Colour is never the only signal — labels stay explicit and destructive actions
-keep their inline confirm step — so this holds up in greyscale and for colour
-blindness. It just makes the common case readable without reading.
+Colour is never the only signal — shape differs, labels stay explicit, and
+destructive actions keep their inline confirm step — so this holds up in
+greyscale and for colour blindness.
+
+Corners are 2px, not 0. Absolute square read as unfinished at this density.
 
 ## Type
 - **Monospace only** (ui-monospace / SF Mono / Menlo). No display serif.

@@ -17,6 +17,7 @@ import ButtonBase from '@mui/material/ButtonBase';
 import Chip from '@mui/material/Chip';
 import LinearProgress from '@mui/material/LinearProgress';
 import MenuItem from '@mui/material/MenuItem';
+import MuiLink from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
@@ -124,17 +125,19 @@ function LinksCell({ show }: { show: AgendaShow }) {
     <Stack direction="row" spacing={0.5}>
       {links.map((l) => (
         <Tooltip key={l.label + l.url} title={l.url}>
-          <Button
-            component="a"
+          {/* A link, not a button — it opens the platform. Boxing these made
+              every row look like it had two pending actions in it. */}
+          <MuiLink
             href={l.url}
             target="_blank"
             rel="noreferrer"
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
             color={ROLE.navigate}
-            sx={{ px: 1.25, py: 0.25, minHeight: 32, fontSize: '0.75rem' }}
+            variant="body2"
+            sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, fontWeight: 500 }}
           >
-            {SHORT[l.label] ?? l.label}
-          </Button>
+            {SHORT[l.label] ?? l.label} ↗
+          </MuiLink>
         </Tooltip>
       ))}
     </Stack>
@@ -394,6 +397,7 @@ export default function Shows() {
                           onClick={h.column.getToggleSortingHandler()}
                           sx={{
                             gap: 0.5,
+                            minHeight: 32,
                             fontSize: '0.6875rem',
                             fontWeight: 600,
                             letterSpacing: '0.09em',

@@ -36,23 +36,31 @@ export const c = {
   okSoft: '#dcf7e1', // oklch(0.95 0.04 150)
   danger: '#bb0916', // oklch(0.5 0.2 27)
   dangerSoft: '#ffe3dd', // oklch(0.95 0.05 27)
-  link: '#0b57d0', // oklch(0.5 0.19 260)
-  linkSoft: '#e4edfd',
+  link: '#1a56a8', // deeper and less saturated than a stock link blue — it
+  linkSoft: '#e7eef8', // appears often, and electric blue on off-white is tiring
 } as const;
 
 /**
- * What a button's colour means. Every button in the app picks one — reading the
- * label should never be the only way to know whether something publishes,
- * downloads or deletes.
+ * What a control's colour means.
  *
- *   primary (ink)   the page's own commit action — one per screen, filled
- *   info    (blue)  goes somewhere or fetches something; changes nothing
+ *   primary (ink)   the thing you most likely came to do — filled or bordered
+ *   info    (blue)  navigation: goes somewhere, fetches; changes nothing
  *   success (green) writes to a record: publish, sync, save, generate
- *   error   (red)   destroys or reverses: delete, unpublish, remove, replace
+ *   error   (red)   destroys or reverses: delete, unpublish, remove, cancel
  *
- * Colour is never the only signal — the labels stay explicit and the
- * destructive ones keep their confirm step — so this survives colour blindness
- * and greyscale. It just makes the common case readable at a glance.
+ * Shape carries as much of the meaning as colour, and the split is the ordinary
+ * one people already know from every other site:
+ *
+ *   a bordered box = an action that does something here
+ *   underlined text = a link that takes you somewhere
+ *
+ * Boxing the links too — five identical outlined rectangles in a row, all blue —
+ * was worse than no colour at all: everything shouted at the same volume and
+ * nothing looked like the primary action. Reserve boxes for actions.
+ *
+ * Colour is never the only signal — labels stay explicit, destructive actions
+ * keep their confirm step — so this holds up in greyscale and for colour
+ * blindness.
  */
 export const ROLE = {
   commit: 'primary',
@@ -81,7 +89,10 @@ function paletteMain(theme: { palette: unknown }, color?: string): string {
 
 export const theme = createTheme({
   cssVariables: true,
-  shape: { borderRadius: 0 },
+  // 2px, not 0. Hairline rounding is the difference between "brutalist" and
+  // "unfinished" at this density, and this is a tool someone uses at 1am on a
+  // phone — familiar beats doctrinaire.
+  shape: { borderRadius: 2 },
   // Every elevation flat: DESIGN.md bans shadows outright. MUI wants 25 entries.
   shadows: Array(25).fill('none') as never,
   palette: {
@@ -135,7 +146,7 @@ export const theme = createTheme({
       defaultProps: { variant: 'outlined', disableElevation: true },
       styleOverrides: {
         root: {
-          borderRadius: 0,
+          borderRadius: 2,
           padding: '8px 16px',
           transition: 'background-color 0.12s ease, color 0.12s ease',
         },
@@ -174,7 +185,7 @@ export const theme = createTheme({
         },
       },
     },
-    MuiIconButton: { styleOverrides: { root: { borderRadius: 0 } } },
+    MuiIconButton: { styleOverrides: { root: { borderRadius: 2 } } },
     MuiLink: {
       defaultProps: { underline: 'hover' },
       styleOverrides: {
@@ -196,7 +207,7 @@ export const theme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: 0,
+          borderRadius: 2,
           backgroundColor: c.surface,
           fontFamily: mono,
           fontSize: '0.875rem',
@@ -218,13 +229,13 @@ export const theme = createTheme({
     },
     MuiCheckbox: {
       defaultProps: { disableRipple: true, size: 'small' },
-      styleOverrides: { root: { borderRadius: 0, color: c.ink, '&.Mui-checked': { color: c.ink } } },
+      styleOverrides: { root: { borderRadius: 2, color: c.ink, '&.Mui-checked': { color: c.ink } } },
     },
     // Boxes, not cards: 1px line, no elevation, no rounding.
     MuiPaper: {
       defaultProps: { elevation: 0 },
       styleOverrides: {
-        root: { backgroundImage: 'none', borderRadius: 0 },
+        root: { backgroundImage: 'none', borderRadius: 2 },
         outlined: { border: `1px solid ${c.line}` },
       },
     },
@@ -250,7 +261,7 @@ export const theme = createTheme({
           fontFamily: mono,
           fontSize: '0.6875rem',
           textTransform: 'lowercase',
-          borderRadius: 0,
+          borderRadius: 2,
           backgroundColor: c.ink,
           color: c.paper,
           maxWidth: 320,
@@ -271,7 +282,7 @@ export const theme = createTheme({
     MuiAlert: {
       defaultProps: { variant: 'outlined' },
       styleOverrides: {
-        root: { borderRadius: 0, fontFamily: mono, fontSize: '0.8125rem' },
+        root: { borderRadius: 2, fontFamily: mono, fontSize: '0.8125rem' },
       },
     },
   },

@@ -54,28 +54,34 @@ function htmlToText(html: string): string {
 // painful on a phone.
 const actionSx = { minHeight: 40, px: 1.25, fontSize: '0.75rem' } as const;
 
+// Shared by every text link in a card: normal link affordance, with a 32px hit
+// area so it's still thumb-sized on a phone.
+const linkSx = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 0.5,
+  minHeight: 32,
+  fontWeight: 500,
+} as const;
+
 // A published platform link + the real YouTube privacy status (read-only). Sync
 // actions live in the SyncPanel below, metadata editing in PocketBase ("edit ↗").
+//
+// A link, not a button: it leaves the app. Boxing these put five identical
+// rectangles in a row and buried the one control that actually does something.
 function PublishedLink({ platform, url }: { platform: string; url: string }) {
   const isYt = platform === 'youtube';
   const status = useYoutubeStatus(url, isYt);
   const priv = status.data?.privacyStatus;
   return (
-    <Button
-      component="a"
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      color={ROLE.navigate}
-      sx={{ ...actionSx, gap: 0.75, fontWeight: 500 }}
-    >
+    <MuiLink href={url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={linkSx}>
       {PLATFORM_LABELS[platform] ?? platform} ↗
       {isYt && priv && (
         <Box component="span" sx={{ fontSize: '0.625rem', color: priv === 'public' ? c.ok : c.faint }}>
           {priv}
         </Box>
       )}
-    </Button>
+    </MuiLink>
   );
 }
 
@@ -220,21 +226,14 @@ function publishedJobs(u: UploadWithJobs) {
 function DownloadLink({ url, label }: { url: string | null; label: string }) {
   if (!url)
     return (
-      <Typography variant="caption" color="text.disabled" sx={{ alignSelf: 'center' }}>
+      <Typography variant="body2" color="text.disabled">
         {label} —
       </Typography>
     );
   return (
-    <Button
-      component="a"
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      color={ROLE.navigate}
-      sx={{ ...actionSx, fontWeight: 500 }}
-    >
+    <MuiLink href={url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={linkSx}>
       {label} ↓
-    </Button>
+    </MuiLink>
   );
 }
 
@@ -324,25 +323,31 @@ function SourceVideo({ upload }: { upload: UploadWithJobs }) {
   );
 }
 
-// The audio archive is produced by the 'archive' job — reflect its live state
-// so the operator sees it being extracted, not just a dash.
-function AudioCell({ upload }: { upload: UploadWithJobs }) {
+// The audio archive is produced by the 'archive' job. Three shapes for three
+// meanings: a link once it exists, live progress while it's being made, and a
+// button only when there's something to press.
+function AudioState({ upload, as }: { upload: UploadWithJobs; as: 'link' | 'action' }) {
   const gen = useGenerateAudio();
-  if (upload.audio_url) return <DownloadLink url={upload.audio_url} label="audio" />;
   const job = upload.jobs.find((j) => j.platform === 'archive');
-  if (gen.isPending || job?.status === 'processing' || job?.status === 'queued')
-    return (
-      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', px: 1.25 }}>
+  const busy = gen.isPending || job?.status === 'processing' || job?.status === 'queued';
+
+  if (upload.audio_url) return as === 'link' ? <DownloadLink url={upload.audio_url} label="audio" /> : null;
+
+  if (busy)
+    return as === 'link' ? (
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
         <CircularProgress size={12} thickness={6} />
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="body2" color="text.secondary">
           audio {job?.progress_pct ?? 0}%
         </Typography>
       </Stack>
-    );
+    ) : null;
+
+  if (as === 'link') return null;
   // No audio yet — offer to (re)generate it.
   return (
     <Tooltip title={job?.status === 'failed' ? job.error ?? 'retry' : 'extract the downloadable audio'}>
-      <Button color={ROLE.write} onClick={() => gen.mutate(upload.id)} sx={{ ...actionSx, fontWeight: 500 }}>
+      <Button color={ROLE.write} onClick={() => gen.mutate(upload.id)} sx={actionSx}>
         {job?.status === 'failed' ? 'retry audio' : 'generate audio'}
       </Button>
     </Tooltip>
@@ -405,24 +410,34 @@ function ArchiveCard({
         </Box>
       </Stack>
 
-      {/* Tier one: the media itself — where it's published, how to play it,
-          how to get it. What the operator came here for. */}
+      {/* Tier one, split by kind rather than lined up as identical boxes:
+          the things that DO something on this page get a border, the things
+          that just take you somewhere or hand you a file stay as links. */}
+      {(playable || !upload.audio_url) && (
+        <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap', rowGap: 1 }}>
+          {playable && (
+            <Button color={ROLE.commit} onClick={() => setPlayerOpen((v) => !v)} sx={actionSx}>
+              {playerOpen ? '× close player' : '▸ watch'}
+            </Button>
+          )}
+          <AudioState upload={upload} as="action" />
+        </Stack>
+      )}
+
       <Stack
         direction="row"
-        spacing={1}
-        sx={{ mt: 1.5, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
+        spacing={2}
+        sx={{ mt: 1.25, alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}
       >
         {pub.map((j) => (
           <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />
         ))}
-        {pub.length > 0 && <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />}
-        {playable && (
-          <Button color={ROLE.navigate} onClick={() => setPlayerOpen((v) => !v)} sx={{ ...actionSx, fontWeight: 500 }}>
-            {playerOpen ? 'close player' : 'watch ▸'}
-          </Button>
-        )}
+        {pub.length > 0 && <Divider orientation="vertical" flexItem sx={{ my: 0.75 }} />}
+        <Typography variant="caption" color="text.disabled">
+          download
+        </Typography>
         <DownloadLink url={upload.video_url} label="video" />
-        <AudioCell upload={upload} />
+        <AudioState upload={upload} as="link" />
       </Stack>
 
       {/* Tier two: managing the record. Quieter, and separated by a rule so
