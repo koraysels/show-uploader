@@ -23,6 +23,17 @@ export function appendHashtags(description: string, tags: string[]): string {
 export function htmlToText(html: string): string {
   if (!html || !/[<&]/.test(html)) return html ?? '';
   return html
+    // Links first, before the generic tag strip eats the href. Dropping it left
+    // "our mixcloud" as dead text on YouTube, where descriptions are plain text
+    // and a URL has to be written out to be usable. Anchor text that already IS
+    // the address isn't repeated.
+    .replace(/<a\b[^>]*\bhref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_m, _q, href: string, inner: string) => {
+      const url = String(href).trim();
+      const text = String(inner).replace(/<[^>]+>/g, '').trim();
+      if (!url) return text;
+      const sameAsText = text === url || text === url.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+      return !text || sameAsText ? url : `${text} (${url})`;
+    })
     .replace(/<\s*br\s*\/?>/gi, '\n')
     .replace(/<\/\s*(p|div|li|h[1-6]|tr|blockquote)\s*>/gi, '\n')
     .replace(/<\s*li[^>]*>/gi, '• ')

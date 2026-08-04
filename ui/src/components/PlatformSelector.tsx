@@ -11,6 +11,7 @@ import Typography from '@mui/material/Typography';
 import { trpcClient } from '../api/trpc';
 import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeStatus } from '../api/hooks';
 import ConfirmAction from './ConfirmAction';
+import PlatformIcon from './PlatformIcon';
 import { c, ROLE } from '../theme';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
@@ -116,7 +117,14 @@ function PublishedPlatform({
   return (
     <Paper variant="outlined" sx={{ p: 1.75, backgroundColor: c.accentSoft, borderColor: c.line }}>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
-        <Link href={url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={{ fontWeight: 500 }}>
+        <Link
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          color={ROLE.navigate}
+          sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.625, fontWeight: 500 }}
+        >
+          <PlatformIcon platform={id} />
           {label} ↗
         </Link>
         <Typography variant="caption" color="success.main" sx={{ flexShrink: 0 }}>
@@ -259,6 +267,7 @@ export default function PlatformSelector({
                 >
                   ✓
                 </Box>
+                <PlatformIcon platform={p.id} size={16} />
                 {p.label}
               </Button>
             );

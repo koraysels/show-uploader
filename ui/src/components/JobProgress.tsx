@@ -9,6 +9,7 @@ import { useAuth } from '../auth/useAuth';
 import { useRetryJob } from '../api/hooks';
 import type { PlatformJob } from '../api/client';
 import { ROLE } from '../theme';
+import PlatformIcon from './PlatformIcon';
 
 type Props = {
   uploadId: string;
@@ -118,9 +119,12 @@ export default function JobProgress({ uploadId, jobs }: Props) {
               spacing={1}
               sx={{ mb: 0.75, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}
             >
-              <Typography variant="caption" sx={{ fontWeight: 500 }} color="text.secondary">
-                {PLATFORM_LABELS[platform] ?? platform}
-              </Typography>
+              <Stack direction="row" spacing={0.625} sx={{ alignItems: 'center', color: 'text.secondary' }}>
+                <PlatformIcon platform={platform} size={12} />
+                <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                  {PLATFORM_LABELS[platform] ?? platform}
+                </Typography>
+              </Stack>
 
               {s.status === 'done' && s.url ? (
                 <Link

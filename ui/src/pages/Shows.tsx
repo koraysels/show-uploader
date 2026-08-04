@@ -32,11 +32,13 @@ import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { useUpload, type UploadItem } from '../upload/UploadProvider';
 import { shortName } from '../components/PresenceRoster';
+import PlatformIcon from '../components/PlatformIcon';
 import { c, ROLE } from '../theme';
 
 const col = createColumnHelper<AgendaShow>();
 
 const SHORT: Record<string, string> = { YouTube: 'YT', MixCloud: 'MC' };
+const LABEL_TO_PLATFORM: Record<string, string> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
 
 // Per-show video state in the table: live upload progress, "ready" when a
 // recording is staged (uploaded, not yet published), "uploaded" when it's already
@@ -122,7 +124,9 @@ function LinksCell({ show }: { show: AgendaShow }) {
       </Typography>
     );
   return (
-    <Stack direction="row" spacing={0.5}>
+    // 12px, not 4: "YT ↗" and "MC ↗" ran together into one word at the
+    // tighter gap, since the arrow eats the visual space between them.
+    <Stack direction="row" spacing={1.5}>
       {links.map((l) => (
         <Tooltip key={l.label + l.url} title={l.url}>
           {/* A link, not a button — it opens the platform. Boxing these made
@@ -134,8 +138,9 @@ function LinksCell({ show }: { show: AgendaShow }) {
             onClick={(e: React.MouseEvent) => e.stopPropagation()}
             color={ROLE.navigate}
             variant="body2"
-            sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, fontWeight: 500 }}
+            sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, minHeight: 32, fontWeight: 500 }}
           >
+            <PlatformIcon platform={LABEL_TO_PLATFORM[l.label] ?? ''} />
             {SHORT[l.label] ?? l.label} ↗
           </MuiLink>
         </Tooltip>

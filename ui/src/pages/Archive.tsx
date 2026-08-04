@@ -29,6 +29,7 @@ import {
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
+import PlatformIcon from '../components/PlatformIcon';
 import type { UploadWithJobs } from '../api/client';
 import { c, ROLE } from '../theme';
 
@@ -75,6 +76,7 @@ function PublishedLink({ platform, url }: { platform: string; url: string }) {
   const priv = status.data?.privacyStatus;
   return (
     <MuiLink href={url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={linkSx}>
+      <PlatformIcon platform={platform} />
       {PLATFORM_LABELS[platform] ?? platform} ↗
       {isYt && priv && (
         <Box component="span" sx={{ fontSize: '0.625rem', color: priv === 'public' ? c.ok : c.faint }}>
