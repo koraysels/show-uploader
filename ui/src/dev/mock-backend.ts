@@ -92,7 +92,9 @@ export function install() {
   // real AuthProvider loads it without any auth-specific branch in app code.
   const authority = `https://${import.meta.env.VITE_ZITADEL_DOMAIN}`;
   const clientId = import.meta.env.VITE_ZITADEL_CLIENT_ID ?? 'mock-client';
-  sessionStorage.setItem(
+  // localStorage, matching the userStore AuthProvider now configures — writing
+  // to sessionStorage would leave the real UserManager seeing no session.
+  localStorage.setItem(
     `oidc.user:${authority}:${clientId}`,
     JSON.stringify({
       access_token: 'mock-token',
