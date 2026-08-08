@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import Box from '@mui/material/Box';
@@ -134,6 +134,7 @@ export default function NewUpload() {
   const [pickedVideo, setPickedVideo] = useState<StagedVideo | null>(null);
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewConverting, setPreviewConverting] = useState(false);
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
   const [trimStart, setTrimStart] = useState('');
@@ -229,6 +230,15 @@ export default function NewUpload() {
     if (field === 'imageUrl') setImageUrl(value as string);
   };
 
+  // The preview remux replaced the recording with an MP4 and deleted the
+  // original. A staged video is re-read from the server, but a drop-folder pick
+  // lives here — leaving it on the old key would publish a deleted object.
+  const handleConverted = useCallback((mp4Key: string) => {
+    setPickedVideo((prev) =>
+      prev ? { ...prev, s3_key: mp4Key, filename: mp4Key.split('/').pop() ?? prev.filename } : prev
+    );
+  }, []);
+
   // Discard this show's video: clear the pick, cancel/forget any live upload, and
   // remove the server-staged record. The derived `video` then falls back to none.
   const handleReplace = () => {
@@ -271,7 +281,10 @@ export default function NewUpload() {
     );
   };
 
-  const canSubmit = !!selectedShow && !!videoS3Key && platforms.length > 0 && !createUpload.isPending;
+  // Blocked during a preview convert: the remux deletes the source, so a publish
+  // started now would hand the platform jobs an object that disappears mid-run.
+  const canSubmit =
+    !!selectedShow && !!videoS3Key && platforms.length > 0 && !createUpload.isPending && !previewConverting;
   const pendingVideos = pending.data ?? [];
 
   if (!selectedShow) {
@@ -531,7 +544,12 @@ export default function NewUpload() {
                   </Button>
                 </Stack>
               </Stack>
-              <VideoPreview videoS3Key={videoS3Key} open={previewOpen} />
+              <VideoPreview
+                videoS3Key={videoS3Key}
+                open={previewOpen}
+                onConverted={handleConverted}
+                onConvertingChange={setPreviewConverting}
+              />
             </>
           ) : (
             showId && <UploadControl showId={showId} />

@@ -19,9 +19,11 @@ import { shows, uploads, archiveStates, genres, videoInfo } from './fixtures';
 // scary "not allowed to load local resource" that reads like an app bug.
 const MOCK_VIDEO_URL = 'data:video/mp4;base64,';
 // Number of status polls spent "converting" before the preview turns ready, so
-// the progress UI is reachable in mock mode.
+// the progress UI is reachable in mock mode. Keyed per recording, since the
+// screen can switch between shows without a reload.
 const MOCK_CONVERT_POLLS = 4;
-let previewPolls = 0;
+const previewPolls = new Map<string, number>();
+const previewMp4Key = (key: string) => key.replace(/\.[^./]+$/, '.mp4');
 
 function trpcBody(datas: unknown[]) {
   return JSON.stringify(datas.map((data) => ({ result: { data } })));
@@ -66,17 +68,20 @@ function resolve(proc: string, input: unknown): unknown {
     // a few it flips to ready — so the progress UI and the player are both
     // reachable without ffmpeg, redis or s3.
     case 'uploads.startPreview':
-      previewPolls = 0;
+      previewPolls.set(String(arg.videoS3Key), 0);
       return { state: 'working', pct: 0 };
     case 'uploads.previewStatus': {
-      if (/\.mp4$/i.test(String(arg.videoS3Key))) {
-        return { state: 'ready', key: arg.videoS3Key, url: MOCK_VIDEO_URL };
+      const key = String(arg.videoS3Key);
+      if (/\.mp4$/i.test(key)) return { state: 'ready', key, url: MOCK_VIDEO_URL };
+      // Idle until startPreview runs, so the real idle → start → working → ready
+      // path is what gets exercised, not a shortcut into "working".
+      const polls = previewPolls.get(key);
+      if (polls === undefined) return { state: 'idle', url: null };
+      previewPolls.set(key, polls + 1);
+      if (polls + 1 < MOCK_CONVERT_POLLS) {
+        return { state: 'working', pct: Math.round(((polls + 1) / MOCK_CONVERT_POLLS) * 100), url: null };
       }
-      previewPolls += 1;
-      if (previewPolls < MOCK_CONVERT_POLLS) {
-        return { state: 'working', pct: Math.round((previewPolls / MOCK_CONVERT_POLLS) * 100), url: null };
-      }
-      return { state: 'ready', key: 'staged/dubplate.mp4', url: MOCK_VIDEO_URL };
+      return { state: 'ready', key: previewMp4Key(key), url: MOCK_VIDEO_URL };
     }
     case 'uploads.deleteStaged':
       return { ok: true };

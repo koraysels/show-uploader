@@ -16,6 +16,7 @@ import {
   listUploadingSessions,
   listUploadsNeedingRemux,
   deleteUpload,
+  isPrePublishVideoKey,
 } from '../../db/queries';
 import { enqueueArchiveJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
@@ -24,8 +25,27 @@ import {
   derivePreviewState,
   isPlayable,
   previewJobId,
+  previewKeyFor,
   type PreviewJobView,
 } from '../../services/video-preview';
+
+/**
+ * Reject any key that isn't a recording this app is holding for publication.
+ *
+ * One preview endpoint signs a download URL for the key and the other enqueues a
+ * remux that DELETES it, so a caller-supplied key can never be the authority —
+ * otherwise a jingle or another show's archive could be fed to either.
+ *
+ * Both sides of the rename are accepted: a successful remux repoints the record
+ * to the `.mp4`, at which point the caller's original key is legitimately absent
+ * but still the one it is polling with.
+ */
+async function assertPrePublishVideo(videoS3Key: string): Promise<void> {
+  const ok = await isPrePublishVideoKey(db, [videoS3Key, previewKeyFor(videoS3Key)]);
+  if (!ok) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Not a recording awaiting publication' });
+  }
+}
 import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../../services/s3';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
@@ -326,6 +346,9 @@ export const uploadsRouter = router({
     .input(z.object({ videoS3Key: z.string().min(1) }))
     .mutation(async ({ input }) => {
       const { videoS3Key } = input;
+      // The key decides what gets rewrapped AND deleted, so it is never taken on
+      // the caller's word — only a recording the app is holding qualifies.
+      await assertPrePublishVideo(videoS3Key);
       if (isPlayable(videoS3Key)) return { state: 'ready' as const, key: videoS3Key };
       try {
         const jobId = previewJobId(videoS3Key);
@@ -347,6 +370,9 @@ export const uploadsRouter = router({
     .input(z.object({ videoS3Key: z.string().min(1) }))
     .query(async ({ input }) => {
       const { videoS3Key } = input;
+      // Same rule as startPreview: this signs a download URL, so an arbitrary key
+      // would be an arbitrary read of the bucket.
+      await assertPrePublishVideo(videoS3Key);
       try {
         const job = await previewQueue.getJob(previewJobId(videoS3Key));
         const state = derivePreviewState({

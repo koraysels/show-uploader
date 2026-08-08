@@ -286,3 +286,21 @@ export function getStagedUpload(db: Sql, showId: string) {
 export function deleteStagedUpload(db: Sql, showId: string) {
   return db`DELETE FROM staged_uploads WHERE show_id = ${showId}`;
 }
+
+/**
+ * Is this key a recording the app is actually holding for publication?
+ *
+ * The preview endpoints must never treat a caller-supplied S3 key as authority:
+ * one signs a download URL for it, the other enqueues a remux that DELETES it.
+ * Unchecked, any key in the bucket — a jingle, another show's archive — could be
+ * fed to either. Only the two places a not-yet-published recording lives count.
+ */
+export function isPrePublishVideoKey(db: Sql, s3Keys: string[]): Promise<boolean> {
+  return db<{ ok: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM staged_uploads WHERE s3_key = ANY(${s3Keys})
+      UNION ALL
+      SELECT 1 FROM pending_videos WHERE s3_key = ANY(${s3Keys}) AND claimed = false
+    ) AS ok
+  `.then((r) => r[0]?.ok === true);
+}

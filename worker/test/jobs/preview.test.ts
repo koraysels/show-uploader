@@ -13,7 +13,7 @@ vi.mock('../../src/services/s3', () => ({
   objectSize: vi.fn(async () => 4242),
 }));
 
-vi.mock('../../src/db', () => ({ repointPreviewKey: vi.fn(async () => {}) }));
+vi.mock('../../src/db', () => ({ repointPreviewKey: vi.fn(async () => 1) }));
 
 import { remuxToMp4 } from '../../src/services/ffmpeg';
 import { deleteFromS3, uploadToS3, objectSize } from '../../src/services/s3';
@@ -27,6 +27,7 @@ describe('processPreview', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(objectSize).mockResolvedValue(4242);
+    vi.mocked(repointPreviewKey).mockResolvedValue(1);
   });
 
   it('rewraps an mkv, repoints the row, then drops the original', async () => {
@@ -72,6 +73,16 @@ describe('processPreview', () => {
     await expect(processPreview(makeJob('uploads/rec.mkv'))).rejects.toThrow(/missing or empty/i);
 
     expect(vi.mocked(repointPreviewKey)).not.toHaveBeenCalled();
+    expect(vi.mocked(deleteFromS3)).not.toHaveBeenCalled();
+  });
+
+  // A job queued before its record was replaced or removed would otherwise
+  // delete a recording that nothing points at any more.
+  it('keeps the source when no record was repointed', async () => {
+    vi.mocked(repointPreviewKey).mockResolvedValue(0);
+
+    await expect(processPreview(makeJob('uploads/rec.mkv'))).rejects.toThrow(/no pre-publish record/i);
+
     expect(vi.mocked(deleteFromS3)).not.toHaveBeenCalled();
   });
 });

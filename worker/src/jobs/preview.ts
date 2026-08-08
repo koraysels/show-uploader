@@ -55,7 +55,14 @@ export async function processPreview(job: Job<PreviewJobPayload>): Promise<strin
     if (!size) throw new Error(`Remuxed MP4 missing or empty on S3: ${mp4Key}`);
 
     const filename = `${path.basename(videoS3Key, ext)}.mp4`;
-    await repointPreviewKey(videoS3Key, mp4Key, filename, size);
+    const repointed = await repointPreviewKey(videoS3Key, mp4Key, filename, size);
+
+    // Nothing references this recording any more — the record was replaced or
+    // removed while the remux ran. Deleting the source now would strand the MP4
+    // with nothing pointing at it, so stop while the original is still intact.
+    if (repointed === 0) {
+      throw new Error(`No pre-publish record still points at ${videoS3Key}; left the source in place`);
+    }
 
     await job.updateProgress(100);
 

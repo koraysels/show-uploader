@@ -79,23 +79,29 @@ export async function setVideoKey(uploadId: string, key: string) {
  * not-yet-published video can live: a drop-folder file (pending_videos) and a
  * manually uploaded one (staged_uploads). A key appears in at most one of them,
  * but both are updated rather than branching — the miss is a no-op UPDATE.
+ *
+ * Returns how many records were repointed. The caller MUST treat zero as a
+ * failure and leave the source in place: a job that was queued before its record
+ * was replaced or removed would otherwise delete a recording that nothing points
+ * at any more.
  */
 export async function repointPreviewKey(
   oldKey: string,
   newKey: string,
   newFilename: string,
   sizeBytes: number
-): Promise<void> {
-  await db`
+): Promise<number> {
+  const pending = await db`
     UPDATE pending_videos
     SET s3_key = ${newKey}, filename = ${newFilename}, size_bytes = ${sizeBytes}
     WHERE s3_key = ${oldKey}
   `;
-  await db`
+  const staged = await db`
     UPDATE staged_uploads
     SET s3_key = ${newKey}, filename = ${newFilename}, size_bytes = ${sizeBytes}
     WHERE s3_key = ${oldKey}
   `;
+  return pending.count + staged.count;
 }
 
 export async function createArchiveJobRecord(uploadId: string): Promise<string | null> {
