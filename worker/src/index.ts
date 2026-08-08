@@ -1,10 +1,11 @@
 import { Worker } from 'bullmq';
-import { redis, QUEUE_NAME } from './queue';
+import { redis, QUEUE_NAME, PREVIEW_QUEUE_NAME } from './queue';
 import { processYoutube } from './jobs/youtube';
 import { processMixcloud } from './jobs/mixcloud';
 import { processArchive } from './jobs/archive';
+import { processPreview } from './jobs/preview';
 import { reconcileStalledJobs, setJobStatus } from './db';
-import type { JobPayload } from './types';
+import type { JobPayload, PreviewJobPayload } from './types';
 
 // Clear orphaned 'processing' rows from a previous worker that died mid-run,
 // before this one starts consuming — otherwise they linger as ghosts forever.
@@ -54,6 +55,29 @@ worker.on('failed', (job, err) => {
       console.error('Failed to persist job failure:', e)
     );
   }
+});
+
+// Separate worker so a long preview remux never occupies a slot that a publish
+// is waiting on. Concurrency 1: these are I/O-bound on the same disk, and two at
+// once only makes both slower.
+const previewWorker = new Worker<PreviewJobPayload>(
+  PREVIEW_QUEUE_NAME,
+  async (job) => {
+    console.log(`Processing preview remux: ${job.data.videoS3Key}`);
+    return processPreview(job);
+  },
+  { connection: redis, concurrency: 1 }
+);
+
+previewWorker.on('completed', (job) => {
+  console.log(`Preview remux completed: ${job.data.videoS3Key}`);
+});
+
+// No DB row to mark failed — the API reports the failure straight from the
+// queue, and the source recording is untouched, so retrying is just re-pressing
+// preview.
+previewWorker.on('failed', (job, err) => {
+  console.error(`Preview remux failed: ${job?.data?.videoS3Key}`, err.message);
 });
 
 console.log('Worker started');

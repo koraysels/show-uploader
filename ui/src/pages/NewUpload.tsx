@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useParams, Link } from '@tanstack/react-router';
 import Box from '@mui/material/Box';
@@ -23,6 +23,7 @@ import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import TrimFields from '../components/TrimFields';
+import VideoPreview from '../components/VideoPreview';
 import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
@@ -132,6 +133,8 @@ export default function NewUpload() {
   // "does this show have a video" is DERIVED, never stored — see resolveVideo.
   const [pickedVideo, setPickedVideo] = useState<StagedVideo | null>(null);
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewConverting, setPreviewConverting] = useState(false);
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
   const [trimStart, setTrimStart] = useState('');
@@ -208,6 +211,7 @@ export default function NewUpload() {
     setImageUrl(selectedShow.imageUrl ?? '');
     setPickedVideo(null);
     setSelectedPendingId(null);
+    setPreviewOpen(false);
 
     // Re-publish smarts: pre-select only the platform(s) not yet up. If both are
     // already published, select NONE (never re-publish → duplicate).
@@ -226,11 +230,21 @@ export default function NewUpload() {
     if (field === 'imageUrl') setImageUrl(value as string);
   };
 
+  // The preview remux replaced the recording with an MP4 and deleted the
+  // original. A staged video is re-read from the server, but a drop-folder pick
+  // lives here — leaving it on the old key would publish a deleted object.
+  const handleConverted = useCallback((mp4Key: string) => {
+    setPickedVideo((prev) =>
+      prev ? { ...prev, s3_key: mp4Key, filename: mp4Key.split('/').pop() ?? prev.filename } : prev
+    );
+  }, []);
+
   // Discard this show's video: clear the pick, cancel/forget any live upload, and
   // remove the server-staged record. The derived `video` then falls back to none.
   const handleReplace = () => {
     setPickedVideo(null);
     setSelectedPendingId(null);
+    setPreviewOpen(false);
     if (showId) {
       upload.reset(showId);
       void trpcClient.uploads.deleteStaged.mutate({ showId }).catch(() => {});
@@ -267,7 +281,10 @@ export default function NewUpload() {
     );
   };
 
-  const canSubmit = !!selectedShow && !!videoS3Key && platforms.length > 0 && !createUpload.isPending;
+  // Blocked during a preview convert: the remux deletes the source, so a publish
+  // started now would hand the platform jobs an object that disappears mid-run.
+  const canSubmit =
+    !!selectedShow && !!videoS3Key && platforms.length > 0 && !createUpload.isPending && !previewConverting;
   const pendingVideos = pending.data ?? [];
 
   if (!selectedShow) {
@@ -493,30 +510,47 @@ export default function NewUpload() {
 
         <Section title="video">
           {video.state === 'ready' ? (
-            <Stack
-              direction="row"
-              spacing={1.5}
-              sx={{
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                border: `1px solid ${c.ok}`,
-                backgroundColor: c.okSoft,
-                px: 2,
-                py: 1.5,
-              }}
-            >
-              <Typography noWrap sx={{ minWidth: 0 }}>
-                ✓ {videoFilename || 'video ready'}
-              </Typography>
-              <Button
-                variant="text"
-                color={ROLE.destroy}
-                onClick={handleReplace}
-                sx={{ flexShrink: 0, minHeight: 32, fontSize: '0.6875rem' }}
+            <>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  border: `1px solid ${c.ok}`,
+                  backgroundColor: c.okSoft,
+                  px: 2,
+                  py: 1.5,
+                }}
               >
-                replace
-              </Button>
-            </Stack>
+                <Typography noWrap sx={{ minWidth: 0 }}>
+                  ✓ {videoFilename || 'video ready'}
+                </Typography>
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                  <Button
+                    variant="text"
+                    onClick={() => setPreviewOpen((v) => !v)}
+                    sx={{ minHeight: 32, fontSize: '0.6875rem' }}
+                  >
+                    {previewOpen ? 'hide preview' : 'preview'}
+                  </Button>
+                  <Button
+                    variant="text"
+                    color={ROLE.destroy}
+                    onClick={handleReplace}
+                    sx={{ minHeight: 32, fontSize: '0.6875rem' }}
+                  >
+                    replace
+                  </Button>
+                </Stack>
+              </Stack>
+              <VideoPreview
+                videoS3Key={videoS3Key}
+                open={previewOpen}
+                onConverted={handleConverted}
+                onConvertingChange={setPreviewConverting}
+              />
+            </>
           ) : (
             showId && <UploadControl showId={showId} />
           )}

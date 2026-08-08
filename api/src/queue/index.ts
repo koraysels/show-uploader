@@ -3,6 +3,7 @@ import IORedis from 'ioredis';
 import { env } from '../env';
 
 export const QUEUE_NAME = 'platform-uploads';
+export const PREVIEW_QUEUE_NAME = 'video-previews';
 
 // Cast to bullmq's ConnectionOptions: bullmq bundles its own nested ioredis copy,
 // so the instance's type differs from ours even though it's the same runtime class.
@@ -19,6 +20,21 @@ export const uploadQueue = new Queue(QUEUE_NAME, {
     removeOnFail: { count: 100 },
   },
 });
+
+// Mirrors worker/src/queue.ts. Kept to one attempt: a failed remux leaves the
+// source recording untouched, so retrying is just pressing preview again.
+export const previewQueue = new Queue<PreviewJobPayload>(PREVIEW_QUEUE_NAME, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 50 },
+  },
+});
+
+export type PreviewJobPayload = {
+  videoS3Key: string;
+};
 
 export type JobPayload = {
   jobId: string;

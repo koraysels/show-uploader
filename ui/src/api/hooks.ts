@@ -139,6 +139,33 @@ export function useVideoInfo(uploadId: string) {
   return useQuery(trpc.uploads.videoInfo.queryOptions({ uploadId }, { staleTime: 5 * 60_000 }));
 }
 
+// Preview remux for a not-yet-published recording. Enabled only once the caller
+// opens the preview, so simply having a video on the form costs no polling.
+// Polls while the remux runs and stops as soon as it settles.
+export function usePreviewStatus(videoS3Key: string, enabled: boolean) {
+  const trpc = useTRPC();
+  return useQuery(
+    trpc.uploads.previewStatus.queryOptions(
+      { videoS3Key },
+      {
+        enabled: enabled && !!videoS3Key,
+        refetchInterval: (q) => (q.state.data?.state === 'working' ? 2000 : false),
+      }
+    )
+  );
+}
+
+export function useStartPreview() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    ...trpc.uploads.startPreview.mutationOptions(),
+    // The remux repoints the pending/staged row to the new .mp4 key, so the
+    // form's video has to be re-read rather than kept from before the convert.
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+  });
+}
+
 // Puts the agenda record back to draft — the inverse of usePublishRecord. The
 // platform uploads and their links are untouched.
 export function useUnpublishRecord() {
