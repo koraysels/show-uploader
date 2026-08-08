@@ -141,7 +141,12 @@ async function remuxVideoToMp4(
     // The preview remux already rewrapped this recording, so the container is
     // done and only the trim is outstanding. Stream copy — no re-encode, and the
     // result still replaces the source below exactly as a full remux would.
-    await trimVideoCopy(inputPath, mp4Path, { trimStart: trim.trimStart, trimEnd: trim.trimEnd });
+    await trimVideoCopy(inputPath, mp4Path, {
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
+      // The archive is played in the browser, so it must stay progressive.
+      faststart: true,
+    });
     await onProgress(100);
   } else {
     await remuxToMp4(inputPath, mp4Path, {

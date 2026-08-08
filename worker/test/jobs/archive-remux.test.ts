@@ -84,9 +84,12 @@ describe('archive video remux', () => {
 
     await processArchive(makeJob({ videoS3Key: 'uploads/rec.mp4', trimStart: '00:00:10', trimEnd: '01:00:00' }));
 
+    // faststart matters: this writes a new container, and the archive is played
+    // in the browser, so it has to stay progressively seekable.
     expect(vi.mocked(trimVideoCopy)).toHaveBeenCalledWith('/tmp/input.mp4', '/tmp/archive.mp4', {
       trimStart: '00:00:10',
       trimEnd: '01:00:00',
+      faststart: true,
     });
     expect(vi.mocked(remuxToMp4)).not.toHaveBeenCalled();
     expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(expect.any(String), 'uploads/rec.mp4', 'video/mp4');

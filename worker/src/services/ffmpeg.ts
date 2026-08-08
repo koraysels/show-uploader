@@ -189,11 +189,17 @@ export async function remuxToMp4(
 export async function trimVideoCopy(
   input: string,
   output: string,
-  opts: { trimStart?: string | null; trimEnd?: string | null }
+  opts: { trimStart?: string | null; trimEnd?: string | null; faststart?: boolean }
 ): Promise<void> {
   const cmd = ffmpeg(input);
   applyTrim(cmd, opts.trimStart, opts.trimEnd);
-  cmd.outputOptions(['-c', 'copy', '-map', '0']).output(output);
+  cmd.outputOptions(['-c', 'copy', '-map', '0']);
+  // This writes a NEW container, so the input's progressive layout is not
+  // inherited — an archive trimmed here would not stream/seek in the browser.
+  // Opt-in because the YouTube path trims into the source's own container,
+  // which may be Matroska, where -movflags is not a valid option.
+  if (opts.faststart) cmd.outputOptions(['-movflags', '+faststart']);
+  cmd.output(output);
   return runCommand(cmd);
 }
 
