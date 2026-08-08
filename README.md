@@ -288,6 +288,27 @@ VITE_ZITADEL_CLIENT_ID=your-client-id
 
 The `ZITADEL_DOMAIN` and `ZITADEL_CLIENT_ID` variables (without `VITE_` prefix) are also required in the root `.env` for the API server.
 
+### Session length — required Zitadel console setup
+
+The UI requests the `offline_access` scope so it can renew the session in the background instead of
+bouncing you through the login screen. **Zitadel ignores that scope silently — no error, no refresh
+token — unless the app is configured for it.** In the Zitadel console, on the app:
+
+| Setting | Value | Why |
+|---|---|---|
+| Grant Types → **Refresh Token** | enabled | Without it, no refresh token is issued and the session dies with the access token. |
+| Token Settings → **Refresh Token Idle Expiration** | `30 days` | How long you can stay away and still come back signed in. |
+| Token Settings → **Refresh Token Expiration** | `90 days` | Hard cap; a full login is required after this regardless of activity. |
+| Redirect URIs | add `<origin>/silent-renew` | Target of the hidden renewal iframe, used whenever no refresh token is available. Add it for production *and* `http://localhost:5173`. |
+| Auth Token Type | **JWT** | The API verifies tokens locally against JWKS. Opaque tokens would fail every request. |
+
+To check it is working: sign in, then in DevTools → Application → Local Storage look for
+`oidc.user:https://<domain>:<client-id>`. If that entry has no `refresh_token`, the Refresh Token
+grant is still off.
+
+Note the tradeoff: the session is kept in `localStorage` (it has to survive closing the browser), so
+the refresh token is readable by any script running on the app's origin.
+
 ---
 
 ## Archive quality

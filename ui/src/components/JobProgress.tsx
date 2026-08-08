@@ -6,6 +6,8 @@ import Link from '@mui/material/Link';
 import LinearProgress from '@mui/material/LinearProgress';
 import Typography from '@mui/material/Typography';
 import { useAuth } from '../auth/useAuth';
+import { userManager } from '../auth/AuthProvider';
+import { getFreshAccessToken } from '../auth/session';
 import { useRetryJob } from '../api/hooks';
 import type { PlatformJob } from '../api/client';
 import { ROLE } from '../theme';
@@ -69,42 +71,58 @@ export default function JobProgress({ uploadId, jobs }: Props) {
 
   useEffect(() => {
     const allSettled = jobs.every((j) => j.status === 'done' || j.status === 'failed');
-    if (allSettled || !user?.access_token) return;
+    if (allSettled || !user) return;
 
-    // EventSource can't set an Authorization header — pass the token as a query param.
-    const es = new EventSource(
-      `/api/uploads/${uploadId}/events?access_token=${encodeURIComponent(user.access_token)}`
-    );
+    let es: EventSource | null = null;
+    let cancelled = false;
 
-    es.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data as string) as {
-          type: string;
-          platform?: string;
-          pct?: number;
-          url?: string;
-          error?: string;
-        };
-        if (!data.platform) return;
-        setState((prev) => ({
-          ...prev,
-          [data.platform!]: {
-            pct: data.pct ?? prev[data.platform!]?.pct ?? 0,
-            status:
-              data.type === 'completed'
-                ? 'done'
-                : data.type === 'failed'
-                ? 'failed'
-                : 'processing',
-            url: data.url ?? prev[data.platform!]?.url,
-            error: data.error ?? prev[data.platform!]?.error,
-          },
-        }));
-      } catch { /* ignore parse errors */ }
+    // Fetching a fresh token is async (it may redeem the refresh token), so the
+    // stream is opened in a follow-up tick — hence the cancelled guard, which
+    // also covers unmounting during the renewal.
+    void (async () => {
+      // EventSource has no 401 hook: handed a stale token it would just
+      // reconnect forever in silence, so the token must be fresh up front.
+      const token = await getFreshAccessToken(userManager);
+      if (cancelled || !token) return;
+
+      // EventSource can't set an Authorization header — pass the token as a query param.
+      es = new EventSource(
+        `/api/uploads/${uploadId}/events?access_token=${encodeURIComponent(token)}`
+      );
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data as string) as {
+            type: string;
+            platform?: string;
+            pct?: number;
+            url?: string;
+            error?: string;
+          };
+          if (!data.platform) return;
+          setState((prev) => ({
+            ...prev,
+            [data.platform!]: {
+              pct: data.pct ?? prev[data.platform!]?.pct ?? 0,
+              status:
+                data.type === 'completed'
+                  ? 'done'
+                  : data.type === 'failed'
+                  ? 'failed'
+                  : 'processing',
+              url: data.url ?? prev[data.platform!]?.url,
+              error: data.error ?? prev[data.platform!]?.error,
+            },
+          }));
+        } catch { /* ignore parse errors */ }
+      };
+    })();
+
+    return () => {
+      cancelled = true;
+      es?.close();
     };
-
-    return () => es.close();
-  }, [uploadId, jobs, user?.access_token]);
+  }, [uploadId, jobs, user]);
 
   return (
     <Stack spacing={1.75}>

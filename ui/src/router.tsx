@@ -50,6 +50,15 @@ function AuthedLayout() {
     'account';
 
   const handleLogout = async () => {
+    // Kill the refresh token at Zitadel first — removeUser() only drops the local
+    // copy, which would leave a token redeemable for its full 30-day idle life
+    // after the user believes they signed out. Fail-open: a revoke that errors
+    // must not trap the user in a session they asked to leave.
+    try {
+      await userManager.revokeTokens(['refresh_token']);
+    } catch {
+      // Nothing to revoke (no refresh token yet), or Zitadel is unreachable.
+    }
     // Clear the local session and force the Zitadel login screen. We avoid the
     // OIDC end-session endpoint — it requires a registered post_logout_redirect_uri
     // (not configured), which dead-ends on a "Not Found". prompt=login makes this

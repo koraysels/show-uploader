@@ -17,11 +17,23 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { refetchOnWindowFocus: false } },
 });
 
-// `pnpm dev` + `/?mock=1` swaps the whole backend for fixtures (src/dev) so the
-// UI can be worked on at real viewport sizes without an API, a login, or any
-// risk of a click landing on production data. The DEV guard keeps it out of the
-// production bundle entirely.
 async function bootstrap() {
+  // Target of silent_redirect_uri. This document only ever loads inside the
+  // hidden renewal iframe, where the single job is to post the result back to
+  // the parent window — mounting the app there would boot the whole provider
+  // tree (and open a second presence stream) for every token renewal.
+  if (location.pathname === '/silent-renew') {
+    const { userManager } = await import('./auth/AuthProvider');
+    // Failures are reported to the parent over the same channel; nothing here
+    // can act on them, and this document is never seen by the user.
+    await userManager.signinSilentCallback().catch(() => {});
+    return;
+  }
+
+  // `pnpm dev` + `/?mock=1` swaps the whole backend for fixtures (src/dev) so the
+  // UI can be worked on at real viewport sizes without an API, a login, or any
+  // risk of a click landing on production data. The DEV guard keeps it out of the
+  // production bundle entirely.
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('mock')) {
     const { install } = await import('./dev/mock-backend');
     install();
