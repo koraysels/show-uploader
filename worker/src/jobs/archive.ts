@@ -2,7 +2,7 @@ import type { Job } from 'bullmq';
 import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3, uploadToS3, deleteFromS3, objectSize } from '../services/s3';
-import { extractAudio, remuxToMp4, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
+import { extractAudio, remuxToMp4, trimVideoCopy, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
 import {
   setJobStatus,
   setAudioKey,
@@ -124,18 +124,32 @@ async function remuxVideoToMp4(
 ): Promise<void> {
   const { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim } = ctx;
 
-  // Already an MP4 — nothing to rewrap, and re-running must stay a no-op.
-  if (ext.toLowerCase() === '.mp4') return;
+  const isMp4 = ext.toLowerCase() === '.mp4';
+  const hasTrim = !!(trim.trimStart || trim.trimEnd);
 
-  await remuxToMp4(inputPath, mp4Path, {
-    trimStart: trim.trimStart,
-    trimEnd: trim.trimEnd,
-    onProgress: async (pct) => {
-      const adjusted = 50 + Math.round(pct * 0.3);
-      await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
-      await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
-    },
-  });
+  // Already an MP4 with nothing to cut — no work to do, and re-running must stay
+  // a no-op.
+  if (isMp4 && !hasTrim) return;
+
+  const onProgress = async (pct: number) => {
+    const adjusted = 50 + Math.round(pct * 0.3);
+    await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
+    await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
+  };
+
+  if (isMp4) {
+    // The preview remux already rewrapped this recording, so the container is
+    // done and only the trim is outstanding. Stream copy — no re-encode, and the
+    // result still replaces the source below exactly as a full remux would.
+    await trimVideoCopy(inputPath, mp4Path, { trimStart: trim.trimStart, trimEnd: trim.trimEnd });
+    await onProgress(100);
+  } else {
+    await remuxToMp4(inputPath, mp4Path, {
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
+      onProgress,
+    });
+  }
 
   // Source file is no longer needed — drop it before the upload so /tmp isn't
   // holding the recording twice while a multi-GB PUT runs.
@@ -154,7 +168,12 @@ async function remuxVideoToMp4(
 
   // Past the point of no return for the original: the MP4 is verified on S3 and
   // the row points at it. A failure here leaves an orphan, never a dead link.
-  await deleteFromS3(videoS3Key).catch((err) =>
-    console.warn(`Remuxed to ${mp4Key} but could not delete ${videoS3Key}:`, err)
-  );
+  //
+  // Only when the key actually changed. A trimmed MP4 is written back over its
+  // own key, so deleting "the original" here would delete the file just uploaded.
+  if (mp4Key !== videoS3Key) {
+    await deleteFromS3(videoS3Key).catch((err) =>
+      console.warn(`Remuxed to ${mp4Key} but could not delete ${videoS3Key}:`, err)
+    );
+  }
 }

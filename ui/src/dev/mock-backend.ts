@@ -14,6 +14,15 @@
 import { shows, uploads, archiveStates, genres, videoInfo } from './fixtures';
 
 // tRPC batch responses are positional: one entry per procedure in the URL.
+// There is no real file to play in mock mode. A data: URI keeps the <video>
+// element inert and quiet — a blob:/http: placeholder makes the browser log a
+// scary "not allowed to load local resource" that reads like an app bug.
+const MOCK_VIDEO_URL = 'data:video/mp4;base64,';
+// Number of status polls spent "converting" before the preview turns ready, so
+// the progress UI is reachable in mock mode.
+const MOCK_CONVERT_POLLS = 4;
+let previewPolls = 0;
+
 function trpcBody(datas: unknown[]) {
   return JSON.stringify(datas.map((data) => ({ result: { data } })));
 }
@@ -53,6 +62,22 @@ function resolve(proc: string, input: unknown): unknown {
       return videoInfo[arg.uploadId] ?? { exists: false, size: null, filename: 'unknown' };
     case 'uploads.getJinglePreview':
       return { url: '' };
+    // Walks the real state machine: the first poll reports converting, and after
+    // a few it flips to ready — so the progress UI and the player are both
+    // reachable without ffmpeg, redis or s3.
+    case 'uploads.startPreview':
+      previewPolls = 0;
+      return { state: 'working', pct: 0 };
+    case 'uploads.previewStatus': {
+      if (/\.mp4$/i.test(String(arg.videoS3Key))) {
+        return { state: 'ready', key: arg.videoS3Key, url: MOCK_VIDEO_URL };
+      }
+      previewPolls += 1;
+      if (previewPolls < MOCK_CONVERT_POLLS) {
+        return { state: 'working', pct: Math.round((previewPolls / MOCK_CONVERT_POLLS) * 100), url: null };
+      }
+      return { state: 'ready', key: 'staged/dubplate.mp4', url: MOCK_VIDEO_URL };
+    }
     case 'uploads.deleteStaged':
       return { ok: true };
     case 'uploads.create':

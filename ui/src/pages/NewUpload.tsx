@@ -23,6 +23,7 @@ import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import TrimFields from '../components/TrimFields';
+import VideoPreview from '../components/VideoPreview';
 import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
@@ -132,6 +133,7 @@ export default function NewUpload() {
   // "does this show have a video" is DERIVED, never stored — see resolveVideo.
   const [pickedVideo, setPickedVideo] = useState<StagedVideo | null>(null);
   const [selectedPendingId, setSelectedPendingId] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [platforms, setPlatforms] = useState<string[]>(['youtube', 'mixcloud']);
   const [includeJingle, setIncludeJingle] = useState(true);
   const [trimStart, setTrimStart] = useState('');
@@ -208,6 +210,7 @@ export default function NewUpload() {
     setImageUrl(selectedShow.imageUrl ?? '');
     setPickedVideo(null);
     setSelectedPendingId(null);
+    setPreviewOpen(false);
 
     // Re-publish smarts: pre-select only the platform(s) not yet up. If both are
     // already published, select NONE (never re-publish → duplicate).
@@ -231,6 +234,7 @@ export default function NewUpload() {
   const handleReplace = () => {
     setPickedVideo(null);
     setSelectedPendingId(null);
+    setPreviewOpen(false);
     if (showId) {
       upload.reset(showId);
       void trpcClient.uploads.deleteStaged.mutate({ showId }).catch(() => {});
@@ -493,30 +497,42 @@ export default function NewUpload() {
 
         <Section title="video">
           {video.state === 'ready' ? (
-            <Stack
-              direction="row"
-              spacing={1.5}
-              sx={{
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                border: `1px solid ${c.ok}`,
-                backgroundColor: c.okSoft,
-                px: 2,
-                py: 1.5,
-              }}
-            >
-              <Typography noWrap sx={{ minWidth: 0 }}>
-                ✓ {videoFilename || 'video ready'}
-              </Typography>
-              <Button
-                variant="text"
-                color={ROLE.destroy}
-                onClick={handleReplace}
-                sx={{ flexShrink: 0, minHeight: 32, fontSize: '0.6875rem' }}
+            <>
+              <Stack
+                direction="row"
+                spacing={1.5}
+                sx={{
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  border: `1px solid ${c.ok}`,
+                  backgroundColor: c.okSoft,
+                  px: 2,
+                  py: 1.5,
+                }}
               >
-                replace
-              </Button>
-            </Stack>
+                <Typography noWrap sx={{ minWidth: 0 }}>
+                  ✓ {videoFilename || 'video ready'}
+                </Typography>
+                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                  <Button
+                    variant="text"
+                    onClick={() => setPreviewOpen((v) => !v)}
+                    sx={{ minHeight: 32, fontSize: '0.6875rem' }}
+                  >
+                    {previewOpen ? 'hide preview' : 'preview'}
+                  </Button>
+                  <Button
+                    variant="text"
+                    color={ROLE.destroy}
+                    onClick={handleReplace}
+                    sx={{ minHeight: 32, fontSize: '0.6875rem' }}
+                  >
+                    replace
+                  </Button>
+                </Stack>
+              </Stack>
+              <VideoPreview videoS3Key={videoS3Key} open={previewOpen} />
+            </>
           ) : (
             showId && <UploadControl showId={showId} />
           )}

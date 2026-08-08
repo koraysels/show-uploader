@@ -19,7 +19,13 @@ import {
 } from '../../db/queries';
 import { enqueueArchiveJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
-import { uploadQueue } from '../../queue';
+import { uploadQueue, previewQueue } from '../../queue';
+import {
+  derivePreviewState,
+  isPlayable,
+  previewJobId,
+  type PreviewJobView,
+} from '../../services/video-preview';
 import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../../services/s3';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
@@ -312,6 +318,56 @@ export const uploadsRouter = router({
       internal(err, 'Failed to publish archive record:', 'Failed to publish archive record');
     }
   }),
+
+  // Start the preview remux for a not-yet-published recording. Idempotent: the
+  // job id is derived from the key, so pressing preview in two tabs enqueues one
+  // remux. Already-MP4 keys need no work and never reach the queue.
+  startPreview: protectedProcedure
+    .input(z.object({ videoS3Key: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const { videoS3Key } = input;
+      if (isPlayable(videoS3Key)) return { state: 'ready' as const, key: videoS3Key };
+      try {
+        const jobId = previewJobId(videoS3Key);
+        // A previous failure keeps its job (and id) around, which would make the
+        // retry a silent no-op. Clear it so pressing preview again really retries.
+        const existing = await previewQueue.getJob(jobId);
+        if (existing && (await existing.isFailed())) await existing.remove();
+
+        await previewQueue.add('preview', { videoS3Key }, { jobId });
+        return { state: 'working' as const, pct: 0 };
+      } catch (err) {
+        internal(err, 'Failed to start preview:', 'Failed to start preview');
+      }
+    }),
+
+  // Polled by the prepare screen while a remux runs. Readiness is read from the
+  // key itself, not from queue bookkeeping — see derivePreviewState.
+  previewStatus: protectedProcedure
+    .input(z.object({ videoS3Key: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const { videoS3Key } = input;
+      try {
+        const job = await previewQueue.getJob(previewJobId(videoS3Key));
+        const state = derivePreviewState({
+          videoS3Key,
+          job: job
+            ? {
+                status: (await job.getState()) as NonNullable<PreviewJobView>['status'],
+                pct: typeof job.progress === 'number' ? job.progress : 0,
+                failedReason: job.failedReason,
+              }
+            : null,
+        });
+
+        // Only sign a URL once there is something to play; signing is pointless
+        // work in every other state.
+        if (state.state !== 'ready') return { ...state, url: null };
+        return { ...state, url: await createDownloadPresignedUrl(state.key) };
+      } catch (err) {
+        internal(err, 'Failed to read preview status:', 'Failed to read preview status');
+      }
+    }),
 
   // Is the source recording actually still on S3 for this upload? The row's
   // video_s3_key is not proof — so this HEADs the object rather than trusting

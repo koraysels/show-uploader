@@ -1,3 +1,13 @@
+/**
+ * A preview remux. Deliberately NOT part of JobPayload: it runs before an upload
+ * exists, so it has no uploadId, no platform_jobs row, and no metadata — folding
+ * it into the platform union would make every one of those fields optional for
+ * jobs that genuinely require them.
+ */
+export type PreviewJobPayload = {
+  videoS3Key: string;
+};
+
 export type JobPayload = {
   jobId: string;
   uploadId: string;

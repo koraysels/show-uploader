@@ -30,6 +30,7 @@ import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
+import VideoPlayer from '../components/VideoPlayer';
 import type { UploadWithJobs } from '../api/client';
 import { c, ROLE, LABEL_SX } from '../theme';
 
@@ -242,24 +243,6 @@ function DownloadLink({ url, label }: { url: string | null; label: string }) {
 // Inline playback of the archived recording. Native controls give scrubbing for
 // free: the presigned S3 GET honours range requests and the remuxed MP4 carries
 // its moov atom up front (+faststart), so seeking doesn't pull the whole file.
-function VideoPlayer({ url }: { url: string }) {
-  return (
-    <Box sx={{ mt: 2, p: 1, border: `1px solid ${c.line}`, backgroundColor: c.paper }}>
-      <Box
-        component="video"
-        src={url}
-        controls
-        preload="metadata"
-        playsInline
-        sx={{ width: '100%', maxHeight: '70vh', display: 'block', backgroundColor: '#000' }}
-      />
-      <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block' }}>
-        recordings are hevc — safari and chrome play them, firefox may not. the download always works.
-      </Typography>
-    </Box>
-  );
-}
-
 function humanSize(bytes: number): string {
   if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
   if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
