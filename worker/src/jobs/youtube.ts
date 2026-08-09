@@ -4,7 +4,7 @@ import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToYoutube } from '../services/youtube-client';
 import { setJobStatus, getUploadRow } from '../db';
-import { makeTempPath, cleanup, resolveTrim, trimVideoCopy } from '../services/ffmpeg';
+import { makeTempPath, cleanup, resolveTrim, trimVideoCopy, measureLoudness } from '../services/ffmpeg';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle, htmlToText } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
@@ -23,11 +23,19 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 20 });
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 20 });
 
-    // Trim dead air off the raw recording before upload (fast stream-copy).
+    // Trim dead air off the raw recording before upload, and bring it to the
+    // delivery target. Video is still stream-copied; only the audio is re-encoded.
     const trim = await resolveTrim(videoPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
+    const loudness = await measureLoudness(videoPath, {
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
+    });
+
     let uploadPath = videoPath;
-    if (trim.trimStart || trim.trimEnd) {
-      await trimVideoCopy(videoPath, trimmedPath, trim);
+    // Normalising is work in its own right, so this no longer short-circuits on
+    // "no trim" — the raw recording is only uploaded when there is nothing to do.
+    if (trim.trimStart || trim.trimEnd || loudness) {
+      await trimVideoCopy(videoPath, trimmedPath, { ...trim, loudness });
       uploadPath = trimmedPath;
     }
 

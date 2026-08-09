@@ -77,19 +77,141 @@ function runCommand(cmd: ffmpeg.FfmpegCommand, onProgress?: (pct: number) => voi
   });
 }
 
+/**
+ * Delivery loudness target.
+ *
+ * YouTube normalises to -14 LUFS and only ever turns audio DOWN, so anything
+ * louder is attenuated on their side and nothing is gained by exceeding it.
+ * Mixcloud does not normalise at all, so hitting the same number is what keeps
+ * the two platforms sounding alike.
+ *
+ * TP is the true-peak ceiling: lossy decoding overshoots on inter-sample peaks,
+ * so a master at 0 dBFS clips *after* encoding. -1 dBTP is the headroom for that.
+ */
+export const LOUDNESS = { I: -14, TP: -1, LRA: 11 } as const;
+
+export type LoudnessMeasurement = {
+  input_i: string;
+  input_tp: string;
+  input_lra: string;
+  input_thresh: string;
+  target_offset: string;
+};
+
+/**
+ * First pass of a two-pass loudnorm: measure, decode-only, write nothing.
+ *
+ * Two passes matter for a DJ set. One-pass loudnorm is a dynamic normaliser and
+ * audibly pumps across a mix; given these measurements the second pass applies a
+ * single fixed gain instead, leaving the dynamics alone.
+ *
+ * Measured over the TRIMMED range, because that is what actually gets published
+ * — dead air at the edges shifts the integrated figure.
+ *
+ * Returns null if measurement fails, which callers treat as "publish unmodified"
+ * rather than failing the upload.
+ */
+export async function measureLoudness(
+  input: string,
+  opts?: { trimStart?: string | null; trimEnd?: string | null }
+): Promise<LoudnessMeasurement | null> {
+  const cmd = ffmpeg(input).noVideo();
+  applyTrim(cmd, opts?.trimStart, opts?.trimEnd);
+  cmd
+    .audioFilters(`loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}:print_format=json`)
+    .outputOptions(['-f', 'null'])
+    .output(process.platform === 'win32' ? 'NUL' : '/dev/null');
+
+  const stderr = await new Promise<string | null>((resolve) => {
+    const lines: string[] = [];
+    cmd.on('stderr', (line: string) => lines.push(line));
+    cmd.on('end', () => resolve(lines.join('\n')));
+    cmd.on('error', (err: Error) => {
+      console.warn('Loudness measurement failed, publishing unmodified:', err.message);
+      resolve(null);
+    });
+    cmd.run();
+  });
+  if (stderr === null) return null;
+  return parseLoudnessJson(stderr);
+}
+
+/**
+ * Pull loudnorm's JSON summary out of ffmpeg's stderr.
+ *
+ * Separate and exported because this is the fragile part — ffmpeg interleaves
+ * the block with ordinary chatter — and it is the only piece testable without
+ * running ffmpeg. Returns null for anything unusable so callers publish the
+ * audio unmodified rather than failing an upload over a measurement.
+ */
+export function parseLoudnessJson(stderr: string): LoudnessMeasurement | null {
+  // The summary is printed last; everything before it is chatter that must not
+  // reach the parser.
+  const start = stderr.lastIndexOf('{');
+  const end = stderr.lastIndexOf('}');
+  if (start === -1 || end <= start) {
+    console.warn('Loudness measurement produced no JSON, publishing unmodified');
+    return null;
+  }
+  let parsed: Partial<LoudnessMeasurement>;
+  try {
+    parsed = JSON.parse(stderr.slice(start, end + 1)) as Partial<LoudnessMeasurement>;
+  } catch (err) {
+    console.warn('Could not parse loudness measurement:', err instanceof Error ? err.message : err);
+    return null;
+  }
+
+  // Silence measures as -inf, which the second pass cannot use as a gain basis.
+  const required = ['input_i', 'input_tp', 'input_lra', 'input_thresh', 'target_offset'] as const;
+  for (const field of required) {
+    if (!parsed[field] || !Number.isFinite(Number(parsed[field]))) {
+      console.warn(`Loudness measurement not usable (${field}=${parsed[field]}), publishing unmodified`);
+      return null;
+    }
+  }
+  return parsed as LoudnessMeasurement;
+}
+
+/**
+ * Second pass: apply the measured gain and re-encode the audio to AAC.
+ *
+ * Re-encoding is unavoidable — the samples change, so a stream copy is no longer
+ * possible. `linear=true` asks loudnorm for a single static gain; it falls back
+ * to dynamic only when that would breach the true-peak ceiling.
+ */
+function applyLoudnorm(cmd: ffmpeg.FfmpegCommand, m: LoudnessMeasurement): void {
+  cmd
+    .audioFilters(
+      `loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}` +
+        `:measured_I=${m.input_i}:measured_TP=${m.input_tp}:measured_LRA=${m.input_lra}` +
+        `:measured_thresh=${m.input_thresh}:offset=${m.target_offset}:linear=true:print_format=summary`
+    )
+    .audioCodec('aac')
+    .audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
+}
+
 export async function extractAudio(
   videoPath: string,
   outputPath: string,
-  opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
+  opts?: {
+    trimStart?: string | null;
+    trimEnd?: string | null;
+    loudness?: LoudnessMeasurement | null;
+    onProgress?: (pct: number) => void;
+  }
 ): Promise<void> {
   const { audioCodec } = await probeStreams(videoPath);
 
   const cmd = ffmpeg(videoPath).noVideo();
 
-  // Stream-copy when the source audio already fits the .m4a container (OBS set
-  // to AAC) — no re-encode, no quality loss. Otherwise encode to AAC: a copy of
-  // e.g. pcm_s16le into .m4a fails outright, it does not degrade gracefully.
-  if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
+  if (opts?.loudness) {
+    // Normalising rewrites the samples, so the stream-copy path below cannot
+    // apply — the audio is re-encoded to AAC at the archive bitrate.
+    applyLoudnorm(cmd, opts.loudness);
+  } else if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
+    // Stream-copy when the source audio already fits the .m4a container (OBS set
+    // to AAC) — no re-encode, no quality loss. Otherwise encode to AAC: a copy of
+    // e.g. pcm_s16le into .m4a fails outright, it does not degrade gracefully.
     cmd.audioCodec('copy');
   } else {
     cmd.audioCodec('aac').audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
@@ -125,11 +247,27 @@ export async function captureSquareFrame(
   );
 }
 
+/**
+ * Prepend a jingle to the show audio.
+ *
+ * `jingleLoudness` brings the jingle to the same target as the show instead of
+ * re-normalising the joined file: the show audio arrives already normalised, and
+ * a second pass over it would both re-encode it again and let the jingle's level
+ * drag the show off target. Two segments at -14 concatenate to -14.
+ */
 export async function prependJingle(
   jinglePath: string,
   audioPath: string,
-  outputPath: string
+  outputPath: string,
+  jingleLoudness?: LoudnessMeasurement | null
 ): Promise<void> {
+  const loudnormChain = jingleLoudness
+    ? `loudnorm=I=${LOUDNESS.I}:TP=${LOUDNESS.TP}:LRA=${LOUDNESS.LRA}` +
+      `:measured_I=${jingleLoudness.input_i}:measured_TP=${jingleLoudness.input_tp}` +
+      `:measured_LRA=${jingleLoudness.input_lra}:measured_thresh=${jingleLoudness.input_thresh}` +
+      `:offset=${jingleLoudness.target_offset}:linear=true,`
+    : '';
+
   return runCommand(
     ffmpeg()
       .input(jinglePath)
@@ -137,8 +275,9 @@ export async function prependJingle(
       // concat requires identical sample rate / layout / format across inputs, so
       // normalise BOTH to 48k stereo fltp first — otherwise a jingle recorded at a
       // different rate/channels makes the merge error out and the jingle is dropped.
+      // loudnorm runs before the resample because it outputs at its own rate.
       .complexFilter([
-        '[0:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[j]',
+        `[0:a]${loudnormChain}aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[j]`,
         '[1:a]aresample=48000,aformat=sample_fmts=fltp:channel_layouts=stereo[s]',
         '[j][s]concat=n=2:v=0:a=1[out]',
       ])
@@ -159,7 +298,12 @@ export async function prependJingle(
 export async function remuxToMp4(
   inputPath: string,
   outputPath: string,
-  opts?: { trimStart?: string | null; trimEnd?: string | null; onProgress?: (pct: number) => void }
+  opts?: {
+    trimStart?: string | null;
+    trimEnd?: string | null;
+    loudness?: LoudnessMeasurement | null;
+    onProgress?: (pct: number) => void;
+  }
 ): Promise<void> {
   const { audioCodec, videoCodec } = await probeStreams(inputPath);
 
@@ -169,7 +313,10 @@ export async function remuxToMp4(
   // 'hvc1' is the same bitstream under the tag those players accept.
   if (videoCodec === 'hevc') cmd.outputOptions(['-tag:v', 'hvc1']);
 
-  if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
+  if (opts?.loudness) {
+    // Video is still copied bit-for-bit; only the audio is re-encoded.
+    applyLoudnorm(cmd, opts.loudness);
+  } else if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
     cmd.audioCodec('copy');
   } else {
     cmd.audioCodec('aac').audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
@@ -189,11 +336,19 @@ export async function remuxToMp4(
 export async function trimVideoCopy(
   input: string,
   output: string,
-  opts: { trimStart?: string | null; trimEnd?: string | null; faststart?: boolean }
+  opts: {
+    trimStart?: string | null;
+    trimEnd?: string | null;
+    faststart?: boolean;
+    loudness?: LoudnessMeasurement | null;
+  }
 ): Promise<void> {
   const cmd = ffmpeg(input);
   applyTrim(cmd, opts.trimStart, opts.trimEnd);
+  // Copy everything, then let the audio encoder below override -c for audio only
+  // when normalising — the video stream stays a bit-exact copy either way.
   cmd.outputOptions(['-c', 'copy', '-map', '0']);
+  if (opts.loudness) applyLoudnorm(cmd, opts.loudness);
   // This writes a NEW container, so the input's progressive layout is not
   // inherited — an archive trimmed here would not stream/seek in the browser.
   // Opt-in because the YouTube path trims into the source's own container,

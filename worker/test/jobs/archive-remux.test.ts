@@ -7,9 +7,18 @@ vi.mock('../../src/services/ffmpeg', () => ({
   remuxToMp4: vi.fn(async () => {}),
   trimVideoCopy: vi.fn(async () => {}),
   resolveTrim: vi.fn(async () => ({ trimStart: null, trimEnd: null })),
+  measureLoudness: vi.fn(async () => null),
   makeTempPath: (s: string) => `/tmp/${s}`,
   cleanup: vi.fn(),
 }));
+
+const MEASURED = {
+  input_i: '-9.42',
+  input_tp: '-0.21',
+  input_lra: '6.30',
+  input_thresh: '-19.68',
+  target_offset: '0.01',
+};
 
 vi.mock('../../src/services/s3', () => ({
   downloadFromS3: vi.fn(async () => {}),
@@ -28,7 +37,7 @@ vi.mock('../../src/db', () => ({
 
 vi.mock('../../src/queue', () => ({ uploadQueue: { add: vi.fn() }, previewQueue: { add: vi.fn() } }));
 
-import { remuxToMp4, trimVideoCopy, resolveTrim } from '../../src/services/ffmpeg';
+import { remuxToMp4, trimVideoCopy, resolveTrim, measureLoudness, extractAudio } from '../../src/services/ffmpeg';
 import { deleteFromS3, uploadToS3 } from '../../src/services/s3';
 import { processArchive } from '../../src/jobs/archive';
 
@@ -57,6 +66,7 @@ describe('archive video remux', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(resolveTrim).mockResolvedValue({ trimStart: null, trimEnd: null });
+    vi.mocked(measureLoudness).mockResolvedValue(null);
   });
 
   it('remuxes an mkv source and deletes the original', async () => {
@@ -90,9 +100,55 @@ describe('archive video remux', () => {
       trimStart: '00:00:10',
       trimEnd: '01:00:00',
       faststart: true,
+      loudness: null,
     });
     expect(vi.mocked(remuxToMp4)).not.toHaveBeenCalled();
     expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(expect.any(String), 'uploads/rec.mp4', 'video/mp4');
+  });
+
+  describe('loudness normalisation', () => {
+    beforeEach(() => vi.mocked(measureLoudness).mockResolvedValue(MEASURED as any));
+
+    // One measurement, both artefacts: the downloadable audio and the archived
+    // video have to sit at the same level, and measuring twice risks drift.
+    it('measures once and applies it to both archives', async () => {
+      await processArchive(makeJob());
+
+      expect(vi.mocked(measureLoudness)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(extractAudio).mock.calls[0][2]).toMatchObject({ loudness: MEASURED });
+      expect(vi.mocked(remuxToMp4).mock.calls[0][2]).toMatchObject({ loudness: MEASURED });
+    });
+
+    // Normalising is real work even when the container is already right, so the
+    // "already mp4, nothing to do" shortcut must not swallow it.
+    it('still processes an untrimmed mp4 source', async () => {
+      await processArchive(makeJob({ videoS3Key: 'uploads/rec.mp4' }));
+
+      expect(vi.mocked(trimVideoCopy)).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(trimVideoCopy).mock.calls[0][2]).toMatchObject({ loudness: MEASURED });
+    });
+
+    // Measured over the published range: dead air at the edges shifts the
+    // integrated figure, so measuring the untrimmed file targets the wrong thing.
+    it('measures the trimmed range, not the whole recording', async () => {
+      vi.mocked(resolveTrim).mockResolvedValue({ trimStart: '00:00:10', trimEnd: '01:00:00' });
+
+      await processArchive(makeJob({ trimStart: '00:00:10', trimEnd: '01:00:00' }));
+
+      expect(vi.mocked(measureLoudness)).toHaveBeenCalledWith('/tmp/input.mkv', {
+        trimStart: '00:00:10',
+        trimEnd: '01:00:00',
+      });
+    });
+
+    // A failed measurement must not fail the publish.
+    it('publishes unmodified when measurement fails', async () => {
+      vi.mocked(measureLoudness).mockResolvedValue(null);
+
+      await processArchive(makeJob());
+
+      expect(vi.mocked(remuxToMp4).mock.calls[0][2]).toMatchObject({ loudness: null });
+    });
   });
 
   // The trimmed file is written back over its own key, so the usual "delete the
