@@ -31,6 +31,14 @@ describe('LOUDNESS target', () => {
     expect(LOUDNESS.I).toBe(-14);
     expect(LOUDNESS.TP).toBe(-1);
   });
+
+  // LRA gates linear mode: a source whose range exceeds it gets dynamically
+  // compressed instead of gain-adjusted. Verified against ffmpeg that a 21 LU
+  // source falls back at the old default of 11, which a show mixing talk with
+  // music would hit routinely.
+  it('sets an LRA target wide enough to keep normal shows out of dynamic mode', () => {
+    expect(LOUDNESS.LRA).toBeGreaterThanOrEqual(20);
+  });
 });
 
 describe('parseLoudnessJson', () => {

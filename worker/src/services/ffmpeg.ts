@@ -88,7 +88,14 @@ function runCommand(cmd: ffmpeg.FfmpegCommand, onProgress?: (pct: number) => voi
  * TP is the true-peak ceiling: lossy decoding overshoots on inter-sample peaks,
  * so a master at 0 dBFS clips *after* encoding. -1 dBTP is the headroom for that.
  */
-export const LOUDNESS = { I: -14, TP: -1, LRA: 11 } as const;
+/**
+ * LRA is a gate, not a goal, in the two-pass path: loudnorm abandons linear mode
+ * when the source's range exceeds this target. 11 is the mastering-guide default
+ * and is easily exceeded by a show mixing talk with music, which would silently
+ * put every such episode through dynamic compression. 20 keeps the common cases
+ * on a single static gain.
+ */
+export const LOUDNESS = { I: -14, TP: -1, LRA: 20 } as const;
 
 export type LoudnessMeasurement = {
   input_i: string;
@@ -176,8 +183,16 @@ export function parseLoudnessJson(stderr: string): LoudnessMeasurement | null {
  * Second pass: apply the measured gain and re-encode the audio to AAC.
  *
  * Re-encoding is unavoidable — the samples change, so a stream copy is no longer
- * possible. `linear=true` asks loudnorm for a single static gain; it falls back
- * to dynamic only when that would breach the true-peak ceiling.
+ * possible.
+ *
+ * `linear=true` REQUESTS a single static gain; it is not a guarantee. loudnorm
+ * reverts to dynamic (i.e. compression) when the source's loudness range exceeds
+ * the LRA target, or when the required gain would push true peak past TP. The
+ * second case is legitimate — quiet material cannot be raised without limiting —
+ * and the first is why LRA is set wide above.
+ *
+ * In practice a hot master, which is what these recordings are, needs negative
+ * gain: peaks move down, so the TP gate passes and the gain stays linear.
  */
 function applyLoudnorm(cmd: ffmpeg.FfmpegCommand, m: LoudnessMeasurement): void {
   cmd
