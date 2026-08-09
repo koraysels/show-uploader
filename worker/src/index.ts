@@ -5,7 +5,18 @@ import { processMixcloud } from './jobs/mixcloud';
 import { processArchive } from './jobs/archive';
 import { processPreview } from './jobs/preview';
 import { reconcileStalledJobs, setJobStatus } from './db';
+import { sweepWorkspaces } from './services/workspace';
 import type { JobPayload, PreviewJobPayload } from './types';
+
+// Reclaim scratch space a previous worker lost. A process killed mid-job never
+// reaches its cleanup, orphaning multi-GB files with nothing to remove them —
+// left alone that fills the disk. The age cutoff is what makes this safe to run
+// at startup: a job running right now has a young directory and is never swept.
+const TEMP_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const swept = sweepWorkspaces(TEMP_MAX_AGE_MS);
+if (swept.removed) {
+  console.log(`Swept ${swept.removed} orphaned workspace(s), reclaimed ${(swept.bytes / 1024 ** 3).toFixed(2)} GB`);
+}
 
 // Clear orphaned 'processing' rows from a previous worker that died mid-run,
 // before this one starts consuming — otherwise they linger as ghosts forever.

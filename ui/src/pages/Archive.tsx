@@ -31,6 +31,7 @@ import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
 import VideoPlayer from '../components/VideoPlayer';
+import { humanSize } from '../format';
 import type { UploadWithJobs } from '../api/client';
 import { c, ROLE, LABEL_SX } from '../theme';
 
@@ -243,12 +244,6 @@ function DownloadLink({ url, label }: { url: string | null; label: string }) {
 // Inline playback of the archived recording. Native controls give scrubbing for
 // free: the presigned S3 GET honours range requests and the remuxed MP4 carries
 // its moov atom up front (+faststart), so seeking doesn't pull the whole file.
-function humanSize(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
-  return `${Math.round(bytes / 1024)} KB`;
-}
-
 // The source recording's real state on S3, plus the way back to the upload page
 // when it's wrong. The row's key alone would claim a file exists even when the
 // object is gone, which is exactly the case worth catching.

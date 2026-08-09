@@ -11,24 +11,25 @@ import {
   captureSquareFrame,
   resolveTrim,
   measureLoudness,
-  makeTempPath,
   cleanup,
 } from '../services/ffmpeg';
 import { setJobStatus, getUploadRow } from '../db';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle, htmlToText } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
+import { createWorkspace } from '../services/workspace';
 
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
   const { jobId, uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle, trimStart, trimEnd, autoTrimSilence } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
-  const videoPath = makeTempPath(path.basename(videoS3Key));
-  const audioPath = makeTempPath('audio.m4a');
-  const jinglePath = makeTempPath('jingle.m4a');
-  const mergedPath = makeTempPath('merged.m4a');
-  const thumbPath = makeTempPath('cover.jpg');
+  const ws = createWorkspace(jobId);
+  const videoPath = ws.path(path.basename(videoS3Key));
+  const audioPath = ws.path('audio.m4a');
+  const jinglePath = ws.path('jingle.m4a');
+  const mergedPath = ws.path('merged.m4a');
+  const thumbPath = ws.path('cover.jpg');
 
   try {
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 5 });
@@ -133,6 +134,6 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'failed', { error: msg });
     throw err;
   } finally {
-    cleanup(videoPath, audioPath, jinglePath, mergedPath, thumbPath);
+    ws.cleanup();
   }
 }

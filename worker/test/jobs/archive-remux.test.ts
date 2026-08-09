@@ -8,7 +8,6 @@ vi.mock('../../src/services/ffmpeg', () => ({
   trimVideoCopy: vi.fn(async () => {}),
   resolveTrim: vi.fn(async () => ({ trimStart: null, trimEnd: null })),
   measureLoudness: vi.fn(async () => null),
-  makeTempPath: (s: string) => `/tmp/${s}`,
   cleanup: vi.fn(),
 }));
 
@@ -36,6 +35,11 @@ vi.mock('../../src/db', () => ({
 }));
 
 vi.mock('../../src/queue', () => ({ uploadQueue: { add: vi.fn() }, previewQueue: { add: vi.fn() } }));
+
+// Per-job scratch dir; paths stay predictable so the assertions below can name them.
+vi.mock('../../src/services/workspace', () => ({
+  createWorkspace: vi.fn(() => ({ path: (n: string) => `/tmp/${n}`, cleanup: vi.fn() })),
+}));
 
 import { remuxToMp4, trimVideoCopy, resolveTrim, measureLoudness, extractAudio } from '../../src/services/ffmpeg';
 import { deleteFromS3, uploadToS3 } from '../../src/services/s3';

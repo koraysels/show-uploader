@@ -8,7 +8,6 @@ import {
   trimVideoCopy,
   resolveTrim,
   measureLoudness,
-  makeTempPath,
   cleanup,
   type LoudnessMeasurement,
 } from '../services/ffmpeg';
@@ -20,6 +19,7 @@ import {
   createArchiveJobRecord,
 } from '../db';
 import { uploadQueue } from '../queue';
+import { createWorkspace } from '../services/workspace';
 
 // PocketBase write-back now happens per-platform (in each job) the moment that
 // platform finishes — no waiting on the others. This only enqueues the archive.
@@ -62,9 +62,10 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
 
   const ext = path.extname(videoS3Key) || '.mkv';
   const base = path.basename(videoS3Key, ext);
-  const inputPath = makeTempPath(`input${ext}`);
-  const audioPath = makeTempPath('archive.m4a');
-  const mp4Path = makeTempPath('archive.mp4');
+  const ws = createWorkspace(jobId);
+  const inputPath = ws.path(`input${ext}`);
+  const audioPath = ws.path('archive.m4a');
+  const mp4Path = ws.path('archive.mp4');
 
   try {
     await job.updateProgress({ uploadId, platform: 'archive', pct: 5 });
@@ -114,7 +115,7 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'failed', { error: msg });
     throw err;
   } finally {
-    cleanup(inputPath, audioPath, mp4Path);
+    ws.cleanup();
   }
 }
 

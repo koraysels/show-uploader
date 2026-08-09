@@ -3,6 +3,7 @@ import { showsRouter } from './routers/shows';
 import { uploadsRouter } from './routers/uploads';
 import { platformRouter } from './routers/platform';
 import { watcherRouter } from './routers/watcher';
+import { storageRouter } from './routers/storage';
 
 // tRPC lives ALONGSIDE the Express REST routes so the client adopts it
 // incrementally. Migrated: `shows` (full), `uploads` (all non-SSE/non-multipart),
@@ -15,6 +16,7 @@ export const appRouter = router({
   uploads: uploadsRouter,
   platform: platformRouter,
   watcher: watcherRouter,
+  storage: storageRouter,
 });
 
 export type AppRouter = typeof appRouter;

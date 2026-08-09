@@ -2,7 +2,8 @@ import type { Job } from 'bullmq';
 import path from 'path';
 import type { PreviewJobPayload } from '../types';
 import { downloadFromS3, uploadToS3, deleteFromS3, objectSize } from '../services/s3';
-import { remuxToMp4, makeTempPath, cleanup } from '../services/ffmpeg';
+import { remuxToMp4, cleanup } from '../services/ffmpeg';
+import { createWorkspace } from '../services/workspace';
 import { repointPreviewKey } from '../db';
 
 /**
@@ -30,8 +31,11 @@ export async function processPreview(job: Job<PreviewJobPayload>): Promise<strin
   // not re-run the rewrap and delete a file that is already the MP4.
   if (ext.toLowerCase() === '.mp4') return videoS3Key;
 
-  const inputPath = makeTempPath(`preview-input${ext || '.mkv'}`);
-  const mp4Path = makeTempPath('preview.mp4');
+  // The API sets a deterministic job id (a hash of the key); the key itself is
+  // the fallback, and createWorkspace sanitises it into one path segment.
+  const ws = createWorkspace(job.id ?? videoS3Key);
+  const inputPath = ws.path(`input${ext || '.mkv'}`);
+  const mp4Path = ws.path('preview.mp4');
   const mp4Key = `${videoS3Key.slice(0, videoS3Key.length - ext.length)}.mp4`;
 
   try {
@@ -74,6 +78,6 @@ export async function processPreview(job: Job<PreviewJobPayload>): Promise<strin
 
     return mp4Key;
   } finally {
-    cleanup(inputPath, mp4Path);
+    ws.cleanup();
   }
 }
