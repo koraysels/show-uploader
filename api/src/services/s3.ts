@@ -9,6 +9,8 @@ import {
   CompleteMultipartUploadCommand,
   AbortMultipartUploadCommand,
   HeadObjectCommand,
+  CopyObjectCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../env';
@@ -152,4 +154,30 @@ export async function completeMultipart(key: string, uploadId: string): Promise<
 
 export async function abortMultipart(key: string, uploadId: string): Promise<void> {
   await s3.send(new AbortMultipartUploadCommand({ Bucket: bucket(), Key: key, UploadId: uploadId }));
+}
+
+/**
+ * Move an object within the bucket.
+ *
+ * S3 has no rename: it is a server-side copy followed by a delete, and the two
+ * are separate operations. The delete only runs once the copy is verified, so an
+ * interruption leaves a duplicate — recoverable — rather than nothing at all.
+ */
+export async function moveObject(from: string, to: string): Promise<void> {
+  if (from === to) return;
+
+  await s3.send(
+    new CopyObjectCommand({
+      Bucket: env.S3_BUCKET,
+      // CopySource is bucket-qualified and must be URI-encoded: keys here contain
+      // spaces and parentheses from OBS filenames.
+      CopySource: encodeURI(`${env.S3_BUCKET}/${from}`),
+      Key: to,
+    })
+  );
+
+  const landed = await objectInfo(to);
+  if (!landed.exists) throw new Error(`Copy to ${to} did not land`);
+
+  await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: from }));
 }

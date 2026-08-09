@@ -304,3 +304,41 @@ export function isPrePublishVideoKey(db: Sql, s3Keys: string[]): Promise<boolean
     ) AS ok
   `.then((r) => r[0]?.ok === true);
 }
+
+// ---- storage layout migration ----------------------------------------------
+
+/** Published uploads (archive job finished) with their two artefact keys. */
+export function listPublishedKeys(db: Sql) {
+  return db<{ video_s3_key: string; audio_s3_key: string | null }[]>`
+    SELECT DISTINCT u.video_s3_key, u.audio_s3_key
+    FROM show_uploads u
+    JOIN platform_jobs j ON j.upload_id = u.id
+    WHERE j.platform = 'archive' AND j.status = 'done'
+  `;
+}
+
+/** Keys still awaiting publication. */
+export function listUnpublishedKeys(db: Sql) {
+  return Promise.all([
+    db<{ s3_key: string }[]>`SELECT s3_key FROM pending_videos WHERE claimed = false`,
+    db<{ s3_key: string }[]>`SELECT s3_key FROM staged_uploads`,
+  ]).then(([pending, staged]) => ({
+    pendingKeys: pending.map((r) => r.s3_key),
+    stagedKeys: staged.map((r) => r.s3_key),
+  }));
+}
+
+/**
+ * Repoint every reference to a moved object.
+ *
+ * Runs across all key columns rather than only the one the plan named: a key can
+ * be referenced from more than one place (a pending row whose recording was also
+ * staged), and a missed reference is a dead link.
+ */
+export async function repointStorageKey(db: Sql, from: string, to: string): Promise<void> {
+  await db`UPDATE show_uploads SET video_s3_key = ${to} WHERE video_s3_key = ${from}`;
+  await db`UPDATE show_uploads SET audio_s3_key = ${to} WHERE audio_s3_key = ${from}`;
+  await db`UPDATE show_uploads SET archive_s3_key = ${to} WHERE archive_s3_key = ${from}`;
+  await db`UPDATE pending_videos SET s3_key = ${to} WHERE s3_key = ${from}`;
+  await db`UPDATE staged_uploads SET s3_key = ${to} WHERE s3_key = ${from}`;
+}

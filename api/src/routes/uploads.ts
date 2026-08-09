@@ -25,6 +25,7 @@ import { updateArchiveRecord, resolveGenreIds, removeArchiveMediaLink } from '..
 import { syncYoutubeMetadata, syncMixcloudMetadata, setYoutubePublic, getYoutubePrivacyStatus } from '../services/platform-metadata';
 import { baseTitle } from '../services/format';
 import { env } from '../env';
+import { incomingKey } from '../services/storage-layout';
 
 export const uploadsRouter = Router();
 
@@ -118,7 +119,7 @@ uploadsRouter.post('/presign', async (req, res) => {
   if (!filename || !contentType) {
     return res.status(400).json({ error: 'filename and contentType required' });
   }
-  const key = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const key = incomingKey(filename);
   try {
     const url = await createUploadPresignedUrl(key, contentType);
     res.json({ url, key });

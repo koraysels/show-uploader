@@ -3,10 +3,12 @@ import Stack from '@mui/material/Stack';
 import LinearProgress from '@mui/material/LinearProgress';
 import Typography from '@mui/material/Typography';
 import Tooltip from '@mui/material/Tooltip';
-import { useStorageOverview } from '../api/hooks';
+import { useStorageOverview, useMigrationPlan, useRunMigration } from '../api/hooks';
 import { humanSize, humanAge } from '../format';
 import { c } from '../theme';
 import { PageLoading } from '../components/Skeleton';
+import ConfirmAction from '../components/ConfirmAction';
+import StorageBrowser from '../components/StorageBrowser';
 
 // Past this much of a disk consumed, the number stops being informational.
 const WARN_AT = 0.8;
@@ -70,6 +72,12 @@ export default function Storage() {
         )}
       </Section>
 
+      <LayoutMigration />
+
+      <Section title="files">
+        <StorageBrowser />
+      </Section>
+
       <Section title={`bucket${bucket.name ? ` · ${bucket.name}` : ''}`}>
         <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap', rowGap: 1.5, mb: 2 }}>
           <Stat label="total" value={humanSize(bucket.bytes)} />
@@ -95,6 +103,73 @@ export default function Storage() {
         )}
       </Section>
     </Stack>
+  );
+}
+
+/**
+ * Move existing objects into the incoming/ + shows/ layout.
+ *
+ * Always shows the exact list before doing anything: this rewrites live object
+ * keys, and seeing the plan is the difference between a reversible decision and
+ * an irreversible one.
+ */
+function LayoutMigration() {
+  const plan = useMigrationPlan();
+  const run = useRunMigration();
+
+  if (plan.isPending || plan.isError) return null;
+
+  const moves = plan.data.moves;
+
+  return (
+    <Section title="layout">
+      {moves.length === 0 ? (
+        <Typography variant="caption" color="text.disabled">
+          everything is already filed under incoming/ and shows/. nothing to move.
+        </Typography>
+      ) : (
+        <Stack spacing={1.5}>
+          <Typography variant="body2">
+            {moves.length} object{moves.length === 1 ? '' : 's'} still in the old flat layout, where
+            unpublished drops and finished masters share one prefix.
+          </Typography>
+
+          <Box sx={{ maxHeight: 220, overflowY: 'auto', border: `1px solid ${c.line}`, p: 1.5 }}>
+            <Stack spacing={0.75}>
+              {moves.map((m) => (
+                <Box key={m.from} sx={{ fontFamily: 'monospace', fontSize: '0.6875rem' }}>
+                  <Box sx={{ color: c.faint }}>{m.from}</Box>
+                  <Box sx={{ color: c.ink }}>→ {m.to}</Box>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+
+          {run.isSuccess && (
+            <Typography variant="caption" sx={{ color: run.data.failed.length ? c.danger : c.ok }}>
+              moved {run.data.moved} of {run.data.attempted}
+              {run.data.failed.length ? ` · ${run.data.failed.length} failed, see the api log` : ''}
+            </Typography>
+          )}
+          {run.isError && (
+            <Typography variant="caption" sx={{ color: c.danger }}>
+              {run.error.message}
+            </Typography>
+          )}
+
+          <Box>
+            <ConfirmAction
+              label="reorganize"
+              question="move these objects?"
+              onConfirm={() => run.mutate()}
+              pending={run.isPending}
+              pendingLabel="moving…"
+              title="copies each object to its new key, verifies it landed, updates the database, then deletes the original"
+            />
+          </Box>
+        </Stack>
+      )}
+    </Section>
   );
 }
 

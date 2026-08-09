@@ -148,6 +148,34 @@ export function useStorageOverview() {
   );
 }
 
+// One level of the bucket. Keyed by prefix, so stepping back is instant.
+export function useBrowseStorage(prefix: string) {
+  const trpc = useTRPC();
+  return useQuery(trpc.storage.browse.queryOptions({ prefix }, { staleTime: 30_000 }));
+}
+
+export function useSignObject() {
+  const trpc = useTRPC();
+  return useMutation(trpc.storage.signObject.mutationOptions());
+}
+
+// What the storage-layout migration would move. Read-only — nothing is touched
+// until runMigration is called.
+export function useMigrationPlan() {
+  const trpc = useTRPC();
+  return useQuery(trpc.storage.migrationPlan.queryOptions(undefined, { staleTime: 30_000 }));
+}
+
+export function useRunMigration() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    ...trpc.storage.runMigration.mutationOptions(),
+    // Keys moved, so every cached view of them is stale.
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 // Preview remux for a not-yet-published recording. Enabled only once the caller
 // opens the preview, so simply having a video on the form costs no polling.
 // Polls while the remux runs and stops as soon as it settles.

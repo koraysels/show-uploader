@@ -33,7 +33,7 @@ const pending = new Map<string, { size: number; timer: ReturnType<typeof setTime
 
 async function uploadAndNotify(filePath: string) {
   const filename = path.basename(filePath);
-  const key = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const key = `incoming/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
   const stat = fs.statSync(filePath);
 
   console.log(`Uploading ${filename} (${(stat.size / 1e9).toFixed(2)} GB) → S3...`);

@@ -86,7 +86,7 @@ describe('archive video remux', () => {
 
     expect(vi.mocked(remuxToMp4)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(trimVideoCopy)).not.toHaveBeenCalled();
-    expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(expect.any(String), 'uploads/rec.mp4', 'video/mp4');
+    expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(expect.any(String), 'shows/rec/video.mp4', 'video/mp4');
     expect(vi.mocked(deleteFromS3)).toHaveBeenCalledWith('uploads/rec.mkv');
   });
 
@@ -115,7 +115,7 @@ describe('archive video remux', () => {
       loudness: null,
     });
     expect(vi.mocked(remuxToMp4)).not.toHaveBeenCalled();
-    expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(expect.any(String), 'uploads/rec.mp4', 'video/mp4');
+    expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(expect.any(String), 'shows/rec/video.mp4', 'video/mp4');
   });
 
   describe('loudness normalisation', () => {
@@ -187,13 +187,19 @@ describe('archive video remux', () => {
     });
   });
 
-  // The trimmed file is written back over its own key, so the usual "delete the
-  // original" step would delete the archive that was just uploaded.
-  it('never deletes the source when the remuxed key is the source key', async () => {
+  // Re-archiving something already in the show layout must not nest it again
+  // (shows/x/video.mp4 -> shows/video/video.mp4), and must not delete the file
+  // it just wrote back over its own key.
+  it('is idempotent for a source already in the show layout', async () => {
     vi.mocked(resolveTrim).mockResolvedValue({ trimStart: '00:00:10', trimEnd: null });
 
-    await processArchive(makeJob({ videoS3Key: 'uploads/rec.mp4', trimStart: '00:00:10' }));
+    await processArchive(makeJob({ videoS3Key: 'shows/rec/video.mp4', trimStart: '00:00:10' }));
 
+    expect(vi.mocked(uploadToS3)).toHaveBeenCalledWith(
+      expect.any(String),
+      'shows/rec/video.mp4',
+      'video/mp4'
+    );
     expect(vi.mocked(deleteFromS3)).not.toHaveBeenCalled();
   });
 });
