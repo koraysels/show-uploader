@@ -5,7 +5,15 @@ import type { JobPayload } from '../types';
 import { env } from '../env';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
-import { extractAudio, prependJingle, captureSquareFrame, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
+import {
+  extractAudio,
+  prependJingle,
+  captureSquareFrame,
+  resolveTrim,
+  measureLoudness,
+  makeTempPath,
+  cleanup,
+} from '../services/ffmpeg';
 import { setJobStatus, getUploadRow } from '../db';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle, htmlToText } from '../services/format';
@@ -31,9 +39,15 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
 
     const trim = await resolveTrim(videoPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
 
+    const loudness = await measureLoudness(videoPath, {
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
+    });
+
     await extractAudio(videoPath, audioPath, {
       trimStart: trim.trimStart,
       trimEnd: trim.trimEnd,
+      loudness,
       onProgress: async (pct) => {
         const adjusted = 15 + Math.round(pct * 0.4);
         await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
@@ -48,7 +62,10 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       // the audio as-is and warn instead.
       try {
         await downloadFromS3(jingleS3Key, jinglePath);
-        await prependJingle(jinglePath, audioPath, mergedPath);
+        // Measured separately so the jingle lands at the same target as the show
+        // rather than whatever level it happens to be mastered at.
+        const jingleLoudness = await measureLoudness(jinglePath);
+        await prependJingle(jinglePath, audioPath, mergedPath, jingleLoudness);
         finalAudioPath = mergedPath;
       } catch (err) {
         console.warn(

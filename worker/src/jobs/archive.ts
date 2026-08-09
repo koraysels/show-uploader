@@ -2,7 +2,16 @@ import type { Job } from 'bullmq';
 import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3, uploadToS3, deleteFromS3, objectSize } from '../services/s3';
-import { extractAudio, remuxToMp4, trimVideoCopy, resolveTrim, makeTempPath, cleanup } from '../services/ffmpeg';
+import {
+  extractAudio,
+  remuxToMp4,
+  trimVideoCopy,
+  resolveTrim,
+  measureLoudness,
+  makeTempPath,
+  cleanup,
+  type LoudnessMeasurement,
+} from '../services/ffmpeg';
 import {
   setJobStatus,
   setAudioKey,
@@ -69,9 +78,17 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     // as the video archive (MKV doesn't play in a browser).
     const trim = await resolveTrim(inputPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
 
+    // Measured once and reused for both archives, so the downloadable audio and
+    // the archived video sit at exactly the same level.
+    const loudness = await measureLoudness(inputPath, {
+      trimStart: trim.trimStart,
+      trimEnd: trim.trimEnd,
+    });
+
     await extractAudio(inputPath, audioPath, {
       trimStart: trim.trimStart,
       trimEnd: trim.trimEnd,
+      loudness,
       onProgress: async (pct) => {
         const adjusted = 20 + Math.round(pct * 0.3);
         await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
@@ -86,7 +103,7 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 50 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 50 });
 
-    await remuxVideoToMp4(job, { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim });
+    await remuxVideoToMp4(job, { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness });
 
     await setJobStatus(jobId, 'done', { result_url: audioKey, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 100 });
@@ -120,16 +137,18 @@ async function remuxVideoToMp4(
     inputPath: string;
     mp4Path: string;
     trim: { trimStart: string | null; trimEnd: string | null };
+    loudness: LoudnessMeasurement | null;
   }
 ): Promise<void> {
-  const { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim } = ctx;
+  const { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness } = ctx;
 
   const isMp4 = ext.toLowerCase() === '.mp4';
   const hasTrim = !!(trim.trimStart || trim.trimEnd);
 
-  // Already an MP4 with nothing to cut — no work to do, and re-running must stay
-  // a no-op.
-  if (isMp4 && !hasTrim) return;
+  // Already an MP4, nothing to cut and nothing to normalise — no work to do, and
+  // re-running must stay a no-op. Normalising counts as work even when the
+  // container is already right, so it cannot be skipped here.
+  if (isMp4 && !hasTrim && !loudness) return;
 
   const onProgress = async (pct: number) => {
     const adjusted = 50 + Math.round(pct * 0.3);
@@ -146,12 +165,14 @@ async function remuxVideoToMp4(
       trimEnd: trim.trimEnd,
       // The archive is played in the browser, so it must stay progressive.
       faststart: true,
+      loudness,
     });
     await onProgress(100);
   } else {
     await remuxToMp4(inputPath, mp4Path, {
       trimStart: trim.trimStart,
       trimEnd: trim.trimEnd,
+      loudness,
       onProgress,
     });
   }
