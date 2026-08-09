@@ -30,6 +30,12 @@ services:
       - redis
       - minio
     restart: unless-stopped
+    volumes:
+      # Read-only, purely so the storage page can report real disk figures for
+      # the dedicated object-store disk and the worker's scratch space. The api
+      # never writes to either.
+      - /mnt/storage:/mnt/storage:ro
+      - worker_tmp:/tmp/show-uploader:ro
     networks:
       - default
       - reverse-proxy
@@ -62,6 +68,11 @@ services:
       - minio
       - api
     restart: unless-stopped
+    volumes:
+      # Multi-GB scratch belongs on a volume, not the container's writable layer,
+      # and it has to outlive a restart so the startup sweeper can reclaim what a
+      # killed job left behind.
+      - worker_tmp:/tmp/show-uploader
     networks:
       # reverse-proxy is the shared external network where radio-pocketbase lives.
       - default
@@ -107,6 +118,7 @@ services:
 
 volumes:
   redis_data:
+  worker_tmp:
 
 networks:
   default:

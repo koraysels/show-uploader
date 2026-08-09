@@ -2,7 +2,6 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('../../src/services/ffmpeg', () => ({
   remuxToMp4: vi.fn(async () => {}),
-  makeTempPath: (s: string) => `/tmp/${s}`,
   cleanup: vi.fn(),
 }));
 
@@ -14,6 +13,10 @@ vi.mock('../../src/services/s3', () => ({
 }));
 
 vi.mock('../../src/db', () => ({ repointPreviewKey: vi.fn(async () => 1) }));
+
+vi.mock('../../src/services/workspace', () => ({
+  createWorkspace: vi.fn(() => ({ path: (n: string) => `/tmp/${n}`, cleanup: vi.fn() })),
+}));
 
 import { remuxToMp4 } from '../../src/services/ffmpeg';
 import { deleteFromS3, uploadToS3, objectSize } from '../../src/services/s3';

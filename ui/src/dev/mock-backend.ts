@@ -96,6 +96,25 @@ function resolve(proc: string, input: unknown): unknown {
       return { enqueued: 1 };
     case 'uploads.generateAudio':
       return { ok: true };
+    // Deliberately unhealthy figures: a nearly-full object disk and a stale job
+    // folder, so the warning states are reachable without staging a real outage.
+    case 'storage.overview':
+      return {
+        disk: { path: '/mnt/storage', totalBytes: 2_000_000_000_000, freeBytes: 180_000_000_000, usedBytes: 1_820_000_000_000 },
+        root: { path: '/', totalBytes: 100_000_000_000, freeBytes: 61_000_000_000, usedBytes: 39_000_000_000 },
+        temp: { path: '/tmp/show-uploader', bytes: 7_400_000_000, jobs: 2, oldestAgeMs: 9 * 60 * 60 * 1000 },
+        bucket: {
+          name: 'show-uploader',
+          truncated: false,
+          bytes: 1_500_000_000_000,
+          objects: 412,
+          prefixes: [
+            { prefix: 'uploads', bytes: 980_000_000_000, objects: 190 },
+            { prefix: 'archive', bytes: 505_000_000_000, objects: 210 },
+            { prefix: 'jingles', bytes: 15_000_000_000, objects: 12 },
+          ],
+        },
+      };
     case 'watcher.pending':
       return [
         { id: 'pv1', s3_key: 'dropfolder/obs-2026-07-31.mkv', filename: 'obs-2026-07-31.mkv', size_bytes: 2_293_760_000 },

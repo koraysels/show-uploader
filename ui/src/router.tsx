@@ -26,6 +26,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageLoading } from './components/Skeleton';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
+import Storage from './pages/Storage';
 
 function AuthedLayout() {
   const { user, loading, userManager } = useAuth();
@@ -145,6 +146,9 @@ function AuthedLayout() {
             <Button component={Link} to="/archive" variant="text" sx={pathname.startsWith('/archive') ? navActiveSx : navSx}>
               archive
             </Button>
+            <Button component={Link} to="/storage" variant="text" sx={pathname.startsWith('/storage') ? navActiveSx : navSx}>
+              storage
+            </Button>
           </Stack>
 
           {/* Identity block drops to its own full-width line on phones instead
@@ -223,6 +227,12 @@ const archiveRoute = createRoute({
   component: Archive,
 });
 
+const storageRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/storage',
+  component: Storage,
+});
+
 const historyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/history',
@@ -234,7 +244,7 @@ const historyRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   callbackRoute,
-  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute]),
+  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute, storageRoute]),
 ]);
 
 export const router = createRouter({ routeTree });

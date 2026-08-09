@@ -448,12 +448,11 @@ export async function resolveTrim(
   return { trimStart: null, trimEnd: null };
 }
 
-export function makeTempPath(suffix: string): string {
-  const dir = path.join('/tmp', 'show-uploader');
-  fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, `${Date.now()}-${suffix}`);
-}
-
+/**
+ * Delete named files mid-job, to free a multi-GB input before the next step
+ * needs the space. Whole-job cleanup is the workspace's business (see
+ * services/workspace.ts) — this is only for releasing space early.
+ */
 export function cleanup(...paths: string[]): void {
   for (const p of paths) {
     try { fs.unlinkSync(p); } catch { /* ignore missing files */ }

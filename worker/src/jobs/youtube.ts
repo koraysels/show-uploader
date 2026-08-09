@@ -4,7 +4,8 @@ import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToYoutube } from '../services/youtube-client';
 import { setJobStatus, getUploadRow } from '../db';
-import { makeTempPath, cleanup, resolveTrim, trimVideoCopy, measureLoudness } from '../services/ffmpeg';
+import { cleanup, resolveTrim, trimVideoCopy, measureLoudness } from '../services/ffmpeg';
+import { createWorkspace } from '../services/workspace';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle, htmlToText } from '../services/format';
 import { maybeEnqueueArchive } from './archive';
@@ -14,8 +15,9 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
-  const videoPath = makeTempPath(path.basename(videoS3Key));
-  const trimmedPath = makeTempPath(`yt-trimmed${path.extname(videoS3Key) || '.mkv'}`);
+  const ws = createWorkspace(jobId);
+  const videoPath = ws.path(path.basename(videoS3Key));
+  const trimmedPath = ws.path(`yt-trimmed${path.extname(videoS3Key) || '.mkv'}`);
   try {
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 5 });
     await downloadFromS3(videoS3Key, videoPath);
@@ -76,6 +78,6 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'failed', { error: msg });
     throw err;
   } finally {
-    cleanup(videoPath, trimmedPath);
+    ws.cleanup();
   }
 }

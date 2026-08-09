@@ -139,6 +139,15 @@ export function useVideoInfo(uploadId: string) {
   return useQuery(trpc.uploads.videoInfo.queryOptions({ uploadId }, { staleTime: 5 * 60_000 }));
 }
 
+// Disk + bucket figures for the storage page. The bucket side lists every
+// object, so this refetches on a slow timer rather than riding the uploads poll.
+export function useStorageOverview() {
+  const trpc = useTRPC();
+  return useQuery(
+    trpc.storage.overview.queryOptions(undefined, { refetchInterval: 30_000, staleTime: 15_000 })
+  );
+}
+
 // Preview remux for a not-yet-published recording. Enabled only once the caller
 // opens the preview, so simply having a video on the form costs no polling.
 // Polls while the remux runs and stops as soon as it settles.
