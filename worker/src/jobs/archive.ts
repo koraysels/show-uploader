@@ -11,11 +11,14 @@ import {
   cleanup,
   type LoudnessMeasurement,
 } from '../services/ffmpeg';
+import { env } from '../env';
+import { finalizeArchiveRecord } from '../services/shows-api';
 import {
   setJobStatus,
   setAudioKey,
   setVideoKey,
   getPlatformJobsForUpload,
+  getUploadRow,
   createArchiveJobRecord,
 } from '../db';
 import { uploadQueue } from '../queue';
@@ -109,6 +112,8 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'done', { result_url: audioKey, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 100 });
 
+    await publishArchiveLinks(uploadId);
+
     return JSON.stringify({ uploadId, platform: 'archive', key: audioKey });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -116,6 +121,39 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     throw err;
   } finally {
     ws.cleanup();
+  }
+}
+
+/**
+ * Put the finished recording on the agenda record, as two more mediaLinks
+ * beside the YouTube and MixCloud ones the platform jobs already write.
+ *
+ * The URLs point at this app rather than at S3 directly: presigned links expire
+ * within hours, and PocketBase stores these forever. /api/public redirects to a
+ * freshly signed URL per request, so the stored link never rots.
+ *
+ * Best-effort by design — the archive itself is already safely on S3, so a
+ * PocketBase hiccup must not fail the job or trigger a retry that would redo the
+ * whole transcode.
+ */
+async function publishArchiveLinks(uploadId: string): Promise<void> {
+  if (!env.APP_PUBLIC_URL) {
+    console.warn('APP_PUBLIC_URL unset — skipping archive links on the agenda record');
+    return;
+  }
+  try {
+    const row = await getUploadRow(uploadId);
+    if (!row?.show_id) return;
+
+    const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${uploadId}`;
+    await finalizeArchiveRecord(row.show_id, {
+      mediaLinks: [
+        { label: 'Recording', type: 'video', url: `${base}/video` },
+        { label: 'Audio', type: 'audio', url: `${base}/audio` },
+      ],
+    });
+  } catch (err) {
+    console.error(`Could not attach archive links for ${uploadId}:`, err);
   }
 }
 
