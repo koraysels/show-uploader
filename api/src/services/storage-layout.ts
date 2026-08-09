@@ -11,6 +11,8 @@
  * worse rather than better.
  */
 
+import { showSlug, uniqueSlug } from './show-slug';
+
 export const INCOMING_PREFIX = 'incoming';
 export const SHOWS_PREFIX = 'shows';
 
@@ -37,22 +39,33 @@ export function incomingKey(filename: string): string {
   return `${INCOMING_PREFIX}/${Date.now()}-${safe}`;
 }
 
+/**
+ * The name a show's folder is derived from.
+ *
+ * For a key already under shows/ that is the folder segment, not the file — the
+ * file is always called video/audio, which carries no identity. For anything
+ * else it is the recording's own basename.
+ */
+export function sourceName(key: string): string {
+  if (key.startsWith(`${SHOWS_PREFIX}/`)) {
+    const rest = key.slice(SHOWS_PREFIX.length + 1);
+    const slash = rest.indexOf('/');
+    return slash === -1 ? baseName(rest) : rest.slice(0, slash);
+  }
+  return baseName(key);
+}
+
 /** Folder holding one published show's artefacts. */
 export function showFolder(sourceKey: string): string {
-  return `${SHOWS_PREFIX}/${baseName(sourceKey)}`;
+  return `${SHOWS_PREFIX}/${showSlug(sourceName(sourceKey))}`;
 }
 
-export function showVideoKey(sourceKey: string): string {
-  // Idempotent: a key already in the layout would otherwise be nested again.
-  if (sourceKey.startsWith(`${SHOWS_PREFIX}/`)) return sourceKey;
-  return `${showFolder(sourceKey)}/video${extension(sourceKey) || '.mp4'}`;
+export function showVideoKey(sourceKey: string, folder = showFolder(sourceKey)): string {
+  return `${folder}/video${extension(sourceKey) || '.mp4'}`;
 }
 
-export function showAudioKey(sourceKey: string): string {
-  if (sourceKey.startsWith(`${SHOWS_PREFIX}/`)) {
-    return `${sourceKey.slice(0, sourceKey.lastIndexOf('/'))}/audio.m4a`;
-  }
-  return `${showFolder(sourceKey)}/audio.m4a`;
+export function showAudioKey(sourceKey: string, folder = showFolder(sourceKey)): string {
+  return `${folder}/audio.m4a`;
 }
 
 export type MigrationMove = {
@@ -96,23 +109,26 @@ export function planMigration(input: MigrationInput): MigrationMove[] {
     moves.push(move);
   };
 
+  // One slug per show, shared by both artefacts so they land together. Reserved
+  // even when nothing moves, so an untouched folder cannot be taken by a later
+  // show that slugs to the same name.
+  const taken = new Set<string>();
+
   for (const { videoKey, audioKey } of input.published) {
-    // Already migrated. Deriving a destination from a key that is already in the
-    // new layout would nest it again — shows/x/video.mp4 becomes shows/video/….
-    if (!isMigrated(videoKey)) {
+    const folder = `${SHOWS_PREFIX}/${uniqueSlug(showSlug(sourceName(videoKey)), taken)}`;
+
+    add({
+      from: videoKey,
+      to: showVideoKey(videoKey, folder),
+      field: 'video_s3_key',
+      reason: 'published master',
+    });
+    if (audioKey) {
       add({
-        from: videoKey,
-        to: showVideoKey(videoKey),
-        field: 'video_s3_key',
-        reason: 'published master',
-      });
-    }
-    if (audioKey && !isMigrated(audioKey)) {
-      add({
-        // The audio's folder has to match its own video, not its own old key —
-        // the m4a lives under archive/ and carries no show grouping of its own.
+        // The audio's folder follows its video, not its own key — the m4a
+        // carries no show grouping of its own.
         from: audioKey,
-        to: showAudioKey(videoKey),
+        to: showAudioKey(videoKey, folder),
         field: 'audio_s3_key',
         reason: 'published audio',
       });

@@ -7,6 +7,8 @@
  * the same literal keys — drift breaks one of them.
  */
 
+import { showSlug } from './show-slug';
+
 export const SHOWS_PREFIX = 'shows';
 
 function baseName(key: string): string {
@@ -22,25 +24,28 @@ function extension(key: string): string {
 }
 
 
-/**
- * Already in the show layout? Deriving a destination from such a key would nest
- * it again — shows/x/video.mp4 would become shows/video/video.mp4 — so both
- * helpers below return it untouched. This is what makes re-archiving safe.
- */
-function alreadyPlaced(key: string): boolean {
-  return key.startsWith(`${SHOWS_PREFIX}/`);
+export function showFolder(sourceKey: string): string {
+  return `${SHOWS_PREFIX}/${showSlug(sourceName(sourceKey))}`;
 }
 
-export function showFolder(sourceKey: string): string {
-  return `${SHOWS_PREFIX}/${baseName(sourceKey)}`;
+/**
+ * The name a folder is derived from: the folder segment for a key already under
+ * shows/ (the file is always video/audio, which carries no identity), otherwise
+ * the recording's own basename.
+ */
+function sourceName(key: string): string {
+  if (key.startsWith(`${SHOWS_PREFIX}/`)) {
+    const rest = key.slice(SHOWS_PREFIX.length + 1);
+    const slash = rest.indexOf('/');
+    return slash === -1 ? baseName(rest) : rest.slice(0, slash);
+  }
+  return baseName(key);
 }
 
 export function showVideoKey(sourceKey: string): string {
-  if (alreadyPlaced(sourceKey)) return sourceKey;
   return `${showFolder(sourceKey)}/video${extension(sourceKey) || '.mp4'}`;
 }
 
 export function showAudioKey(sourceKey: string): string {
-  if (alreadyPlaced(sourceKey)) return `${sourceKey.slice(0, sourceKey.lastIndexOf('/'))}/audio.m4a`;
   return `${showFolder(sourceKey)}/audio.m4a`;
 }

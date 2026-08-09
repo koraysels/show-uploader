@@ -96,6 +96,46 @@ describe('planMigration', () => {
     expect(moves).toHaveLength(1);
   });
 
+  // The first migration filed folders under the raw filename. Re-running now
+  // renames them to the readable slug, in place.
+  it('renames an already-migrated show folder to the readable slug', () => {
+    const moves = planMigration({
+      published: [
+        {
+          videoKey: 'shows/1783776608000-misharog_10.07.2026__coming_soon__2026-07-10_15-52-25/video.mp4',
+          audioKey: 'shows/1783776608000-misharog_10.07.2026__coming_soon__2026-07-10_15-52-25/audio.m4a',
+        },
+      ],
+      pendingKeys: [],
+      stagedKeys: [],
+    });
+
+    expect(moves.map((m) => m.to)).toEqual([
+      'shows/2026-07-10-misharog/video.mp4',
+      'shows/2026-07-10-misharog/audio.m4a',
+    ]);
+  });
+
+  // Both artefacts must land in the SAME folder, including when a collision
+  // suffix is applied — otherwise a show's audio ends up beside another show.
+  it('keeps video and audio together when two shows slug alike', () => {
+    const moves = planMigration({
+      published: [
+        { videoKey: 'uploads/1783776608000-mills_17.07.2026__coming_soon__2026-07-17_18-00-31.mp4', audioKey: 'archive/a.m4a' },
+        { videoKey: 'uploads/1784493571380-mills_17.07.2026__coming_soon__2026-07-17_18-00-31.mp4', audioKey: 'archive/b.m4a' },
+      ],
+      pendingKeys: [],
+      stagedKeys: [],
+    });
+
+    expect(moves.map((m) => m.to)).toEqual([
+      'shows/2026-07-17-mills/video.mp4',
+      'shows/2026-07-17-mills/audio.m4a',
+      'shows/2026-07-17-mills-2/video.mp4',
+      'shows/2026-07-17-mills-2/audio.m4a',
+    ]);
+  });
+
   it('handles a published upload whose audio archive is missing', () => {
     const moves = planMigration({
       published: [{ videoKey: 'uploads/1785-rec.mp4', audioKey: null }],
