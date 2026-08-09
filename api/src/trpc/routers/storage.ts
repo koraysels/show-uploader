@@ -1,6 +1,9 @@
 import { router, protectedProcedure } from '../trpc';
 import { bucketUsage, diskUsage, tempUsage } from '../../services/storage-usage';
-import { moveObject } from '../../services/s3';
+import { z } from 'zod';
+import { TRPCError } from '@trpc/server';
+import { moveObject, createDownloadPresignedUrl } from '../../services/s3';
+import { browse } from '../../services/storage-browse';
 import { planMigration } from '../../services/storage-layout';
 import { db } from '../../db/client';
 import { listPublishedKeys, listUnpublishedKeys, repointStorageKey } from '../../db/queries';
@@ -10,6 +13,12 @@ import { env } from '../../env';
 // the api purely so this page can report real figures. Unset/unmounted degrades
 // to "unavailable" rather than failing.
 const STORAGE_DISK = process.env.STORAGE_DISK_PATH ?? '/mnt/storage';
+// Log the cause, return something safe for the UI.
+function internal(err: unknown, logPrefix: string, message: string): never {
+  console.error(logPrefix, err);
+  throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
+}
+
 const TEMP_ROOT = process.env.WORKER_TEMP_ROOT ?? '/tmp/show-uploader';
 
 /** Read the current layout of every tracked key and work out what should move. */
@@ -25,6 +34,33 @@ async function buildPlan() {
 }
 
 export const storageRouter = router({
+  /** One level of the bucket, folders first. */
+  browse: protectedProcedure
+    .input(z.object({ prefix: z.string().default('') }))
+    .query(async ({ input }) => {
+      try {
+        return await browse(input.prefix);
+      } catch (err) {
+        internal(err, 'Failed to browse storage:', 'Failed to browse storage');
+      }
+    }),
+
+  /**
+   * A short-lived download URL for one object.
+   *
+   * Signed on demand rather than during listing: signing every object in a
+   * folder would be wasted work for the ones nobody opens.
+   */
+  signObject: protectedProcedure
+    .input(z.object({ key: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        return { url: await createDownloadPresignedUrl(input.key) };
+      } catch (err) {
+        internal(err, 'Failed to sign object:', 'Failed to sign object');
+      }
+    }),
+
   /**
    * What the layout migration would do, without doing any of it.
    *

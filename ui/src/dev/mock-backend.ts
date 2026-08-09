@@ -115,6 +115,27 @@ function resolve(proc: string, input: unknown): unknown {
           ],
         },
       };
+    case 'storage.browse': {
+      const p = String(arg.prefix ?? '');
+      if (!p) {
+        return { prefix: '', truncated: false, files: [], folders: [
+          { key: 'incoming/', name: 'incoming', bytes: null, modified: null },
+          { key: 'shows/', name: 'shows', bytes: null, modified: null },
+          { key: 'jingles/', name: 'jingles', bytes: null, modified: null },
+        ] };
+      }
+      if (p === 'shows/') {
+        return { prefix: p, truncated: false, files: [], folders: [
+          { key: 'shows/1785-obs/', name: '1785-obs', bytes: null, modified: null },
+        ] };
+      }
+      return { prefix: p, truncated: false, folders: [], files: [
+        { key: `${p}video.mp4`, name: 'video.mp4', bytes: 2_293_760_000, modified: new Date().toISOString() },
+        { key: `${p}audio.m4a`, name: 'audio.m4a', bytes: 240_000_000, modified: new Date().toISOString() },
+      ] };
+    }
+    case 'storage.signObject':
+      return { url: 'data:text/plain,mock' };
     case 'storage.migrationPlan':
       return {
         count: 2,

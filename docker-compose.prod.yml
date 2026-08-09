@@ -114,7 +114,18 @@ services:
       - traefik.http.routers.show-uploader-minio.rule=Host(`minio-uploader.coming-soon.space`)
       - traefik.http.routers.show-uploader-minio.entrypoints=websecure
       - traefik.http.routers.show-uploader-minio.tls.certresolver=myresolver
+      - traefik.http.routers.show-uploader-minio.service=show-uploader-minio
       - traefik.http.services.show-uploader-minio.loadbalancer.server.port=9000
+      # The console minio already runs (--console-address above) is the object
+      # browser: upload, download, delete, preview, share links, and it cannot
+      # drift from the bucket because it IS the bucket's own tool. It only ever
+      # needed a route. Separate router + service because a container exposing
+      # two ports needs each router bound to its own service explicitly.
+      - traefik.http.routers.show-uploader-console.rule=Host(`console-uploader.coming-soon.space`)
+      - traefik.http.routers.show-uploader-console.entrypoints=websecure
+      - traefik.http.routers.show-uploader-console.tls.certresolver=myresolver
+      - traefik.http.routers.show-uploader-console.service=show-uploader-console
+      - traefik.http.services.show-uploader-console.loadbalancer.server.port=9001
   # Bucket creation moved into the api (ensureBucket on startup) — no more
   # one-shot minio-init container, which lingered as Exited(0) and read as
   # "unhealthy". Object prefixes (uploads/archive/…) are created on first PUT.

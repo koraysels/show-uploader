@@ -8,6 +8,7 @@ import { humanSize, humanAge } from '../format';
 import { c } from '../theme';
 import { PageLoading } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
+import StorageBrowser from '../components/StorageBrowser';
 
 // Past this much of a disk consumed, the number stops being informational.
 const WARN_AT = 0.8;
@@ -72,6 +73,10 @@ export default function Storage() {
       </Section>
 
       <LayoutMigration />
+
+      <Section title="files">
+        <StorageBrowser />
+      </Section>
 
       <Section title={`bucket${bucket.name ? ` · ${bucket.name}` : ''}`}>
         <Stack direction="row" spacing={3} sx={{ flexWrap: 'wrap', rowGap: 1.5, mb: 2 }}>

@@ -148,6 +148,17 @@ export function useStorageOverview() {
   );
 }
 
+// One level of the bucket. Keyed by prefix, so stepping back is instant.
+export function useBrowseStorage(prefix: string) {
+  const trpc = useTRPC();
+  return useQuery(trpc.storage.browse.queryOptions({ prefix }, { staleTime: 30_000 }));
+}
+
+export function useSignObject() {
+  const trpc = useTRPC();
+  return useMutation(trpc.storage.signObject.mutationOptions());
+}
+
 // What the storage-layout migration would move. Read-only — nothing is touched
 // until runMigration is called.
 export function useMigrationPlan() {
