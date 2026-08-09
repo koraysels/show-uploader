@@ -9,6 +9,7 @@ import {
   abortMultipart,
 } from '../services/s3';
 import { upsertStagedUpload } from '../db/queries';
+import { incomingKey } from '../services/storage-layout';
 
 export const multipartRouter = Router();
 
@@ -48,7 +49,7 @@ multipartRouter.post('/create', async (req, res) => {
   const parsed = CreateSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
   const { filename, contentType, size, showId } = parsed.data;
-  const key = `uploads/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
+  const key = incomingKey(filename);
   try {
     const uploadId = await createMultipart(key, contentType);
     const rows = await db<{ id: string }[]>`

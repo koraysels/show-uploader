@@ -115,6 +115,16 @@ function resolve(proc: string, input: unknown): unknown {
           ],
         },
       };
+    case 'storage.migrationPlan':
+      return {
+        count: 2,
+        moves: [
+          { from: 'uploads/1785-obs.mp4', to: 'shows/1785-obs/video.mp4', field: 'video_s3_key', reason: 'published master' },
+          { from: 'archive/1785-obs.m4a', to: 'shows/1785-obs/audio.m4a', field: 'audio_s3_key', reason: 'published audio' },
+        ],
+      };
+    case 'storage.runMigration':
+      return { moved: 2, attempted: 2, failed: [] };
     case 'watcher.pending':
       return [
         { id: 'pv1', s3_key: 'dropfolder/obs-2026-07-31.mkv', filename: 'obs-2026-07-31.mkv', size_bytes: 2_293_760_000 },

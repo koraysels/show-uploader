@@ -148,6 +148,23 @@ export function useStorageOverview() {
   );
 }
 
+// What the storage-layout migration would move. Read-only — nothing is touched
+// until runMigration is called.
+export function useMigrationPlan() {
+  const trpc = useTRPC();
+  return useQuery(trpc.storage.migrationPlan.queryOptions(undefined, { staleTime: 30_000 }));
+}
+
+export function useRunMigration() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    ...trpc.storage.runMigration.mutationOptions(),
+    // Keys moved, so every cached view of them is stale.
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 // Preview remux for a not-yet-published recording. Enabled only once the caller
 // opens the preview, so simply having a video on the form costs no polling.
 // Polls while the remux runs and stops as soon as it settles.

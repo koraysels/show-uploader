@@ -23,6 +23,7 @@ import {
 } from '../db';
 import { uploadQueue } from '../queue';
 import { createWorkspace } from '../services/workspace';
+import { showAudioKey, showVideoKey } from '../services/storage-layout';
 
 // PocketBase write-back now happens per-platform (in each job) the moment that
 // platform finishes — no waiting on the others. This only enqueues the archive.
@@ -100,7 +101,7 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
       },
     });
 
-    const audioKey = `archive/${base}.m4a`;
+    const audioKey = showAudioKey(videoS3Key);
     await uploadToS3(audioPath, audioKey, 'audio/mp4');
     await setAudioKey(uploadId, audioKey);
 
@@ -220,7 +221,9 @@ async function remuxVideoToMp4(
   // holding the recording twice while a multi-GB PUT runs.
   cleanup(inputPath);
 
-  const mp4Key = `${videoS3Key.slice(0, -ext.length)}.mp4`;
+  // Published artefacts move into the show's own folder; the source key may
+  // still be under incoming/, which is exactly what this migration away from.
+  const mp4Key = showVideoKey(`${videoS3Key.slice(0, -ext.length)}.mp4`);
   await uploadToS3(mp4Path, mp4Key, 'video/mp4');
 
   const size = await objectSize(mp4Key);
