@@ -12,6 +12,10 @@ const schema = z.object({
   // the published result back onto the PocketBase archive record via the api's
   // superuser. Defaults to the in-network service address.
   INTERNAL_API_URL: z.string().url().default('http://api:3000/api'),
+  // The uploader's own public base. Only used to build the permanent recording
+  // links stored on the agenda records — they are opened by browsers, so the
+  // internal docker host is useless here. Unset means those links are skipped.
+  APP_PUBLIC_URL: z.string().url().optional(),
   WATCHER_API_KEY: z.string().default('change-me'),
   YOUTUBE_CLIENT_ID: z.string().optional(),
   YOUTUBE_CLIENT_SECRET: z.string().optional(),

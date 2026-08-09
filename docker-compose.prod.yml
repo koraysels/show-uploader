@@ -59,6 +59,9 @@ services:
       # Write published results back to the PocketBase archive record via the api
       # (which holds the PB superuser). Same isolated network, api listens on 3000.
       - INTERNAL_API_URL=http://api:3000/api
+      # Public base for the permanent recording links written onto the agenda
+      # records. Browsers open these, so it must be the external host.
+      - APP_PUBLIC_URL=https://uploader.coming-soon.space
       # Reach PocketBase over the shared network to fetch a record's cover image
       # for the MixCloud upload (the public host isn't reachable from inside — NAT
       # hairpin). POCKETBASE_URL (the public base to rewrite from) comes from .env.

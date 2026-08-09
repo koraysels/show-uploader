@@ -26,12 +26,19 @@ vi.mock('../../src/services/s3', () => ({
   objectSize: vi.fn(async () => 1234),
 }));
 
+vi.mock('../../src/env', () => ({ env: { ARCHIVE_AUDIO_BITRATE: '256k', APP_PUBLIC_URL: 'https://uploader.test' } }));
+
+// Agenda write-back is best-effort and asserted separately; stub it so these
+// tests stay about the remux branching.
+vi.mock('../../src/services/shows-api', () => ({ finalizeArchiveRecord: vi.fn(async () => {}) }));
+
 vi.mock('../../src/db', () => ({
   setJobStatus: vi.fn(async () => {}),
   setAudioKey: vi.fn(async () => {}),
   setVideoKey: vi.fn(async () => {}),
   getPlatformJobsForUpload: vi.fn(async () => []),
   createArchiveJobRecord: vi.fn(async () => null),
+  getUploadRow: vi.fn(async () => ({ show_id: 'show-1', jingle_s3_key: null })),
 }));
 
 vi.mock('../../src/queue', () => ({ uploadQueue: { add: vi.fn() }, previewQueue: { add: vi.fn() } }));
@@ -43,6 +50,7 @@ vi.mock('../../src/services/workspace', () => ({
 
 import { remuxToMp4, trimVideoCopy, resolveTrim, measureLoudness, extractAudio } from '../../src/services/ffmpeg';
 import { deleteFromS3, uploadToS3 } from '../../src/services/s3';
+import { finalizeArchiveRecord } from '../../src/services/shows-api';
 import { processArchive } from '../../src/jobs/archive';
 
 function makeJob(over: Record<string, unknown> = {}) {
@@ -152,6 +160,30 @@ describe('archive video remux', () => {
       await processArchive(makeJob());
 
       expect(vi.mocked(remuxToMp4).mock.calls[0][2]).toMatchObject({ loudness: null });
+    });
+  });
+
+
+  describe('agenda write-back', () => {
+    // Permanent links, not presigned ones: PocketBase stores these forever and a
+    // signed URL would be dead within hours.
+    it('attaches stable recording links to the agenda record', async () => {
+      await processArchive(makeJob());
+
+      expect(vi.mocked(finalizeArchiveRecord)).toHaveBeenCalledWith('show-1', {
+        mediaLinks: [
+          { label: 'Recording', type: 'video', url: 'https://uploader.test/api/public/recordings/up-1/video' },
+          { label: 'Audio', type: 'audio', url: 'https://uploader.test/api/public/recordings/up-1/audio' },
+        ],
+      });
+    });
+
+    // The archive is already safely on S3 by this point, so a PocketBase outage
+    // must not fail the job and trigger a retry of the whole transcode.
+    it('does not fail the job when the write-back errors', async () => {
+      vi.mocked(finalizeArchiveRecord).mockRejectedValueOnce(new Error('pocketbase down'));
+
+      await expect(processArchive(makeJob())).resolves.toBeTruthy();
     });
   });
 
