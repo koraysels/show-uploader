@@ -94,11 +94,18 @@ function internal(err: unknown, logMessage: string, message: string): never {
 }
 
 export const uploadsRouter = router({
-  // GET /api/uploads — every upload with its jobs + presigned download URLs.
+  /**
+   * GET /api/uploads — every upload with its jobs. Keys, not signed URLs.
+   *
+   * This list is polled, and signing here meant re-signing every artefact of
+   * every upload on every poll: pure churn for objects that never change, and
+   * it handed the UI a download URL that mutated underneath anything using it
+   * (a playing <video> was torn down and restarted). The UI signs a key when
+   * the operator actually asks for it — see storage.signObject.
+   */
   list: protectedProcedure.query(async () => {
     try {
-      const uploads = await listUploadsWithJobs(db);
-      return await Promise.all(uploads.map(withDownloadUrls));
+      return await listUploadsWithJobs(db);
     } catch (err) {
       internal(err, 'Failed to list uploads:', 'Failed to list uploads');
     }

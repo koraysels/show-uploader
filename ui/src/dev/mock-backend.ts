@@ -51,13 +51,7 @@ function resolve(proc: string, input: unknown): unknown {
     case 'shows.syncPlatforms':
       return { results: { youtube: 'ok', mixcloud: 'ok' } };
     case 'uploads.list':
-      // withDownloadUrls re-signs on every call, so the real endpoint returns a
-      // different video_url each time. The mock has to do the same or it hides
-      // every bug caused by an unstable media src.
-      return uploads.map((u) => ({
-        ...u,
-        video_url: u.video_url ? `${u.video_url}?sig=${Math.random().toString(36).slice(2)}` : u.video_url,
-      }));
+      return uploads;
     case 'uploads.getStagedShowIds':
       return ['show_dubplate'];
     case 'uploads.getStaged':
