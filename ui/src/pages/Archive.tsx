@@ -237,6 +237,7 @@ function publishedJobs(u: UploadWithJobs) {
  */
 function DownloadLink({ objectKey, label }: { objectKey: string | null; label: string }) {
   const sign = useSignObjectOnDemand();
+  const [failed, setFailed] = useState(false);
 
   if (!objectKey)
     return (
@@ -251,14 +252,23 @@ function DownloadLink({ objectKey, label }: { objectKey: string | null; label: s
     // The tab must be opened inside the click's own task or the popup blocker
     // eats it; the URL is filled in once signing resolves.
     const tab = window.open('', '_blank');
+    setFailed(false);
     sign(objectKey)
-      .then(({ url }) => { if (tab) tab.location.href = url; })
-      .catch(() => tab?.close());
+      .then(({ url }) => {
+        if (tab) tab.location.href = url;
+        // A blocked popup leaves no tab and no error — say so rather than
+        // looking like nothing happened.
+        else setFailed(true);
+      })
+      .catch(() => {
+        tab?.close();
+        setFailed(true);
+      });
   };
 
   return (
     <MuiLink component="button" onClick={open} color={ROLE.navigate} sx={linkSx}>
-      {label} ↓
+      {label} {failed ? '— failed' : '↓'}
     </MuiLink>
   );
 }

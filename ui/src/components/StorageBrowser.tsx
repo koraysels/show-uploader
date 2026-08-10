@@ -22,6 +22,7 @@ const CONSOLE_URL = import.meta.env.VITE_MINIO_CONSOLE_URL as string | undefined
  */
 export default function StorageBrowser() {
   const [prefix, setPrefix] = useState('');
+  const [signError, setSignError] = useState<string | null>(null);
   const listing = useBrowseStorage(prefix);
   const sign = useSignObjectOnDemand();
 
@@ -30,9 +31,18 @@ export default function StorageBrowser() {
   const open = (key: string) => {
     // Opened inside the click's own task or the popup blocker eats it.
     const tab = window.open('', '_blank');
+    setSignError(null);
     sign(key)
-      .then(({ url }) => { if (tab) tab.location.href = url; })
-      .catch(() => tab?.close());
+      .then(({ url }) => {
+        if (tab) tab.location.href = url;
+        // A blocked popup leaves no tab and no error — say so rather than
+        // looking like nothing happened.
+        else setSignError('popup blocked — allow popups to open files');
+      })
+      .catch((err: Error) => {
+        tab?.close();
+        setSignError(err.message);
+      });
   };
 
   const segments = prefix.split('/').filter(Boolean);
@@ -120,6 +130,12 @@ export default function StorageBrowser() {
       {listing.data?.truncated && (
         <Typography variant="caption" sx={{ color: c.danger }}>
           long folder — only the first page is shown. use the console for the rest.
+        </Typography>
+      )}
+
+      {signError && (
+        <Typography variant="caption" sx={{ color: c.danger }}>
+          {signError}
         </Typography>
       )}
 
