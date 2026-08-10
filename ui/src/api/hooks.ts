@@ -167,9 +167,30 @@ export function useBrowseStorage(prefix: string) {
   return useQuery(trpc.storage.browse.queryOptions({ prefix }, { staleTime: 30_000 }));
 }
 
-export function useSignObject() {
+/**
+ * A download URL for one object, keyed by that object.
+ *
+ * The key is what makes this safe to feed a <video src>: the same object always
+ * resolves to the same cached URL, so a refetch elsewhere cannot swap the source
+ * out from under a playing element. staleTime keeps it that way for the session;
+ * the signature itself is good for hours.
+ */
+export function useSignedUrl(objectKey: string | null, enabled = true) {
   const trpc = useTRPC();
-  return useMutation(trpc.storage.signObject.mutationOptions());
+  return useQuery(
+    trpc.storage.signObject.queryOptions(
+      { key: objectKey ?? '' },
+      { enabled: enabled && !!objectKey, staleTime: 60 * 60_000, gcTime: 60 * 60_000 }
+    )
+  );
+}
+
+/** Imperative sign for click handlers, sharing the cache above. */
+export function useSignObjectOnDemand() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return (key: string) =>
+    qc.fetchQuery({ ...trpc.storage.signObject.queryOptions({ key }), staleTime: 60 * 60_000 });
 }
 
 // What the storage-layout migration would move. Read-only — nothing is touched

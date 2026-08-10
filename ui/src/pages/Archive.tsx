@@ -32,7 +32,7 @@ import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
 import SignedVideoPlayer from '../components/SignedVideoPlayer';
 import { humanSize } from '../format';
-import { useSignObject } from '../api/hooks';
+import { useSignObjectOnDemand } from '../api/hooks';
 import type { UploadWithJobs } from '../api/client';
 import { c, ROLE, LABEL_SX } from '../theme';
 
@@ -236,7 +236,7 @@ function publishedJobs(u: UploadWithJobs) {
  * mutating URL tore down anything already using it.
  */
 function DownloadLink({ objectKey, label }: { objectKey: string | null; label: string }) {
-  const sign = useSignObject();
+  const sign = useSignObjectOnDemand();
 
   if (!objectKey)
     return (
@@ -248,16 +248,17 @@ function DownloadLink({ objectKey, label }: { objectKey: string | null; label: s
   // The tab must be opened inside the click's own task or the popup blocker
   // eats it; the URL is filled in once signing resolves.
   const open = () => {
+    // The tab must be opened inside the click's own task or the popup blocker
+    // eats it; the URL is filled in once signing resolves.
     const tab = window.open('', '_blank');
-    sign.mutate(
-      { key: objectKey },
-      { onSuccess: ({ url }) => { if (tab) tab.location.href = url; }, onError: () => tab?.close() }
-    );
+    sign(objectKey)
+      .then(({ url }) => { if (tab) tab.location.href = url; })
+      .catch(() => tab?.close());
   };
 
   return (
     <MuiLink component="button" onClick={open} color={ROLE.navigate} sx={linkSx}>
-      {label} {sign.isPending ? '…' : '↓'}
+      {label} ↓
     </MuiLink>
   );
 }

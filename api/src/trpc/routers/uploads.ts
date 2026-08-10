@@ -393,10 +393,10 @@ export const uploadsRouter = router({
             : null,
         });
 
-        // Only sign a URL once there is something to play; signing is pointless
-        // work in every other state.
-        if (state.state !== 'ready') return { ...state, url: null };
-        return { ...state, url: await createDownloadPresignedUrl(state.key) };
+        // Returns the key, never a signed URL. Signing here would hand back a
+        // different URL on every poll and tear down a playing <video>; the
+        // player signs the key once via storage.signObject instead.
+        return state;
       } catch (err) {
         internal(err, 'Failed to read preview status:', 'Failed to read preview status');
       }

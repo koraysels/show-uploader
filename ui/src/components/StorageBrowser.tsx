@@ -3,7 +3,7 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import { useBrowseStorage, useSignObject } from '../api/hooks';
+import { useBrowseStorage, useSignObjectOnDemand } from '../api/hooks';
 import { humanSize } from '../format';
 import { c } from '../theme';
 
@@ -23,21 +23,16 @@ const CONSOLE_URL = import.meta.env.VITE_MINIO_CONSOLE_URL as string | undefined
 export default function StorageBrowser() {
   const [prefix, setPrefix] = useState('');
   const listing = useBrowseStorage(prefix);
-  const sign = useSignObject();
+  const sign = useSignObjectOnDemand();
 
   // The tab has to be opened inside the click's own task or the popup blocker
   // eats it; the URL is filled in once signing resolves.
   const open = (key: string) => {
+    // Opened inside the click's own task or the popup blocker eats it.
     const tab = window.open('', '_blank');
-    sign.mutate(
-      { key },
-      {
-        onSuccess: ({ url }) => {
-          if (tab) tab.location.href = url;
-        },
-        onError: () => tab?.close(),
-      }
-    );
+    sign(key)
+      .then(({ url }) => { if (tab) tab.location.href = url; })
+      .catch(() => tab?.close());
   };
 
   const segments = prefix.split('/').filter(Boolean);
@@ -111,7 +106,6 @@ export default function StorageBrowser() {
                   <Button
                     variant="text"
                     onClick={() => open(f.key)}
-                    disabled={sign.isPending}
                     sx={{ minHeight: 28, fontSize: '0.6875rem' }}
                   >
                     open
@@ -126,11 +120,6 @@ export default function StorageBrowser() {
       {listing.data?.truncated && (
         <Typography variant="caption" sx={{ color: c.danger }}>
           long folder — only the first page is shown. use the console for the rest.
-        </Typography>
-      )}
-      {sign.isError && (
-        <Typography variant="caption" sx={{ color: c.danger }}>
-          {sign.error.message}
         </Typography>
       )}
 
