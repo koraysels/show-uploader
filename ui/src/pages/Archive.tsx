@@ -30,8 +30,9 @@ import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
-import VideoPlayer from '../components/VideoPlayer';
+import SignedVideoPlayer from '../components/SignedVideoPlayer';
 import { humanSize } from '../format';
+import { useSignObject } from '../api/hooks';
 import type { UploadWithJobs } from '../api/client';
 import { c, ROLE, LABEL_SX } from '../theme';
 
@@ -227,16 +228,36 @@ function publishedJobs(u: UploadWithJobs) {
     .sort((a, b) => a.platform.localeCompare(b.platform));
 }
 
-function DownloadLink({ url, label }: { url: string | null; label: string }) {
-  if (!url)
+/**
+ * Signs its object only when clicked.
+ *
+ * The uploads list carries keys rather than presigned URLs — signing every
+ * artefact on every poll was churn for objects that never change, and the
+ * mutating URL tore down anything already using it.
+ */
+function DownloadLink({ objectKey, label }: { objectKey: string | null; label: string }) {
+  const sign = useSignObject();
+
+  if (!objectKey)
     return (
       <Typography variant="body2" color="text.disabled">
         {label} —
       </Typography>
     );
+
+  // The tab must be opened inside the click's own task or the popup blocker
+  // eats it; the URL is filled in once signing resolves.
+  const open = () => {
+    const tab = window.open('', '_blank');
+    sign.mutate(
+      { key: objectKey },
+      { onSuccess: ({ url }) => { if (tab) tab.location.href = url; }, onError: () => tab?.close() }
+    );
+  };
+
   return (
-    <MuiLink href={url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={linkSx}>
-      {label} ↓
+    <MuiLink component="button" onClick={open} color={ROLE.navigate} sx={linkSx}>
+      {label} {sign.isPending ? '…' : '↓'}
     </MuiLink>
   );
 }
@@ -313,7 +334,7 @@ function AudioState({ upload, as }: { upload: UploadWithJobs; as: 'link' | 'acti
   const job = upload.jobs.find((j) => j.platform === 'archive');
   const busy = gen.isPending || job?.status === 'processing' || job?.status === 'queued';
 
-  if (upload.audio_url) return as === 'link' ? <DownloadLink url={upload.audio_url} label="audio" /> : null;
+  if (upload.audio_s3_key) return as === 'link' ? <DownloadLink objectKey={upload.audio_s3_key} label="audio" /> : null;
 
   if (busy)
     return as === 'link' ? (
@@ -416,7 +437,9 @@ function ArchiveCard({
   const pub = publishedJobs(upload);
   // Only the remuxed MP4 plays in a browser; an upload still stored as MKV stays
   // download-only until its archive job has run.
-  const playable = !!upload.video_url && /\.mp4$/i.test(upload.video_s3_key);
+  // Only the remuxed MP4 plays in a browser; an upload still stored as MKV
+  // stays download-only until its archive job has run.
+  const playable = /\.mp4$/i.test(upload.video_s3_key);
   // Editing happens in the PocketBase agenda admin — the master record. There's
   // no duplicate record here, so the "edit" action just opens it there.
   const agendaUrl = `${AGENDA_BASE}/#/archive/${upload.show_id}`;
@@ -493,7 +516,7 @@ function ArchiveCard({
           </Field>
 
           <Field label="downloads">
-            <DownloadLink url={upload.video_url} label="video" />
+            <DownloadLink objectKey={upload.video_s3_key} label="video" />
             <AudioState upload={upload} as="link" />
             <AudioState upload={upload} as="action" />
           </Field>
@@ -584,7 +607,7 @@ function ArchiveCard({
         </Typography>
       )}
 
-      {playerOpen && playable && <VideoPlayer url={upload.video_url} />}
+      {playerOpen && playable && <SignedVideoPlayer objectKey={upload.video_s3_key} />}
       {syncOpen && <SyncPanel showId={upload.show_id} links={links} />}
     </Paper>
   );

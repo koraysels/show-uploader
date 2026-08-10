@@ -92,7 +92,20 @@ export function usePendingVideos() {
 
 export function useUploads() {
   const trpc = useTRPC();
-  return useQuery(trpc.uploads.list.queryOptions(undefined, { refetchInterval: 10_000 }));
+  return useQuery(
+    trpc.uploads.list.queryOptions(undefined, {
+      // Poll only while something is actually moving. The interval exists for
+      // the history page's live progress bars; the archive page shows finished
+      // shows, so left unconditional it re-fetched every 10s forever for rows
+      // that had not changed in weeks.
+      refetchInterval: (q) =>
+        q.state.data?.some((u) =>
+          u.jobs.some((j) => j.status === 'queued' || j.status === 'processing')
+        )
+          ? 10_000
+          : false,
+    })
+  );
 }
 
 // Mutations -----------------------------------------------------------------

@@ -17,7 +17,7 @@ import { shows, uploads, archiveStates, genres, videoInfo } from './fixtures';
 // There is no real file to play in mock mode. A data: URI keeps the <video>
 // element inert and quiet — a blob:/http: placeholder makes the browser log a
 // scary "not allowed to load local resource" that reads like an app bug.
-const MOCK_VIDEO_URL = 'data:video/mp4;base64,';
+const mockSignedUrl = () => `data:video/mp4;base64,#sig=${Math.random().toString(36).slice(2)}`;
 // Number of status polls spent "converting" before the preview turns ready, so
 // the progress UI is reachable in mock mode. Keyed per recording, since the
 // screen can switch between shows without a reload.
@@ -72,7 +72,7 @@ function resolve(proc: string, input: unknown): unknown {
       return { state: 'working', pct: 0 };
     case 'uploads.previewStatus': {
       const key = String(arg.videoS3Key);
-      if (/\.mp4$/i.test(key)) return { state: 'ready', key, url: MOCK_VIDEO_URL };
+      if (/\.mp4$/i.test(key)) return { state: 'ready', key, url: mockSignedUrl() };
       // Idle until startPreview runs, so the real idle → start → working → ready
       // path is what gets exercised, not a shortcut into "working".
       const polls = previewPolls.get(key);
@@ -81,7 +81,7 @@ function resolve(proc: string, input: unknown): unknown {
       if (polls + 1 < MOCK_CONVERT_POLLS) {
         return { state: 'working', pct: Math.round(((polls + 1) / MOCK_CONVERT_POLLS) * 100), url: null };
       }
-      return { state: 'ready', key: previewMp4Key(key), url: MOCK_VIDEO_URL };
+      return { state: 'ready', key: previewMp4Key(key), url: mockSignedUrl() };
     }
     case 'uploads.deleteStaged':
       return { ok: true };

@@ -87,9 +87,6 @@ export const uploads: UploadWithJobs[] = [
     video_s3_key: 'recordings/1785677613218-radio-zonderdak.mkv',
     archive_s3_key: null,
     audio_s3_key: null,
-    video_url: 'https://example.invalid/video.mkv',
-    audio_url: null,
-    archive_url: null,
     created_at: day(0),
     jobs: [
       { id: 'j1', upload_id: 'upl_running', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo1', error: null, progress_pct: 100 },
@@ -109,9 +106,6 @@ export const uploads: UploadWithJobs[] = [
     video_s3_key: 'recordings/1785000000000-dubplate.mkv',
     archive_s3_key: null,
     audio_s3_key: null,
-    video_url: 'https://example.invalid/dubplate.mkv',
-    audio_url: null,
-    archive_url: null,
     created_at: day(3),
     jobs: [
       { id: 'j4', upload_id: 'upl_failed', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo3', error: null, progress_pct: 100 },
@@ -138,9 +132,6 @@ export const uploads: UploadWithJobs[] = [
     video_s3_key: 'recordings/1784000000000-breakfast.mp4',
     archive_s3_key: 'archive/breakfast.mp4',
     audio_s3_key: 'archive/breakfast.m4a',
-    video_url: 'https://example.invalid/breakfast.mp4',
-    audio_url: 'https://example.invalid/breakfast.m4a',
-    archive_url: 'https://example.invalid/breakfast.mp4',
     created_at: day(9),
     jobs: [
       { id: 'j7', upload_id: 'upl_published', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo2', error: null, progress_pct: 100 },
@@ -160,9 +151,6 @@ export const uploads: UploadWithJobs[] = [
     video_s3_key: 'recordings/1783000000000-latenight.mkv',
     archive_s3_key: null,
     audio_s3_key: null,
-    video_url: 'https://example.invalid/latenight.mkv',
-    audio_url: null,
-    archive_url: null,
     created_at: day(14),
     jobs: [
       { id: 'j10', upload_id: 'upl_stale', platform: 'youtube', status: 'done', result_url: 'https://youtube.com/watch?v=demo1', error: null, progress_pct: 100 },
