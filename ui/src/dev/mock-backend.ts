@@ -72,16 +72,16 @@ function resolve(proc: string, input: unknown): unknown {
       return { state: 'working', pct: 0 };
     case 'uploads.previewStatus': {
       const key = String(arg.videoS3Key);
-      if (/\.mp4$/i.test(key)) return { state: 'ready', key, url: mockSignedUrl() };
+      if (/\.mp4$/i.test(key)) return { state: 'ready', key };
       // Idle until startPreview runs, so the real idle → start → working → ready
       // path is what gets exercised, not a shortcut into "working".
       const polls = previewPolls.get(key);
-      if (polls === undefined) return { state: 'idle', url: null };
+      if (polls === undefined) return { state: 'idle' };
       previewPolls.set(key, polls + 1);
       if (polls + 1 < MOCK_CONVERT_POLLS) {
-        return { state: 'working', pct: Math.round(((polls + 1) / MOCK_CONVERT_POLLS) * 100), url: null };
+        return { state: 'working', pct: Math.round(((polls + 1) / MOCK_CONVERT_POLLS) * 100) };
       }
-      return { state: 'ready', key: previewMp4Key(key), url: mockSignedUrl() };
+      return { state: 'ready', key: previewMp4Key(key) };
     }
     case 'uploads.deleteStaged':
       return { ok: true };
@@ -134,8 +134,10 @@ function resolve(proc: string, input: unknown): unknown {
         { key: `${p}audio.m4a`, name: 'audio.m4a', bytes: 240_000_000, modified: new Date().toISOString() },
       ] };
     }
+    // Signs afresh per call, like the real endpoint. The query key is what makes
+    // this stable for a given object — not the endpoint.
     case 'storage.signObject':
-      return { url: 'data:text/plain,mock' };
+      return { url: mockSignedUrl() };
     case 'storage.migrationPlan':
       return {
         count: 2,

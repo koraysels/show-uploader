@@ -8,7 +8,7 @@ import Typography from '@mui/material/Typography';
 import { usePreviewStatus, useStartPreview } from '../api/hooks';
 import { useTRPC } from '../api/trpc';
 import { c } from '../theme';
-import VideoPlayer from './VideoPlayer';
+import SignedVideoPlayer from './SignedVideoPlayer';
 
 /**
  * Watch the recording before publishing it.
@@ -82,8 +82,8 @@ export default function VideoPreview({
   if (status.isPending) return <Hint>checking…</Hint>;
   if (status.isError) return <Hint>could not check this recording</Hint>;
 
-  if (state === 'ready' && status.data?.url) {
-    return <VideoPlayer url={status.data.url} />;
+  if (state === 'ready' && readyKey) {
+    return <SignedVideoPlayer objectKey={readyKey} />;
   }
 
   // A failed *request to start* leaves the status at idle forever, so without

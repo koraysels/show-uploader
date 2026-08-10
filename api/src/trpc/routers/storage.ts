@@ -46,14 +46,19 @@ export const storageRouter = router({
     }),
 
   /**
-   * A short-lived download URL for one object.
+   * A download URL for one object.
    *
-   * Signed on demand rather than during listing: signing every object in a
-   * folder would be wasted work for the ones nobody opens.
+   * A query, not a mutation: signing has no side effect, and keying it by the
+   * object means the same key yields the same cached URL. That is what keeps a
+   * <video src> stable — the alternative is re-signing on every render and
+   * tearing the media element down mid-playback.
+   *
+   * Signed on demand rather than during listing: signing a whole folder is
+   * wasted work for the objects nobody opens.
    */
   signObject: protectedProcedure
     .input(z.object({ key: z.string().min(1) }))
-    .mutation(async ({ input }) => {
+    .query(async ({ input }) => {
       try {
         return { url: await createDownloadPresignedUrl(input.key) };
       } catch (err) {
