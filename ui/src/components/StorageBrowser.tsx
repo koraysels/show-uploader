@@ -3,9 +3,10 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Typography from '@mui/material/Typography';
-import { useBrowseStorage, useSignObjectOnDemand } from '../api/hooks';
+import { useBrowseStorage, useSignObjectOnDemand, useDeleteObject } from '../api/hooks';
 import { humanSize } from '../format';
 import { c } from '../theme';
+import ConfirmAction from './ConfirmAction';
 
 const CONSOLE_URL = import.meta.env.VITE_MINIO_CONSOLE_URL as string | undefined;
 
@@ -16,15 +17,17 @@ const CONSOLE_URL = import.meta.env.VITE_MINIO_CONSOLE_URL as string | undefined
  * reports when listing with a delimiter, which is why navigation is a prefix
  * string rather than a tree.
  *
- * Deliberately read-only. This is for answering "what is actually in there";
- * anything destructive belongs in the MinIO console linked at the bottom, which
- * has real confirmation flows and an audit trail.
+ * Delete is deliberately narrow: the server (isKeyReferenced) refuses to
+ * delete anything the app still points at, so this can only ever remove a
+ * true orphan — there is no way to delete a live show's video through here,
+ * whatever prefix you're browsing.
  */
 export default function StorageBrowser() {
   const [prefix, setPrefix] = useState('');
   const [signError, setSignError] = useState<string | null>(null);
   const listing = useBrowseStorage(prefix);
   const sign = useSignObjectOnDemand();
+  const del = useDeleteObject();
 
   // The tab has to be opened inside the click's own task or the popup blocker
   // eats it; the URL is filled in once signing resolves.
@@ -43,6 +46,23 @@ export default function StorageBrowser() {
         tab?.close();
         setSignError(err.message);
       });
+  };
+
+  // useDeleteObject's mutation state is shared across every row; tracking
+  // which key is in flight is what keeps only that row's button showing it.
+  const [deletingKey, setDeletingKey] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const remove = (key: string) => {
+    setDeletingKey(key);
+    setDeleteError(null);
+    del.mutate(
+      { key },
+      {
+        onError: (err) => setDeleteError(err.message),
+        onSettled: () => setDeletingKey(null),
+      }
+    );
   };
 
   const segments = prefix.split('/').filter(Boolean);
@@ -109,7 +129,7 @@ export default function StorageBrowser() {
                 >
                   {f.name}
                 </Typography>
-                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
                   <Typography variant="caption" sx={{ color: c.faint }}>
                     {f.bytes === null ? '' : humanSize(f.bytes)}
                   </Typography>
@@ -120,6 +140,14 @@ export default function StorageBrowser() {
                   >
                     open
                   </Button>
+                  <ConfirmAction
+                    label="delete"
+                    question="delete this file?"
+                    onConfirm={() => remove(f.key)}
+                    pending={del.isPending && deletingKey === f.key}
+                    pendingLabel="deleting…"
+                    title="refused if anything in the app still points at this file — only removes a true orphan"
+                  />
                 </Stack>
               </Stack>
             </Row>
@@ -138,10 +166,15 @@ export default function StorageBrowser() {
           {signError}
         </Typography>
       )}
+      {deleteError && (
+        <Typography variant="caption" sx={{ color: c.danger }}>
+          {deleteError}
+        </Typography>
+      )}
 
       {CONSOLE_URL && (
         <Typography variant="caption" color="text.disabled">
-          this view is read-only —{' '}
+          delete here only removes a file nothing in the app references —{' '}
           <Box
             component="a"
             href={CONSOLE_URL}
@@ -151,7 +184,7 @@ export default function StorageBrowser() {
           >
             open the minio console
           </Box>{' '}
-          to upload, delete or share.
+          to upload or share a link instead.
         </Typography>
       )}
     </Stack>

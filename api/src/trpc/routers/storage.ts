@@ -2,11 +2,11 @@ import { router, protectedProcedure } from '../trpc';
 import { bucketUsage, diskUsage, tempUsage } from '../../services/storage-usage';
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
-import { moveObject, createDownloadPresignedUrl } from '../../services/s3';
+import { moveObject, createDownloadPresignedUrl, deleteObject } from '../../services/s3';
 import { browse } from '../../services/storage-browse';
 import { planMigration } from '../../services/storage-layout';
 import { db } from '../../db/client';
-import { listPublishedKeys, listUnpublishedKeys, repointStorageKey } from '../../db/queries';
+import { listPublishedKeys, listUnpublishedKeys, repointStorageKey, isKeyReferenced } from '../../db/queries';
 import { env } from '../../env';
 
 // Where the object store keeps its data on the host, bind-mounted read-only into
@@ -63,6 +63,31 @@ export const storageRouter = router({
         return { url: await createDownloadPresignedUrl(input.key) };
       } catch (err) {
         internal(err, 'Failed to sign object:', 'Failed to sign object');
+      }
+    }),
+
+  /**
+   * Delete one object from the browser.
+   *
+   * Unlike the scoped "replace" delete, this browser reaches anywhere in the
+   * bucket, so there is no narrow caller context to lean on for safety. Refuses
+   * anything isKeyReferenced still finds a row for — this can only ever remove
+   * a true orphan, never a file the app itself still points at.
+   */
+  deleteObject: protectedProcedure
+    .input(z.object({ key: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      if (await isKeyReferenced(db, input.key)) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This object is still referenced and cannot be deleted here.',
+        });
+      }
+      try {
+        await deleteObject(input.key);
+        return { ok: true };
+      } catch (err) {
+        internal(err, 'Failed to delete object:', 'Failed to delete object');
       }
     }),
 

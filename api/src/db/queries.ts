@@ -327,6 +327,28 @@ export function isVideoKeyClaimed(db: Sql, s3Key: string): Promise<boolean> {
   `.then((r) => r[0]?.ok === true);
 }
 
+/**
+ * Does anything in the app still reference this key?
+ *
+ * The browser can delete from anywhere in the bucket, not just a scoped
+ * "replace this show's pick" action — so unlike takeStagedUpload/deleteStaged,
+ * there is no narrow caller context to lean on here. This spans every column
+ * and table that can hold an S3 key, so the delete route can refuse anything
+ * still in use rather than trusting the operator to have picked correctly.
+ */
+export function isKeyReferenced(db: Sql, key: string): Promise<boolean> {
+  return db<{ ok: boolean }[]>`
+    SELECT EXISTS (
+      SELECT 1 FROM show_uploads
+        WHERE video_s3_key = ${key} OR audio_s3_key = ${key} OR archive_s3_key = ${key} OR jingle_s3_key = ${key}
+      UNION ALL
+      SELECT 1 FROM staged_uploads WHERE s3_key = ${key}
+      UNION ALL
+      SELECT 1 FROM pending_videos WHERE s3_key = ${key}
+    ) AS ok
+  `.then((r) => r[0]?.ok === true);
+}
+
 export function isPrePublishVideoKey(db: Sql, s3Keys: string[]): Promise<boolean> {
   return db<{ ok: boolean }[]>`
     SELECT EXISTS (
@@ -338,6 +360,21 @@ export function isPrePublishVideoKey(db: Sql, s3Keys: string[]): Promise<boolean
 }
 
 // ---- storage layout migration ----------------------------------------------
+
+/**
+ * Every upload whose archive job has finished — the population the
+ * PocketBase-links backfill runs over. Same WHERE clause as listPublishedKeys
+ * below, different columns: this needs id/show_id to write mediaLinks, that
+ * needs the S3 keys to move them.
+ */
+export function listArchivedUploads(db: Sql) {
+  return db<{ id: string; show_id: string }[]>`
+    SELECT DISTINCT u.id, u.show_id
+    FROM show_uploads u
+    JOIN platform_jobs j ON j.upload_id = u.id
+    WHERE j.platform = 'archive' AND j.status = 'done'
+  `;
+}
 
 /** Published uploads (archive job finished) with their two artefact keys. */
 export function listPublishedKeys(db: Sql) {

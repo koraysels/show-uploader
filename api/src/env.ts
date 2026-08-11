@@ -15,6 +15,13 @@ const schema = z.object({
   SHOWS_API_KEY: z.string(),
   GROQ_API_KEY: z.string(),
   JINGLE_S3_KEY: z.string().optional(),
+  // Public base for the permanent recording links written onto agenda records
+  // (/api/public/recordings/...). Browsers open these, so this must be the
+  // externally reachable host, not a docker alias. Mirrors worker's own copy —
+  // the worker writes these links when an archive job finishes; the api writes
+  // them for the one-time backfill covering uploads archived before that
+  // existed. Unset skips the backfill entirely, same as it skips the worker.
+  APP_PUBLIC_URL: z.string().url().optional(),
   // Platform creds — the api edits published metadata (title/desc/tags) in place
   // when an archive record is changed, so it needs the same tokens as the worker.
   YOUTUBE_CLIENT_ID: z.string().optional(),

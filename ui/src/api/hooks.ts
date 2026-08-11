@@ -193,6 +193,18 @@ export function useSignObjectOnDemand() {
     qc.fetchQuery({ ...trpc.storage.signObject.queryOptions({ key }), staleTime: 60 * 60_000 });
 }
 
+// Deletes one bucket object. The server refuses anything the app still
+// references — this can only ever remove a true orphan — so the button needs
+// no destructive-action framing beyond the usual "are you sure".
+export function useDeleteObject() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    ...trpc.storage.deleteObject.mutationOptions(),
+    onSuccess: () => qc.invalidateQueries(trpc.storage.pathFilter()),
+  });
+}
+
 // What the storage-layout migration would move. Read-only — nothing is touched
 // until runMigration is called.
 export function useMigrationPlan() {
@@ -268,6 +280,14 @@ export function useRemuxBackfill() {
     mutationFn: () => trpcClient.uploads.remuxBackfill.mutate(),
     onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
+}
+
+// One-shot backfill: writes the permanent Recording/Audio agenda links for
+// every already-archived upload. Purely additive (merges by label), so
+// nothing here can touch the YouTube/MixCloud links already on a record.
+export function useArchiveLinksBackfill() {
+  const trpc = useTRPC();
+  return useMutation(trpc.uploads.archiveLinksBackfill.mutationOptions());
 }
 
 // Cover image lives in the PocketBase record; changing it invalidates shows so
