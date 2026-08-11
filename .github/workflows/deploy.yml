@@ -46,8 +46,15 @@ jobs:
           # concurrency slot behind it — open indefinitely. max-time defaults to
           # 30s but the polling loop below tightens it as the deadline nears, so
           # a request itself cannot push wall-clock time past the deadline.
+          # --fail-with-body, not -f: -f discards the response body on a
+          # non-2xx, which is exactly what made the first live run
+          # undiagnosable — a bare "curl: (22) ... 500" with nothing to look
+          # at. --fail-with-body still exits non-zero on failure (so `set -e`
+          # and the checks below still work) but writes the body to stdout
+          # either way, so a failure shows up as an unparseable-but-visible
+          # blob in the output below instead of nothing at all.
           api() {
-            curl -fsS --connect-timeout 10 --max-time "${3:-30}" -X POST "$KOMODO_URL/$1" \
+            curl --fail-with-body -sS --connect-timeout 10 --max-time "${3:-30}" -X POST "$KOMODO_URL/$1" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
               -H "Content-Type: application/json" \
@@ -55,15 +62,20 @@ jobs:
           }
 
           echo "Requesting DeployStack for $STACK…"
-          # `.$oid` is not "the field literally named $oid" — jq parses `$oid` as
-          # a variable reference and refuses to compile. This broke the very
+          # `|| true`: a failed request must reach the check below, not kill the
+          # script via set -e — that's what silently discarded the diagnosis
+          # on the second live run, right after --fail-with-body was added to
+          # stop discarding it. The body is captured either way.
+          deploy_response=$(api execute "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}") || true
+          # `.$oid` is not "the field literally named $oid" — jq parses `$oid`
+          # as a variable reference and refuses to compile. This broke the very
           # first real run. `.["$oid"]` is the correct way to key into Mongo's
           # extended-JSON `{"$oid": "..."}`, with a plain-string _id and a bare
           # .id as fallbacks for whatever shape Komodo actually returns.
-          update_id=$(api execute "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}" | jq -r '(._id | if type == "object" then .["$oid"] else . end) // .id // empty')
+          update_id=$(jq -r '(._id | if type == "object" then .["$oid"] else . end) // .id // empty' <<<"$deploy_response" 2>/dev/null) || true
 
           if [ -z "$update_id" ]; then
-            echo "::error::Komodo accepted the request but returned no update id — cannot confirm the deploy."
+            echo "::error::Komodo did not return an update id — cannot confirm the deploy. Raw response: $deploy_response"
             exit 1
           fi
           echo "Update $update_id"
@@ -88,10 +100,13 @@ jobs:
 
             remaining=$((deadline - SECONDS))
             [ "$remaining" -gt 0 ] || out_of_time
-            update=$(api read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}" $((remaining < 30 ? remaining : 30)))
+            # Same reasoning as the request above: a failed poll must be
+            # inspectable, not fatal — a single flaky read shouldn't end the
+            # job when the deploy itself may still be running fine.
+            update=$(api read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}" $((remaining < 30 ? remaining : 30))) || true
 
-            status=$(jq -r '.status // empty' <<<"$update")
-            [ "$status" = "Complete" ] || { echo "  status: ${status:-unknown}"; continue; }
+            status=$(jq -r '.status // empty' <<<"$update" 2>/dev/null) || true
+            [ "$status" = "Complete" ] || { echo "  status: ${status:-unknown} — raw: $update"; continue; }
 
             if [ "$(jq -r '.success' <<<"$update")" = "true" ]; then
               echo "Deploy succeeded."
