@@ -18,7 +18,7 @@ import {
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
-import { deleteStagedVideo } from '../services/staged-video';
+import { deleteStagedVideo, isValidStagedKey } from '../services/staged-video';
 import { withDownloadUrls } from '../services/upload-urls';
 import { enqueueArchiveJob } from '../services/archive-jobs';
 import { getLiveState } from '../services/live-guard';
@@ -65,6 +65,11 @@ const StagedBody = z.object({ s3Key: z.string().min(1), filename: z.string().min
 uploadsRouter.put('/staged/:showId', async (req, res) => {
   const parsed = StagedBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+
+  if (!isValidStagedKey(parsed.data.s3Key)) {
+    return res.status(400).json({ error: 'Invalid key' });
+  }
+
   try {
     await upsertStagedUpload(db, req.params.showId, parsed.data.s3Key, parsed.data.filename, parsed.data.sizeBytes);
     res.json({ ok: true });

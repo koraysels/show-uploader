@@ -311,6 +311,22 @@ export function takeStagedUpload(db: Sql, showId: string) {
  * Unchecked, any key in the bucket — a jingle, another show's archive — could be
  * fed to either. Only the two places a not-yet-published recording lives count.
  */
+/**
+ * Has any show_uploads row come to reference this key since it was staged?
+ *
+ * Guards the race between "replace" and "publish" on the same show: publish
+ * captures video_s3_key from client state at submit time, so a replace that
+ * overlaps a publish still in flight could otherwise delete the very key the
+ * new show_uploads row now points at. Narrows the window rather than closing
+ * it outright — a full fix needs a transaction spanning both operations,
+ * which is more than this check-before-delete guard attempts.
+ */
+export function isVideoKeyClaimed(db: Sql, s3Key: string): Promise<boolean> {
+  return db<{ ok: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM show_uploads WHERE video_s3_key = ${s3Key}) AS ok
+  `.then((r) => r[0]?.ok === true);
+}
+
 export function isPrePublishVideoKey(db: Sql, s3Keys: string[]): Promise<boolean> {
   return db<{ ok: boolean }[]>`
     SELECT EXISTS (
