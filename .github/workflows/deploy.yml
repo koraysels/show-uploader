@@ -1,0 +1,98 @@
+name: Deploy to Komodo
+
+# Auto-deploy on every push to master, by asking Komodo's API to redeploy the
+# stack. This exists because Komodo's own git webhook is unreliable — it has
+# skipped merges silently, leaving master ahead of what is actually running.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions):
+#   KOMODO_URL         e.g. https://komodo.example.com   (no trailing slash)
+#   KOMODO_API_KEY     Komodo -> Settings -> Api Keys
+#   KOMODO_API_SECRET  shown once, when the key is created
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: {}
+
+# A newer push supersedes an in-flight one. Without this, two merges in quick
+# succession race and Komodo rejects the second with "Resource is busy".
+concurrency:
+  group: deploy-komodo
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy and wait for the result
+        env:
+          KOMODO_URL: ${{ secrets.KOMODO_URL }}
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          STACK: show-uploader
+        run: |
+          set -eo pipefail
+
+          # Named explicitly: with `set -u` a missing secret produces an unbound
+          # variable error that reads like a bug in this file.
+          for v in KOMODO_URL KOMODO_API_KEY KOMODO_API_SECRET; do
+            if [ -z "${!v:-}" ]; then
+              echo "::error::$v is not set. Add it under Settings -> Secrets and variables -> Actions."
+              exit 1
+            fi
+          done
+
+          # Bounded so a stalled request can't hold the job — and the
+          # concurrency slot behind it — open indefinitely. max-time defaults to
+          # 30s but the polling loop below tightens it as the deadline nears, so
+          # a request itself cannot push wall-clock time past the deadline.
+          api() {
+            curl -fsS --connect-timeout 10 --max-time "${3:-30}" -X POST "$KOMODO_URL/$1" \
+              -H "X-Api-Key: $KOMODO_API_KEY" \
+              -H "X-Api-Secret: $KOMODO_API_SECRET" \
+              -H "Content-Type: application/json" \
+              -d "$2"
+          }
+
+          echo "Requesting DeployStack for $STACK…"
+          update_id=$(api execute "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}" | jq -r '._id.$oid // .id // empty')
+
+          if [ -z "$update_id" ]; then
+            echo "::error::Komodo accepted the request but returned no update id — cannot confirm the deploy."
+            exit 1
+          fi
+          echo "Update $update_id"
+
+          # Accepting the request is not the same as deploying. Komodo returns
+          # immediately and the build can fail afterwards; without this the job
+          # would go green while production stayed on the old commit — the exact
+          # silent failure this workflow exists to prevent.
+          #
+          # Wall-clock deadline, re-checked immediately before both the sleep
+          # and the request: checking only at the top of the loop would still
+          # let an iteration starting near the boundary sleep 10s and then take
+          # up to max-time for the request, overshooting the stated 10 minutes.
+          # Sleep and max-time are both capped to whatever is actually left.
+          deadline=$((SECONDS + 600))
+          out_of_time() { echo "::error::Deploy did not finish within 10 minutes."; exit 1; }
+
+          while :; do
+            remaining=$((deadline - SECONDS))
+            [ "$remaining" -gt 0 ] || out_of_time
+            sleep $((remaining < 10 ? remaining : 10))
+
+            remaining=$((deadline - SECONDS))
+            [ "$remaining" -gt 0 ] || out_of_time
+            update=$(api read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}" $((remaining < 30 ? remaining : 30)))
+
+            status=$(jq -r '.status // empty' <<<"$update")
+            [ "$status" = "Complete" ] || { echo "  status: ${status:-unknown}"; continue; }
+
+            if [ "$(jq -r '.success' <<<"$update")" = "true" ]; then
+              echo "Deploy succeeded."
+              exit 0
+            fi
+            echo "::error::Deploy failed. Stage log:"
+            jq -r '.logs[]? | "--- \(.stage) ---\n\(.stderr // "")\n\(.stdout // "")"' <<<"$update" | tail -60
+            exit 1
+          done
