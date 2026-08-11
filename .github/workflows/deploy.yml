@@ -55,7 +55,12 @@ jobs:
           }
 
           echo "Requesting DeployStack for $STACK…"
-          update_id=$(api execute "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}" | jq -r '._id.$oid // .id // empty')
+          # `.$oid` is not "the field literally named $oid" — jq parses `$oid` as
+          # a variable reference and refuses to compile. This broke the very
+          # first real run. `.["$oid"]` is the correct way to key into Mongo's
+          # extended-JSON `{"$oid": "..."}`, with a plain-string _id and a bare
+          # .id as fallbacks for whatever shape Komodo actually returns.
+          update_id=$(api execute "{\"type\":\"DeployStack\",\"params\":{\"stack\":\"$STACK\"}}" | jq -r '(._id | if type == "object" then .["$oid"] else . end) // .id // empty')
 
           if [ -z "$update_id" ]; then
             echo "::error::Komodo accepted the request but returned no update id — cannot confirm the deploy."
