@@ -43,9 +43,11 @@ jobs:
           done
 
           # Bounded so a stalled request can't hold the job — and the
-          # concurrency slot behind it — open indefinitely.
+          # concurrency slot behind it — open indefinitely. max-time defaults to
+          # 30s but the polling loop below tightens it as the deadline nears, so
+          # a request itself cannot push wall-clock time past the deadline.
           api() {
-            curl -fsS --connect-timeout 10 --max-time 30 -X POST "$KOMODO_URL/$1" \
+            curl -fsS --connect-timeout 10 --max-time "${3:-30}" -X POST "$KOMODO_URL/$1" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
               -H "Content-Type: application/json" \
@@ -66,14 +68,23 @@ jobs:
           # would go green while production stayed on the old commit — the exact
           # silent failure this workflow exists to prevent.
           #
-          # Wall-clock deadline rather than a fixed iteration count: each `api`
-          # call is itself timed, but a fixed count of (sleep + call) iterations
-          # would still let slow-but-under-max-time calls push the real total
-          # well past the ten minutes this comment promises.
+          # Wall-clock deadline, re-checked immediately before both the sleep
+          # and the request: checking only at the top of the loop would still
+          # let an iteration starting near the boundary sleep 10s and then take
+          # up to max-time for the request, overshooting the stated 10 minutes.
+          # Sleep and max-time are both capped to whatever is actually left.
           deadline=$((SECONDS + 600))
-          while [ "$SECONDS" -lt "$deadline" ]; do
-            sleep 10
-            update=$(api read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}")
+          out_of_time() { echo "::error::Deploy did not finish within 10 minutes."; exit 1; }
+
+          while :; do
+            remaining=$((deadline - SECONDS))
+            [ "$remaining" -gt 0 ] || out_of_time
+            sleep $((remaining < 10 ? remaining : 10))
+
+            remaining=$((deadline - SECONDS))
+            [ "$remaining" -gt 0 ] || out_of_time
+            update=$(api read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}" $((remaining < 30 ? remaining : 30)))
+
             status=$(jq -r '.status // empty' <<<"$update")
             [ "$status" = "Complete" ] || { echo "  status: ${status:-unknown}"; continue; }
 
@@ -85,6 +96,3 @@ jobs:
             jq -r '.logs[]? | "--- \(.stage) ---\n\(.stderr // "")\n\(.stdout // "")"' <<<"$update" | tail -60
             exit 1
           done
-
-          echo "::error::Deploy did not finish within 10 minutes."
-          exit 1
