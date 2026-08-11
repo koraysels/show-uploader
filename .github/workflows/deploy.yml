@@ -42,8 +42,10 @@ jobs:
             fi
           done
 
+          # Bounded so a stalled request can't hold the job — and the
+          # concurrency slot behind it — open indefinitely.
           api() {
-            curl -fsS -X POST "$KOMODO_URL/$1" \
+            curl -fsS --connect-timeout 10 --max-time 30 -X POST "$KOMODO_URL/$1" \
               -H "X-Api-Key: $KOMODO_API_KEY" \
               -H "X-Api-Secret: $KOMODO_API_SECRET" \
               -H "Content-Type: application/json" \
@@ -63,7 +65,13 @@ jobs:
           # immediately and the build can fail afterwards; without this the job
           # would go green while production stayed on the old commit — the exact
           # silent failure this workflow exists to prevent.
-          for _ in $(seq 1 60); do
+          #
+          # Wall-clock deadline rather than a fixed iteration count: each `api`
+          # call is itself timed, but a fixed count of (sleep + call) iterations
+          # would still let slow-but-under-max-time calls push the real total
+          # well past the ten minutes this comment promises.
+          deadline=$((SECONDS + 600))
+          while [ "$SECONDS" -lt "$deadline" ]; do
             sleep 10
             update=$(api read "{\"type\":\"GetUpdate\",\"params\":{\"id\":\"$update_id\"}}")
             status=$(jq -r '.status // empty' <<<"$update")
