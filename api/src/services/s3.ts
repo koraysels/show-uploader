@@ -181,3 +181,7 @@ export async function moveObject(from: string, to: string): Promise<void> {
 
   await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: from }));
 }
+
+export async function deleteObject(key: string): Promise<void> {
+  await s3.send(new DeleteObjectCommand({ Bucket: env.S3_BUCKET, Key: key }));
+}

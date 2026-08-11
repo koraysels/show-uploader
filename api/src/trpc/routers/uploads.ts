@@ -47,6 +47,7 @@ async function assertPrePublishVideo(videoS3Key: string): Promise<void> {
   }
 }
 import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../../services/s3';
+import { deleteStagedVideo } from '../../services/staged-video';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
 import { updateArchiveRecord, resolveGenreIds } from '../../services/shows-api';
@@ -132,9 +133,11 @@ export const uploadsRouter = router({
     }
   }),
 
-  // DELETE /api/uploads/staged/:showId — swallows errors, always ok (matches REST).
+  // DELETE /api/uploads/staged/:showId — the operator abandoning a staged
+  // pick (replace). See services/staged-video.ts for why this must delete the
+  // S3 object while the post-publish cleanup in `create` below must not.
   deleteStaged: protectedProcedure.input(z.object({ showId: z.string() })).mutation(async ({ input }) => {
-    await deleteStagedUpload(db, input.showId).catch(() => {});
+    await deleteStagedVideo(input.showId);
     return { ok: true };
   }),
 
@@ -245,7 +248,10 @@ export const uploadsRouter = router({
       );
 
       // The show is now published — free its claim so it drops off everyone's
-      // "being processed" list immediately, and clear the staged upload.
+      // "being processed" list immediately, and clear the staged row. Row only:
+      // its s3_key is what data.videoS3Key just became, so unlike deleteStaged
+      // (the operator's "replace" action) this must never touch S3 — that
+      // would delete the video the show now points at, seconds after publish.
       await releaseClaimForShow(db, data.showId);
       await deleteStagedUpload(db, data.showId).catch(() => {});
       void presenceHub.broadcastClaims();

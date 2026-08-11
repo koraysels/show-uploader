@@ -18,6 +18,7 @@ import {
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
+import { deleteStagedVideo } from '../services/staged-video';
 import { withDownloadUrls } from '../services/upload-urls';
 import { enqueueArchiveJob } from '../services/archive-jobs';
 import { getLiveState } from '../services/live-guard';
@@ -73,8 +74,11 @@ uploadsRouter.put('/staged/:showId', async (req, res) => {
   }
 });
 
+// Operator abandoning a staged pick (replace). See services/staged-video.ts
+// for why this must delete the S3 object while the post-publish cleanup
+// further down (inside the create route) must not.
 uploadsRouter.delete('/staged/:showId', async (req, res) => {
-  await deleteStagedUpload(db, req.params.showId).catch(() => {});
+  await deleteStagedVideo(req.params.showId);
   res.json({ ok: true });
 });
 
@@ -188,7 +192,8 @@ uploadsRouter.post('/', async (req, res) => {
     );
 
     // The show is now published — free its claim so it drops off everyone's
-    // "being processed" list immediately, and clear the staged upload.
+    // "being processed" list immediately, and clear the staged row. Row only —
+    // see the DELETE /staged/:showId route above for why this must not touch S3.
     await releaseClaimForShow(db, data.showId);
     await deleteStagedUpload(db, data.showId).catch(() => {});
     void presenceHub.broadcastClaims();

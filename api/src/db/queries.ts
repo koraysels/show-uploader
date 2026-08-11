@@ -288,6 +288,22 @@ export function deleteStagedUpload(db: Sql, showId: string) {
 }
 
 /**
+ * Delete a show's staged row and hand back the S3 key it pointed at, so the
+ * caller can also delete the object.
+ *
+ * Deliberately separate from deleteStagedUpload, which stays a bare delete —
+ * that one is also called right after a successful publish, where the staged
+ * key has just become show_uploads.video_s3_key and must NOT be deleted. This
+ * function is for the other caller: the operator abandoning a staged pick
+ * (replace), where the key really is going nowhere else.
+ */
+export function takeStagedUpload(db: Sql, showId: string) {
+  return db<{ s3_key: string }[]>`
+    DELETE FROM staged_uploads WHERE show_id = ${showId} RETURNING s3_key
+  `.then((r) => r[0]?.s3_key ?? null);
+}
+
+/**
  * Is this key a recording the app is actually holding for publication?
  *
  * The preview endpoints must never treat a caller-supplied S3 key as authority:
