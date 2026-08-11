@@ -18,6 +18,7 @@ import {
 import { presenceHub } from '../services/presence-hub';
 import { uploadQueue } from '../queue';
 import { createUploadPresignedUrl, createDownloadPresignedUrl } from '../services/s3';
+import { deleteStagedVideo, isValidStagedKey } from '../services/staged-video';
 import { withDownloadUrls } from '../services/upload-urls';
 import { enqueueArchiveJob } from '../services/archive-jobs';
 import { getLiveState } from '../services/live-guard';
@@ -64,6 +65,11 @@ const StagedBody = z.object({ s3Key: z.string().min(1), filename: z.string().min
 uploadsRouter.put('/staged/:showId', async (req, res) => {
   const parsed = StagedBody.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: 'Invalid body' });
+
+  if (!isValidStagedKey(parsed.data.s3Key)) {
+    return res.status(400).json({ error: 'Invalid key' });
+  }
+
   try {
     await upsertStagedUpload(db, req.params.showId, parsed.data.s3Key, parsed.data.filename, parsed.data.sizeBytes);
     res.json({ ok: true });
@@ -73,8 +79,11 @@ uploadsRouter.put('/staged/:showId', async (req, res) => {
   }
 });
 
+// Operator abandoning a staged pick (replace). See services/staged-video.ts
+// for why this must delete the S3 object while the post-publish cleanup
+// further down (inside the create route) must not.
 uploadsRouter.delete('/staged/:showId', async (req, res) => {
-  await deleteStagedUpload(db, req.params.showId).catch(() => {});
+  await deleteStagedVideo(req.params.showId);
   res.json({ ok: true });
 });
 
@@ -188,7 +197,8 @@ uploadsRouter.post('/', async (req, res) => {
     );
 
     // The show is now published — free its claim so it drops off everyone's
-    // "being processed" list immediately, and clear the staged upload.
+    // "being processed" list immediately, and clear the staged row. Row only —
+    // see the DELETE /staged/:showId route above for why this must not touch S3.
     await releaseClaimForShow(db, data.showId);
     await deleteStagedUpload(db, data.showId).catch(() => {});
     void presenceHub.broadcastClaims();

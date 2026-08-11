@@ -288,6 +288,22 @@ export function deleteStagedUpload(db: Sql, showId: string) {
 }
 
 /**
+ * Delete a show's staged row and hand back the S3 key it pointed at, so the
+ * caller can also delete the object.
+ *
+ * Deliberately separate from deleteStagedUpload, which stays a bare delete —
+ * that one is also called right after a successful publish, where the staged
+ * key has just become show_uploads.video_s3_key and must NOT be deleted. This
+ * function is for the other caller: the operator abandoning a staged pick
+ * (replace), where the key really is going nowhere else.
+ */
+export function takeStagedUpload(db: Sql, showId: string) {
+  return db<{ s3_key: string }[]>`
+    DELETE FROM staged_uploads WHERE show_id = ${showId} RETURNING s3_key
+  `.then((r) => r[0]?.s3_key ?? null);
+}
+
+/**
  * Is this key a recording the app is actually holding for publication?
  *
  * The preview endpoints must never treat a caller-supplied S3 key as authority:
@@ -295,6 +311,22 @@ export function deleteStagedUpload(db: Sql, showId: string) {
  * Unchecked, any key in the bucket — a jingle, another show's archive — could be
  * fed to either. Only the two places a not-yet-published recording lives count.
  */
+/**
+ * Has any show_uploads row come to reference this key since it was staged?
+ *
+ * Guards the race between "replace" and "publish" on the same show: publish
+ * captures video_s3_key from client state at submit time, so a replace that
+ * overlaps a publish still in flight could otherwise delete the very key the
+ * new show_uploads row now points at. Narrows the window rather than closing
+ * it outright — a full fix needs a transaction spanning both operations,
+ * which is more than this check-before-delete guard attempts.
+ */
+export function isVideoKeyClaimed(db: Sql, s3Key: string): Promise<boolean> {
+  return db<{ ok: boolean }[]>`
+    SELECT EXISTS (SELECT 1 FROM show_uploads WHERE video_s3_key = ${s3Key}) AS ok
+  `.then((r) => r[0]?.ok === true);
+}
+
 export function isPrePublishVideoKey(db: Sql, s3Keys: string[]): Promise<boolean> {
   return db<{ ok: boolean }[]>`
     SELECT EXISTS (
