@@ -293,7 +293,9 @@ function SourceVideo({ upload }: { upload: UploadWithJobs }) {
   // new, smaller size instead of waiting out the stale window.
   const prevCompressStatus = useRef(compressJob?.status);
   useEffect(() => {
-    if (prevCompressStatus.current === 'processing' && compressJob?.status === 'done') void info.refetch();
+    // Not just 'processing' → 'done': a poll can land right on a job that went
+    // queued → done between two ticks, and that transition still needs the nudge.
+    if (prevCompressStatus.current !== 'done' && compressJob?.status === 'done') void info.refetch();
     prevCompressStatus.current = compressJob?.status;
   }, [compressJob?.status]);
 

@@ -334,6 +334,19 @@ export const uploadsRouter = router({
             message: 'Not an mp4 archive yet — run the mp4 conversion first',
           });
         }
+        // The archive job only reaches 'done' once every platform job is done
+        // AND its own remux has finished — the same source-key-is-settled
+        // guarantee readyToArchive gives the archive job itself. Compress
+        // rewrites that same key, so it needs the same guarantee: otherwise a
+        // still-running platform job (reading the original) or a still-running
+        // remux (writing it) could race the compress job over the same object.
+        const archiveJob = upload.jobs.find((j) => j.platform === 'archive');
+        if (archiveJob?.status !== 'done') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'This recording is still being processed — try again once archiving is done',
+          });
+        }
         const queued = await enqueueCompressJob(db, upload);
         if (!queued) throw new TRPCError({ code: 'CONFLICT', message: 'Already shrinking this recording' });
         return { ok: true };

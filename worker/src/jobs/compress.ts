@@ -1,4 +1,5 @@
 import type { Job } from 'bullmq';
+import fs from 'fs';
 import type { JobPayload } from '../types';
 import { downloadFromS3, uploadToS3, objectSize } from '../services/s3';
 import { compressVideo, cleanup } from '../services/ffmpeg';
@@ -43,6 +44,18 @@ export async function processCompress(job: Job<JobPayload>): Promise<string> {
         await job.updateProgress({ uploadId, platform: 'compress', pct: adjusted });
       },
     });
+
+    // A well-encoded source can come out of CRF 23 the same size or larger —
+    // this button is meant to stay pressable on any future outlier, not just
+    // the two it was built for, so that has to fail loudly rather than
+    // silently replace a fine file with a same-size (or bigger) lossy copy.
+    const inputSize = fs.statSync(inputPath).size;
+    const outputSize = fs.statSync(outputPath).size;
+    if (outputSize >= inputSize) {
+      throw new Error(
+        `Re-encode came out ${outputSize} bytes, not smaller than the ${inputSize}-byte original — already efficiently encoded, nothing to shrink`
+      );
+    }
 
     // Original no longer needed — drop it before the upload so /tmp isn't
     // holding the recording twice while a multi-GB PUT runs.
