@@ -26,6 +26,10 @@ services:
       # PocketBase runs on the same host — reach it over the shared Traefik
       # network to avoid NAT hairpin. Browser file links still use POCKETBASE_URL.
       - POCKETBASE_INTERNAL_URL=http://radio-pocketbase:8090
+      # Same var as the worker's, below — needed here too for the one-time
+      # archiveLinksBackfill mutation, which writes the same permanent
+      # recording links the worker writes per-upload as archive jobs finish.
+      - APP_PUBLIC_URL=https://uploader.coming-soon.space
     depends_on:
       - redis
       - minio
