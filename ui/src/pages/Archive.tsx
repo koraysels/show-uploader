@@ -23,6 +23,7 @@ import {
   useShow,
   useSyncPlatforms,
   useRemuxBackfill,
+  useArchiveLinksBackfill,
   useUnpublishRecord,
   useVideoInfo,
 } from '../api/hooks';
@@ -634,6 +635,32 @@ function needsMp4Remux(u: UploadWithJobs): boolean {
   return platform.length > 0 && platform.every((j) => j.status === 'done');
 }
 
+// One-time: shows archived before the permanent-links feature shipped have no
+// Recording/Audio agenda links. Unlike RemuxBackfill, purely additive — merges
+// by label, so re-running it (or clicking it on a page that already has links)
+// is a harmless no-op, not a destructive action needing confirmation.
+function ArchiveLinksBackfill() {
+  const backfill = useArchiveLinksBackfill();
+  if (backfill.isSuccess) {
+    return (
+      <Typography variant="caption" color="success.main">
+        ✓ linked {backfill.data.updated} of {backfill.data.total} recording{backfill.data.total === 1 ? '' : 's'}
+      </Typography>
+    );
+  }
+  return (
+    <Button
+      variant="text"
+      onClick={() => backfill.mutate()}
+      disabled={backfill.isPending}
+      sx={{ minHeight: 32, fontSize: '0.6875rem' }}
+      title="writes the permanent recording link to every already-archived show's agenda record — safe to run more than once"
+    >
+      {backfill.isPending ? 'linking…' : backfill.isError ? 'retry linking recordings' : 'link recordings to agenda'}
+    </Button>
+  );
+}
+
 // Older recordings sit on S3 in their original container and can't be played in
 // the browser. Offer the one-shot conversion only while some are left.
 function RemuxBackfill({ pending }: { pending: number }) {
@@ -690,6 +717,7 @@ export default function Archive() {
           spacing={2}
           sx={{ alignItems: { sm: 'center' }, width: { xs: '100%', sm: 'auto' } }}
         >
+          <ArchiveLinksBackfill />
           <RemuxBackfill pending={needsRemux} />
           <TextField
             size="small"

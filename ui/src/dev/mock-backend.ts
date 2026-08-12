@@ -94,6 +94,8 @@ function resolve(proc: string, input: unknown): unknown {
       return { ok: true };
     case 'uploads.remuxBackfill':
       return { enqueued: 1 };
+    case 'uploads.archiveLinksBackfill':
+      return { updated: 2, total: 2 };
     case 'uploads.generateAudio':
       return { ok: true };
     // Deliberately unhealthy figures: a nearly-full object disk and a stale job
@@ -129,6 +131,12 @@ function resolve(proc: string, input: unknown): unknown {
           { key: 'shows/1785-obs/', name: '1785-obs', bytes: null, modified: null },
         ] };
       }
+      // incoming/ carries one orphaned recording, to exercise the delete button.
+      if (p === 'incoming/') {
+        return { prefix: p, truncated: false, folders: [], files: [
+          { key: 'incoming/1784465072633-mills_17.07.2026.mkv', name: '1784465072633-mills_17.07.2026.mkv', bytes: 2_100_000_000, modified: new Date().toISOString() },
+        ] };
+      }
       return { prefix: p, truncated: false, folders: [], files: [
         { key: `${p}video.mp4`, name: 'video.mp4', bytes: 2_293_760_000, modified: new Date().toISOString() },
         { key: `${p}audio.m4a`, name: 'audio.m4a', bytes: 240_000_000, modified: new Date().toISOString() },
@@ -138,6 +146,12 @@ function resolve(proc: string, input: unknown): unknown {
     // this stable for a given object — not the endpoint.
     case 'storage.signObject':
       return { url: mockSignedUrl() };
+    // Always succeeds here — the real refusal-for-referenced-keys guard is
+    // proven against actual Postgres in api/test/db/storage-safety.db.test.ts.
+    // This mock has no error-response plumbing, so it only needs to prove the
+    // button, confirm step and list-refresh render and work.
+    case 'storage.deleteObject':
+      return { ok: true };
     case 'storage.migrationPlan':
       return {
         count: 2,

@@ -15,6 +15,7 @@ import {
   listStagedShowIds,
   listUploadingSessions,
   listUploadsNeedingRemux,
+  listArchivedUploads,
   deleteUpload,
   isPrePublishVideoKey,
 } from '../../db/queries';
@@ -336,6 +337,43 @@ export const uploadsRouter = router({
       return { enqueued, skipped: pending.length - enqueued };
     } catch (err) {
       internal(err, 'Failed to enqueue remux backfill:', 'Failed to start remux');
+    }
+  }),
+
+  /**
+   * One-time backfill for the permanent Recording/Audio links on agenda
+   * records (see routes/public.ts). The worker only writes these when an
+   * archive job finishes, so every upload archived before that shipped has
+   * none — this runs the exact same write for all of them, once.
+   *
+   * Purely additive and safe to run any number of times: updateArchiveRecord
+   * merges mediaLinks by label, so it can only add Recording/Audio, never
+   * touch the YouTube/MixCloud links already there.
+   */
+  archiveLinksBackfill: protectedProcedure.mutation(async () => {
+    if (!env.APP_PUBLIC_URL) {
+      throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'APP_PUBLIC_URL is not configured' });
+    }
+    try {
+      const uploads = await listArchivedUploads(db);
+      let updated = 0;
+      for (const u of uploads) {
+        const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${u.id}`;
+        try {
+          await updateArchiveRecord(u.show_id, {
+            mediaLinks: [
+              { label: 'Recording', type: 'video', url: `${base}/video` },
+              { label: 'Audio', type: 'audio', url: `${base}/audio` },
+            ],
+          });
+          updated++;
+        } catch (err) {
+          console.error(`archiveLinksBackfill: failed for upload ${u.id} (show ${u.show_id}):`, err);
+        }
+      }
+      return { updated, total: uploads.length };
+    } catch (err) {
+      internal(err, 'Failed to backfill archive links:', 'Failed to backfill archive links');
     }
   }),
 
