@@ -149,8 +149,8 @@ async function publishArchiveLinks(uploadId: string): Promise<void> {
     const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${uploadId}`;
     await finalizeArchiveRecord(row.show_id, {
       mediaLinks: [
-        { label: 'Recording', type: 'video', url: `${base}/video` },
-        { label: 'Audio', type: 'audio', url: `${base}/audio` },
+        { label: 'cs-archive-video', type: 'download', url: `${base}/video` },
+        { label: 'cs-archive-audio', type: 'download', url: `${base}/audio` },
       ],
     });
   } catch (err) {

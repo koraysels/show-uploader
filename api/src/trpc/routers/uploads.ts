@@ -362,8 +362,8 @@ export const uploadsRouter = router({
         try {
           await updateArchiveRecord(u.show_id, {
             mediaLinks: [
-              { label: 'Recording', type: 'video', url: `${base}/video` },
-              { label: 'Audio', type: 'audio', url: `${base}/audio` },
+              { label: 'cs-archive-video', type: 'download', url: `${base}/video` },
+              { label: 'cs-archive-audio', type: 'download', url: `${base}/audio` },
             ],
           });
           updated++;
