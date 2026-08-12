@@ -78,3 +78,39 @@ export async function enqueueArchiveJob(
   });
   return true;
 }
+
+/**
+ * Queue the 'compress' job for an already-archived upload — a real re-encode
+ * that shrinks the video in place (same S3 key), unlike the lossless remux the
+ * 'archive' job does. Operator-triggered only, never auto-enqueued: it's a
+ * judgment call about one outlier recording, not something every upload needs.
+ *
+ * Same reuse-or-reset-the-row shape as enqueueArchiveJob, so pressing the
+ * button again after a failure (or to shrink further) just re-runs it.
+ */
+export async function enqueueCompressJob(
+  db: Sql,
+  upload: ShowUpload & { jobs: PlatformJob[] }
+): Promise<boolean> {
+  let job = upload.jobs.find((j) => j.platform === 'compress');
+  if (job?.status === 'processing') return false;
+
+  if (!job) job = await createPlatformJob(db, { upload_id: upload.id, platform: 'compress' });
+  else await resetPlatformJobForRetry(db, job.id);
+
+  await uploadQueue.add('compress', {
+    jobId: job.id,
+    uploadId: upload.id,
+    platform: 'compress',
+    videoS3Key: upload.video_s3_key,
+    title: '',
+    description: '',
+    tags: [],
+    imageUrl: null,
+    jingleS3Key: null,
+    includeJingle: false,
+    trimStart: null,
+    trimEnd: null,
+  });
+  return true;
+}

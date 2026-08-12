@@ -19,7 +19,7 @@ import {
   deleteUpload,
   isPrePublishVideoKey,
 } from '../../db/queries';
-import { enqueueArchiveJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
+import { enqueueArchiveJob, enqueueCompressJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue, previewQueue } from '../../queue';
 import {
@@ -317,6 +317,30 @@ export const uploadsRouter = router({
       internal(err, 'Failed to enqueue audio archive:', 'Failed to generate audio');
     }
   }),
+
+  // POST /api/uploads/:uploadId/compress — shrink an already-archived show's
+  // video via a real re-encode (see worker/src/services/ffmpeg.ts compressVideo).
+  // Unlike remux this is lossy and operator-triggered per show, for the rare
+  // recording that came out of OBS at a much higher bitrate than usual.
+  compressArchiveVideo: protectedProcedure
+    .input(z.object({ uploadId: z.string() }))
+    .mutation(async ({ input }) => {
+      try {
+        const upload = await getUploadWithJobs(db, input.uploadId);
+        if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+        if (!/\.mp4$/i.test(upload.video_s3_key)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Not an mp4 archive yet — run the mp4 conversion first',
+          });
+        }
+        const queued = await enqueueCompressJob(db, upload);
+        if (!queued) throw new TRPCError({ code: 'CONFLICT', message: 'Already shrinking this recording' });
+        return { ok: true };
+      } catch (err) {
+        internal(err, 'Failed to enqueue compress job:', 'Failed to start shrink');
+      }
+    }),
 
   // Backfill for recordings that predate the MP4 remux: re-run the archive job
   // on every upload whose video is still in its original container. The job is

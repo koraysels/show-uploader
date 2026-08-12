@@ -98,6 +98,8 @@ function resolve(proc: string, input: unknown): unknown {
       return { updated: 2, total: 2 };
     case 'uploads.generateAudio':
       return { ok: true };
+    case 'uploads.compressArchiveVideo':
+      return { ok: true };
     // Deliberately unhealthy figures: a nearly-full object disk and a stale job
     // folder, so the warning states are reachable without staging a real outage.
     case 'storage.overview':
