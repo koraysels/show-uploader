@@ -51,7 +51,7 @@ import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../..
 import { deleteStagedVideo } from '../../services/staged-video';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
-import { updateArchiveRecord, resolveGenreIds } from '../../services/shows-api';
+import { updateArchiveRecord, removeArchiveMediaLink, resolveGenreIds } from '../../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../../services/platform-metadata';
 import { baseTitle } from '../../services/format';
 import { env } from '../../env';
@@ -378,14 +378,18 @@ export const uploadsRouter = router({
   }),
 
   /**
-   * One-time backfill for the permanent Recording/Audio links on agenda
-   * records (see routes/public.ts). The worker only writes these when an
-   * archive job finishes, so every upload archived before that shipped has
+   * One-time backfill for the permanent cs-archive-video/cs-archive-audio links
+   * on agenda records (see routes/public.ts). The worker only writes these when
+   * an archive job finishes, so every upload archived before that shipped has
    * none — this runs the exact same write for all of them, once.
    *
-   * Purely additive and safe to run any number of times: updateArchiveRecord
-   * merges mediaLinks by label, so it can only add Recording/Audio, never
-   * touch the YouTube/MixCloud links already there.
+   * Also strips the old 'Recording'/'Audio' labels this used to write before
+   * the rename (d399fbf): a label rename isn't caught by updateArchiveRecord's
+   * merge-by-label dedup, so any record that picked up the old labels — from
+   * the period the renamed code sat unmerged while production kept running the
+   * old writer — would otherwise carry both forever. removeArchiveMediaLink is
+   * a no-op when the label isn't present, so this is safe to run any number of
+   * times on records that never had the old labels.
    */
   archiveLinksBackfill: protectedProcedure.mutation(async () => {
     if (!env.APP_PUBLIC_URL) {
@@ -403,6 +407,8 @@ export const uploadsRouter = router({
               { label: 'cs-archive-audio', type: 'download', url: `${base}/audio` },
             ],
           });
+          await removeArchiveMediaLink(u.show_id, 'Recording');
+          await removeArchiveMediaLink(u.show_id, 'Audio');
           updated++;
         } catch (err) {
           console.error(`archiveLinksBackfill: failed for upload ${u.id} (show ${u.show_id}):`, err);
