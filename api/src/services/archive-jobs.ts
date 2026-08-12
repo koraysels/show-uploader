@@ -78,3 +78,65 @@ export async function enqueueArchiveJob(
   });
   return true;
 }
+
+/**
+ * Queue the 'compress' job for an already-archived upload — a real re-encode
+ * that shrinks the video in place (same S3 key), unlike the lossless remux the
+ * 'archive' job does. Operator-triggered only, never auto-enqueued: it's a
+ * judgment call about one outlier recording, not something every upload needs.
+ *
+ * Same reuse-or-reset-the-row shape as enqueueArchiveJob, so pressing the
+ * button again after a failure (or to shrink further) just re-runs it.
+ *
+ * Guards against a double-click enqueueing the same recording twice: 'queued'
+ * blocks the same as 'processing' (a queued-but-not-yet-started job would
+ * otherwise get a second BullMQ entry racing the first over the same S3 key),
+ * and the insert's unique(upload_id, platform) index is the backstop for two
+ * concurrent requests both finding no existing row.
+ *
+ * One attempt only (overriding the queue's default retries): a failure here
+ * may land after the re-encoded file already replaced the original on S3, so
+ * an automatic retry would re-download and re-compress the already-lossy
+ * output. Requiring the operator to press the button again keeps that a
+ * deliberate, visible choice instead of a silent second generation of loss.
+ */
+export async function enqueueCompressJob(
+  db: Sql,
+  upload: ShowUpload & { jobs: PlatformJob[] }
+): Promise<boolean> {
+  let job = upload.jobs.find((j) => j.platform === 'compress');
+  if (job?.status === 'processing' || job?.status === 'queued') return false;
+
+  if (!job) {
+    try {
+      job = await createPlatformJob(db, { upload_id: upload.id, platform: 'compress' });
+    } catch (err) {
+      // Unique violation: another request created the row first between the
+      // lookup above and this insert. Treat it the same as "already running".
+      if ((err as { code?: string }).code === '23505') return false;
+      throw err;
+    }
+  } else {
+    await resetPlatformJobForRetry(db, job.id);
+  }
+
+  await uploadQueue.add(
+    'compress',
+    {
+      jobId: job.id,
+      uploadId: upload.id,
+      platform: 'compress',
+      videoS3Key: upload.video_s3_key,
+      title: '',
+      description: '',
+      tags: [],
+      imageUrl: null,
+      jingleS3Key: null,
+      includeJingle: false,
+      trimStart: null,
+      trimEnd: null,
+    },
+    { attempts: 1 }
+  );
+  return true;
+}

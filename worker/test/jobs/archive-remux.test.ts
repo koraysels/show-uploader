@@ -172,8 +172,8 @@ describe('archive video remux', () => {
 
       expect(vi.mocked(finalizeArchiveRecord)).toHaveBeenCalledWith('show-1', {
         mediaLinks: [
-          { label: 'Recording', type: 'video', url: 'https://uploader.test/api/public/recordings/up-1/video' },
-          { label: 'Audio', type: 'audio', url: 'https://uploader.test/api/public/recordings/up-1/audio' },
+          { label: 'cs-archive-video', type: 'download', url: 'https://uploader.test/api/public/recordings/up-1/video' },
+          { label: 'cs-archive-audio', type: 'download', url: 'https://uploader.test/api/public/recordings/up-1/audio' },
         ],
       });
     });

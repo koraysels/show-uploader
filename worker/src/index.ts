@@ -3,6 +3,7 @@ import { redis, QUEUE_NAME, PREVIEW_QUEUE_NAME } from './queue';
 import { processYoutube } from './jobs/youtube';
 import { processMixcloud } from './jobs/mixcloud';
 import { processArchive } from './jobs/archive';
+import { processCompress } from './jobs/compress';
 import { processPreview } from './jobs/preview';
 import { reconcileStalledJobs, setJobStatus } from './db';
 import { sweepWorkspaces } from './services/workspace';
@@ -39,6 +40,8 @@ const worker = new Worker<JobPayload>(
         return processMixcloud(job);
       case 'archive':
         return processArchive(job);
+      case 'compress':
+        return processCompress(job);
       default:
         throw new Error(`Unknown platform: ${String(job.data.platform)}`);
     }

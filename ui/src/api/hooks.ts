@@ -271,6 +271,19 @@ export function useDeleteUpload() {
   });
 }
 
+// Re-encodes an already-archived show's video to shrink it — lossy, replaces
+// the original on S3 in place. Manual and per-recording: never auto-triggered,
+// unlike the other platform jobs. Safe to re-run (creating a new/reset job row
+// each time), so the same button works on any future outlier.
+export function useCompressVideo() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    mutationFn: (uploadId: string) => trpcClient.uploads.compressArchiveVideo.mutate({ uploadId }),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+  });
+}
+
 // One-shot backfill: re-runs the archive job on every upload still stored in
 // its original container, converting them to browser-playable MP4.
 export function useRemuxBackfill() {

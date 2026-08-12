@@ -39,7 +39,7 @@ export type PreviewJobPayload = {
 export type JobPayload = {
   jobId: string;
   uploadId: string;
-  platform: 'youtube' | 'mixcloud' | 'archive';
+  platform: 'youtube' | 'mixcloud' | 'archive' | 'compress';
   videoS3Key: string;
   title: string;
   description: string;

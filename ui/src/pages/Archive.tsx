@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
@@ -26,6 +26,7 @@ import {
   useArchiveLinksBackfill,
   useUnpublishRecord,
   useVideoInfo,
+  useCompressVideo,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
@@ -282,6 +283,21 @@ function DownloadLink({ objectKey, label }: { objectKey: string | null; label: s
 // object is gone, which is exactly the case worth catching.
 function SourceVideo({ upload }: { upload: UploadWithJobs }) {
   const info = useVideoInfo(upload.id);
+  const compress = useCompressVideo();
+  const compressJob = upload.jobs.find((j) => j.platform === 'compress');
+  const compressBusy = compress.isPending || compressJob?.status === 'processing' || compressJob?.status === 'queued';
+  const playable = /\.mp4$/i.test(upload.video_s3_key);
+
+  // videoInfo is deliberately long-lived (staleTime 5m — it only changes on a
+  // replace or a remux), so a finished shrink needs its own nudge to show the
+  // new, smaller size instead of waiting out the stale window.
+  const prevCompressStatus = useRef(compressJob?.status);
+  useEffect(() => {
+    // Not just 'processing' → 'done': a poll can land right on a job that went
+    // queued → done between two ticks, and that transition still needs the nudge.
+    if (prevCompressStatus.current !== 'done' && compressJob?.status === 'done') void info.refetch();
+    prevCompressStatus.current = compressJob?.status;
+  }, [compressJob?.status]);
 
   if (info.isPending)
     return (
@@ -334,6 +350,31 @@ function SourceVideo({ upload }: { upload: UploadWithJobs }) {
           </Link>
         </Box>
       </Tooltip>
+      {/* Most recordings land in the same size range; this is for the outlier
+          that came out of OBS at a much higher bitrate than usual. */}
+      {exists && playable && (
+        compressBusy ? (
+          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+            <CircularProgress size={12} thickness={6} />
+            <Typography variant="body2" color="text.secondary">
+              shrinking {compressJob?.progress_pct ?? 0}%
+            </Typography>
+          </Stack>
+        ) : (
+          <ConfirmAction
+            label={compressJob?.status === 'failed' ? 'retry shrink' : 'shrink'}
+            question="re-encodes the video (lossy) and replaces the only copy on s3. cannot be undone. proceed?"
+            pending={compress.isPending}
+            pendingLabel="starting…"
+            onConfirm={() => compress.mutate(upload.id)}
+            title={
+              compressJob?.status === 'failed'
+                ? compressJob.error ?? 'shrink failed — retry'
+                : 're-encodes this recording to a smaller file (h.264, crf 23) for a show that came out much bigger than the rest of the archive. lossy, replaces the original on s3 — no undo'
+            }
+          />
+        )
+      )}
     </Stack>
   );
 }

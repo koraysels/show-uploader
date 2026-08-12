@@ -345,6 +345,47 @@ export async function remuxToMp4(
   return runCommand(cmd, opts?.onProgress);
 }
 
+/**
+ * Force a real re-encode of the video stream to shrink an already-archived MP4.
+ *
+ * Everything else in this file treats the video as untouchable (`-c:v copy`) —
+ * archive size is otherwise purely whatever the source recorder produced. This
+ * is the one path that actually spends CPU to make the file smaller: CRF 23 is
+ * the standard "visually near-lossless" archival target, and preset medium
+ * trades encode time for a smaller result (there's no live upload waiting on
+ * this — it runs as its own background job).
+ *
+ * Audio is left alone when it's already AAC (true for every source this runs
+ * on — an already-archived show) and only re-encoded for the rare case it
+ * isn't, same rule remuxToMp4 uses for the same container.
+ */
+export async function compressVideo(
+  inputPath: string,
+  outputPath: string,
+  opts?: { onProgress?: (pct: number) => void }
+): Promise<void> {
+  const { audioCodec } = await probeStreams(inputPath);
+
+  const cmd = ffmpeg(inputPath).outputOptions([
+    '-map', '0',
+    '-c:v', 'libx264',
+    '-crf', '23',
+    '-preset', 'medium',
+    '-pix_fmt', 'yuv420p',
+  ]);
+
+  if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
+    cmd.audioCodec('copy');
+  } else {
+    cmd.audioCodec('aac').audioBitrate(env.ARCHIVE_AUDIO_BITRATE);
+  }
+
+  cmd.outputOptions(['-movflags', '+faststart']);
+  cmd.output(outputPath);
+
+  return runCommand(cmd, opts?.onProgress);
+}
+
 // Fast trim without re-encoding (stream copy). Keyframe-aligned start (may be a
 // second or two early) — fine for cutting dead air. Used for YouTube, which
 // otherwise uploads the raw recording untrimmed.

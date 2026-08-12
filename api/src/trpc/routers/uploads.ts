@@ -19,7 +19,7 @@ import {
   deleteUpload,
   isPrePublishVideoKey,
 } from '../../db/queries';
-import { enqueueArchiveJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
+import { enqueueArchiveJob, enqueueCompressJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
 import { uploadQueue, previewQueue } from '../../queue';
 import {
@@ -318,6 +318,43 @@ export const uploadsRouter = router({
     }
   }),
 
+  // POST /api/uploads/:uploadId/compress — shrink an already-archived show's
+  // video via a real re-encode (see worker/src/services/ffmpeg.ts compressVideo).
+  // Unlike remux this is lossy and operator-triggered per show, for the rare
+  // recording that came out of OBS at a much higher bitrate than usual.
+  compressArchiveVideo: protectedProcedure
+    .input(z.object({ uploadId: z.string() }))
+    .mutation(async ({ input }) => {
+      try {
+        const upload = await getUploadWithJobs(db, input.uploadId);
+        if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
+        if (!/\.mp4$/i.test(upload.video_s3_key)) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Not an mp4 archive yet — run the mp4 conversion first',
+          });
+        }
+        // The archive job only reaches 'done' once every platform job is done
+        // AND its own remux has finished — the same source-key-is-settled
+        // guarantee readyToArchive gives the archive job itself. Compress
+        // rewrites that same key, so it needs the same guarantee: otherwise a
+        // still-running platform job (reading the original) or a still-running
+        // remux (writing it) could race the compress job over the same object.
+        const archiveJob = upload.jobs.find((j) => j.platform === 'archive');
+        if (archiveJob?.status !== 'done') {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'This recording is still being processed — try again once archiving is done',
+          });
+        }
+        const queued = await enqueueCompressJob(db, upload);
+        if (!queued) throw new TRPCError({ code: 'CONFLICT', message: 'Already shrinking this recording' });
+        return { ok: true };
+      } catch (err) {
+        internal(err, 'Failed to enqueue compress job:', 'Failed to start shrink');
+      }
+    }),
+
   // Backfill for recordings that predate the MP4 remux: re-run the archive job
   // on every upload whose video is still in its original container. The job is
   // the same one a single upload gets, so this needs no separate code path —
@@ -362,8 +399,8 @@ export const uploadsRouter = router({
         try {
           await updateArchiveRecord(u.show_id, {
             mediaLinks: [
-              { label: 'Recording', type: 'video', url: `${base}/video` },
-              { label: 'Audio', type: 'audio', url: `${base}/audio` },
+              { label: 'cs-archive-video', type: 'download', url: `${base}/video` },
+              { label: 'cs-archive-audio', type: 'download', url: `${base}/audio` },
             ],
           });
           updated++;

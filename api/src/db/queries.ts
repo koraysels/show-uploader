@@ -19,7 +19,7 @@ export type ShowUpload = {
 export type PlatformJob = {
   id: string;
   upload_id: string;
-  platform: 'youtube' | 'mixcloud' | 'archive';
+  platform: 'youtube' | 'mixcloud' | 'archive' | 'compress';
   status: 'queued' | 'processing' | 'done' | 'failed';
   result_url: string | null;
   error: string | null;

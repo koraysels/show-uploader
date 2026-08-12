@@ -11,7 +11,11 @@ export type PreviewJobPayload = {
 export type JobPayload = {
   jobId: string;
   uploadId: string;
-  platform: 'youtube' | 'mixcloud' | 'archive';
+  // 'compress' only ever uses jobId/uploadId/videoS3Key below — every other
+  // field is a placeholder for it. Kept in the same flat type (rather than a
+  // PreviewJobPayload-style split) because it still runs through the shared
+  // platform_jobs row + SSE progress plumbing that the other three rely on.
+  platform: 'youtube' | 'mixcloud' | 'archive' | 'compress';
   videoS3Key: string;
   title: string;
   description: string;
