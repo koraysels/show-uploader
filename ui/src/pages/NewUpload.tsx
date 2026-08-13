@@ -9,7 +9,7 @@ import MuiLink from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import {
-  useShows,
+  useShow,
   useGeneratedMeta,
   usePendingVideos,
   useClaimPending,
@@ -22,6 +22,7 @@ import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
+import { selectablePlatformCount } from '../components/platforms';
 import TrimFields from '../components/TrimFields';
 import VideoPreview from '../components/VideoPreview';
 import { useUpload } from '../upload/UploadProvider';
@@ -113,8 +114,10 @@ export default function NewUpload() {
   const { showId } = useParams({ strict: false }) as { showId?: string };
   const navigate = useNavigate();
 
-  const { data: shows = [] } = useShows();
-  const selectedShow = shows.find((s) => s.id === showId) ?? null;
+  // Any status, not just drafts: an attach-recording flow points here at an
+  // already-published show. Also removes listShows' perPage=200 cap for the
+  // direct-by-id case.
+  const selectedShow = useShow(showId ?? '', !!showId).data ?? null;
 
   // An upload for this show whose platform work hasn't settled yet. Newest
   // first, since a re-upload leaves the older finished one behind.
@@ -284,7 +287,14 @@ export default function NewUpload() {
   // Blocked during a preview convert: the remux deletes the source, so a publish
   // started now would hand the platform jobs an object that disappears mid-run.
   const canSubmit =
-    !!selectedShow && !!videoS3Key && platforms.length > 0 && !createUpload.isPending && !previewConverting;
+    !!selectedShow &&
+    !!videoS3Key &&
+    // Zero platforms is only valid when there's genuinely nothing left to
+    // pick (both already published) — never a silent accidental submit on a
+    // real draft.
+    (platforms.length > 0 || selectablePlatformCount(existingLinks) === 0) &&
+    !createUpload.isPending &&
+    !previewConverting;
   const pendingVideos = pending.data ?? [];
 
   if (!selectedShow) {
