@@ -61,7 +61,21 @@ function runCommand(cmd: ffmpeg.FfmpegCommand, onProgress?: (pct: number) => voi
 
     if (onProgress) {
       cmd.on('progress', (p: { percent?: number }) => {
-        onProgress(Math.min(99, Math.round(p.percent ?? 0)));
+        // ffmpeg reports percent as NaN (not undefined) whenever it can't yet
+        // determine total duration for this tick — `?? 0` only catches
+        // null/undefined, so a NaN tick used to reach callers as NaN and, via
+        // setJobStatus, as an invalid Postgres integer literal. Every caller
+        // computes its own onward percentage from this value, so it has to be
+        // a real, finite number before it ever leaves here.
+        const raw = Math.round(p.percent ?? 0);
+        const pct = Number.isFinite(raw) ? Math.min(99, Math.max(0, raw)) : 0;
+        // Progress reporting is best-effort — a callback failure (this or a
+        // downstream DB/Redis hiccup) must never become an unhandled
+        // rejection. Unhandled here previously crashed the whole worker
+        // process, which is a far worse failure than one missed progress tick.
+        Promise.resolve(onProgress(pct)).catch((err) =>
+          console.warn('Progress callback failed (ignored):', err instanceof Error ? err.message : err)
+        );
       });
     }
 
