@@ -53,7 +53,13 @@ import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../..
 import { deleteStagedVideo } from '../../services/staged-video';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
-import { updateArchiveRecord, removeArchiveMediaLink, resolveGenreIds, getArchiveShow } from '../../services/shows-api';
+import {
+  updateArchiveRecord,
+  removeArchiveMediaLink,
+  resolveGenreIds,
+  getArchiveShow,
+  type AgendaShow,
+} from '../../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../../services/platform-metadata';
 import { baseTitle } from '../../services/format';
 import { slugify } from '../../services/show-slug';
@@ -99,6 +105,17 @@ function internal(err: unknown, logMessage: string, message: string): never {
   if (err instanceof TRPCError) throw err;
   console.error(logMessage, err);
   throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
+}
+
+/**
+ * Where an already-published show's video would live if it followed the same
+ * date+title slug convention every archived show uses (see show-slug.ts).
+ * Server-derived only, never taken from the client — adoptArchive's whole
+ * safety property depends on this being the one source of truth for which
+ * key gets associated with which show.
+ */
+function expectedShowVideoKey(show: Pick<AgendaShow, 'date' | 'title'>): string {
+  return `shows/${show.date}-${slugify(show.title)}/video.mp4`;
 }
 
 export const uploadsRouter = router({
@@ -458,7 +475,7 @@ export const uploadsRouter = router({
         const show = await getArchiveShow(input.showId);
         if (!show) return { exists: false as const };
 
-        const videoKey = `shows/${show.date}-${slugify(show.title)}/video.mp4`;
+        const videoKey = expectedShowVideoKey(show);
         const info = await objectInfo(videoKey);
         if (!info.exists) return { exists: false as const };
 
@@ -473,6 +490,11 @@ export const uploadsRouter = router({
    * of probeExistingArchive. No re-encode: the video is already in the
    * correct layout, so this only creates DB rows.
    *
+   * Takes only showId, not a key: the key is re-derived server-side from the
+   * show record exactly like probeExistingArchive does, rather than trusted
+   * from the client — otherwise an authenticated caller could point this at
+   * any S3 key that happens to exist and associate it with the wrong show.
+   *
    * Every platform link already on the PocketBase record becomes a `done`
    * platform_jobs row carrying that same URL, plus a `done` archive job — so
    * afterward this show behaves exactly like one published through this app:
@@ -481,7 +503,7 @@ export const uploadsRouter = router({
    * this deliberately doesn't touch audio at all.
    */
   adoptArchive: protectedProcedure
-    .input(z.object({ showId: z.string().min(1), videoS3Key: z.string().min(1) }))
+    .input(z.object({ showId: z.string().min(1) }))
     .mutation(async ({ input }) => {
       try {
         const existing = await getLatestUploadForShow(db, input.showId);
@@ -489,13 +511,14 @@ export const uploadsRouter = router({
           throw new TRPCError({ code: 'CONFLICT', message: 'This show already has an upload record' });
         }
 
-        const info = await objectInfo(input.videoS3Key);
-        if (!info.exists) {
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'That file is not on S3' });
-        }
-
         const show = await getArchiveShow(input.showId);
         if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+
+        const videoS3Key = expectedShowVideoKey(show);
+        const info = await objectInfo(videoS3Key);
+        if (!info.exists) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No file found at the expected S3 location' });
+        }
 
         const upload = await createUpload(db, {
           show_id: input.showId,
@@ -503,7 +526,7 @@ export const uploadsRouter = router({
           description: show.description,
           tags: show.tags ?? [],
           image_url: show.imageUrl,
-          video_s3_key: input.videoS3Key,
+          video_s3_key: videoS3Key,
           jingle_s3_key: null,
           trim_start: null,
           trim_end: null,

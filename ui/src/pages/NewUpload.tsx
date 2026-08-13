@@ -596,10 +596,7 @@ export default function NewUpload() {
                 color={ROLE.write}
                 disabled={adoptArchive.isPending}
                 onClick={() =>
-                  adoptArchive.mutate(
-                    { showId: selectedShow.id, videoS3Key: foundArchive.videoKey },
-                    { onSuccess: () => navigate({ to: '/archive' }) }
-                  )
+                  adoptArchive.mutate(selectedShow.id, { onSuccess: () => navigate({ to: '/archive' }) })
                 }
                 sx={{ alignSelf: 'flex-start', minHeight: 44 }}
               >
@@ -611,6 +608,10 @@ export default function NewUpload() {
                 </Typography>
               )}
             </Stack>
+          ) : probeArchive.isPending ? (
+            // Otherwise an operator can start a real upload before the probe
+            // (which only takes one S3 HEAD request) has had a chance to land.
+            <Typography color="text.secondary">checking for an existing recording…</Typography>
           ) : (
             showId && <UploadControl showId={showId} />
           )}

@@ -290,12 +290,13 @@ export function useProbeExistingArchive(showId: string | undefined, enabled: boo
 }
 
 // Turns a probed-existing S3 file into a real upload record — no re-encode,
-// just the DB rows (see probeExistingArchive above).
+// just the DB rows (see probeExistingArchive above). Takes only showId: the
+// key is re-derived server-side from the show record, not sent by the client.
 export function useAdoptArchive() {
   const qc = useQueryClient();
   const trpc = useTRPC();
   return useMutation({
-    mutationFn: (input: { showId: string; videoS3Key: string }) => trpcClient.uploads.adoptArchive.mutate(input),
+    mutationFn: (showId: string) => trpcClient.uploads.adoptArchive.mutate({ showId }),
     onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }
