@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { selectablePlatformCount } from '../../src/components/PlatformSelector';
+import { selectablePlatformCount } from '../../src/components/platforms';
 
 describe('selectablePlatformCount', () => {
   it('counts both platforms when nothing is published yet', () => {
