@@ -71,7 +71,10 @@ const CreateUploadSchema = z.object({
   tags: z.array(z.string()).default([]),
   imageUrl: z.string().url().nullable().default(null),
   videoS3Key: z.string().min(1),
-  platforms: z.array(z.enum(['youtube', 'mixcloud'])).min(1),
+  // Empty is valid: attaching a recording to a show already published
+  // elsewhere needs nothing to publish, just the archive step (see the
+  // platforms.length === 0 branch in `create` below).
+  platforms: z.array(z.enum(['youtube', 'mixcloud'])),
   includeJingle: z.boolean().default(true),
   // Auto-detect and cut leading/trailing silence (dead air) via ffmpeg. Manual
   // trim below overrides it.
@@ -214,6 +217,15 @@ export const uploadsRouter = router({
       const jobs = await Promise.all(
         data.platforms.map((platform) => createPlatformJob(db, { upload_id: upload.id, platform }))
       );
+
+      // Attach-only: no platform to publish (none picked, or none left to
+      // pick on an already-published show). Nothing will ever call
+      // maybeEnqueueArchive's normal "every platform job is done" trigger
+      // with zero platform jobs to wait on, so start the archive job here —
+      // the same enqueueArchiveJob the remux/compress backfills already use.
+      if (data.platforms.length === 0) {
+        await enqueueArchiveJob(db, { ...upload, jobs });
+      }
 
       // Don't run heavy work (transcode/upload) while a show is on air — defer
       // the jobs until the live window (plus buffer) clears. Fails open if PB is
