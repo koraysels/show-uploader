@@ -39,33 +39,19 @@ function resolve(proc: string, input: unknown): unknown {
     case 'shows.listStates':
       return archiveStates;
     case 'shows.listPublished':
-      // Ids match entries already in the `shows` (drafts) fixture, so
-      // shows.get — which NewUpload.tsx now calls via useShow — resolves
-      // them too, without a second fixture to keep in sync.
+      // Derived from the `shows` (drafts) fixture — same ids, same
+      // mediaLinks — so shows.get (which NewUpload.tsx now calls via
+      // useShow) resolves to a consistent state instead of a second,
+      // independently-maintained fixture that can drift out of sync.
       return [
+        shows.find((s) => s.id === 'show_zonderdak')!,
+        shows.find((s) => s.id === 'show_dubplate')!,
         {
-          id: 'show_zonderdak', title: 'Radio (z)onderdak', description: '', date: '2026-07-31',
-          startTime: '20:00', endTime: '22:00', imageUrl: null, tags: null,
-          mediaLinks: [{ label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' }],
-          showDescription: null,
-        },
-        {
-          id: 'show_dubplate', title: 'Dubplate Hour', description: '', date: '2026-07-20',
-          startTime: '21:00', endTime: '23:00', imageUrl: null, tags: null,
+          ...shows.find((s) => s.id === 'show_breakfast')!,
           mediaLinks: [
-            { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo3' },
-            { label: 'MixCloud', type: 'audio', url: 'https://mixcloud.com/demo3' },
-          ],
-          showDescription: null,
-        },
-        {
-          id: 'show_breakfast', title: 'Breakfast Club', description: '', date: '2026-07-25',
-          startTime: '08:00', endTime: '10:00', imageUrl: null, tags: null,
-          mediaLinks: [
-            { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo2' },
+            ...shows.find((s) => s.id === 'show_breakfast')!.mediaLinks,
             { label: 'cs-archive-video', type: 'download', url: 'https://uploader.test/api/public/recordings/x/video' },
           ],
-          showDescription: null,
         },
       ];
     case 'shows.get':

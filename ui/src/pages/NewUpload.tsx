@@ -23,6 +23,7 @@ import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
 import { selectablePlatformCount } from '../components/platforms';
+import { PageLoading } from '../components/Skeleton';
 import TrimFields from '../components/TrimFields';
 import VideoPreview from '../components/VideoPreview';
 import { useUpload } from '../upload/UploadProvider';
@@ -117,7 +118,8 @@ export default function NewUpload() {
   // Any status, not just drafts: an attach-recording flow points here at an
   // already-published show. Also removes listShows' perPage=200 cap for the
   // direct-by-id case.
-  const selectedShow = useShow(showId ?? '', !!showId).data ?? null;
+  const showQuery = useShow(showId ?? '', !!showId);
+  const selectedShow = showQuery.data ?? null;
 
   // An upload for this show whose platform work hasn't settled yet. Newest
   // first, since a re-upload leaves the older finished one behind.
@@ -257,7 +259,8 @@ export default function NewUpload() {
   };
 
   const handleSubmit = () => {
-    if (!selectedShow || !videoS3Key || platforms.length === 0) return;
+    if (!selectedShow || !videoS3Key) return;
+    if (platforms.length === 0 && selectablePlatformCount(existingLinks) > 0) return;
     createUpload.mutate(
       {
         showId: selectedShow.id,
@@ -296,6 +299,10 @@ export default function NewUpload() {
     !createUpload.isPending &&
     !previewConverting;
   const pendingVideos = pending.data ?? [];
+
+  if (showQuery.isPending) {
+    return <PageLoading label="loading…" />;
+  }
 
   if (!selectedShow) {
     return (
@@ -599,12 +606,18 @@ export default function NewUpload() {
             disabled={!canSubmit}
             sx={{ width: '100%', minHeight: 48, fontSize: '0.9375rem' }}
           >
-            {createUpload.isPending ? 'starting…' : 'save & start platform uploads'}
+            {createUpload.isPending
+              ? 'starting…'
+              : platforms.length === 0
+                ? 'save & archive this recording'
+                : 'save & start platform uploads'}
           </Button>
           <Typography variant="caption" color="text.disabled" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>
             {!videoS3Key
               ? 'add a video to start.'
-              : 'uploads to youtube/mixcloud + syncs the draft. publishing the agenda record is a separate step (archive page).'}
+              : platforms.length === 0
+                ? 'muxes to mp4 + extracts audio, then links both on the agenda record.'
+                : 'uploads to youtube/mixcloud + syncs the draft. publishing the agenda record is a separate step (archive page).'}
           </Typography>
         </Box>
       </Stack>

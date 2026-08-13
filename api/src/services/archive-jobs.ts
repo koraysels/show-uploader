@@ -53,7 +53,8 @@ export function readyToArchive(jobs: PlatformJob[]): boolean {
  */
 export async function enqueueArchiveJob(
   db: Sql,
-  upload: ShowUpload & { jobs: PlatformJob[] }
+  upload: ShowUpload & { jobs: PlatformJob[] },
+  opts?: { delay?: number }
 ): Promise<boolean> {
   let job = upload.jobs.find((j) => j.platform === 'archive');
   if (job?.status === 'processing') return false;
@@ -61,21 +62,25 @@ export async function enqueueArchiveJob(
   if (!job) job = await createPlatformJob(db, { upload_id: upload.id, platform: 'archive' });
   else await resetPlatformJobForRetry(db, job.id);
 
-  await uploadQueue.add('archive', {
-    jobId: job.id,
-    uploadId: upload.id,
-    platform: 'archive',
-    videoS3Key: upload.video_s3_key,
-    title: upload.title,
-    description: upload.description ?? '',
-    tags: upload.tags ?? [],
-    imageUrl: upload.image_url,
-    jingleS3Key: upload.jingle_s3_key,
-    includeJingle: false,
-    autoTrimSilence: true,
-    trimStart: upload.trim_start,
-    trimEnd: upload.trim_end,
-  });
+  await uploadQueue.add(
+    'archive',
+    {
+      jobId: job.id,
+      uploadId: upload.id,
+      platform: 'archive',
+      videoS3Key: upload.video_s3_key,
+      title: upload.title,
+      description: upload.description ?? '',
+      tags: upload.tags ?? [],
+      imageUrl: upload.image_url,
+      jingleS3Key: upload.jingle_s3_key,
+      includeJingle: false,
+      autoTrimSilence: true,
+      trimStart: upload.trim_start,
+      trimEnd: upload.trim_end,
+    },
+    opts?.delay ? { delay: opts.delay } : {}
+  );
   return true;
 }
 

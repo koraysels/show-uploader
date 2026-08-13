@@ -13,7 +13,7 @@ import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeS
 import ConfirmAction from './ConfirmAction';
 import PlatformIcon from './PlatformIcon';
 import { c, ROLE } from '../theme';
-import { PLATFORMS, PlatformLink, selectablePlatformCount } from './platforms';
+import { PLATFORMS, PlatformLink } from './platforms';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
 function JinglePreview() {
