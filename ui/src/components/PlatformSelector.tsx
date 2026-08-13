@@ -13,6 +13,7 @@ import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeS
 import ConfirmAction from './ConfirmAction';
 import PlatformIcon from './PlatformIcon';
 import { c, ROLE } from '../theme';
+import { PLATFORMS, PlatformLink } from './platforms';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
 function JinglePreview() {
@@ -70,7 +71,8 @@ function JinglePreview() {
   );
 }
 
-export type PlatformLink = { label: string; url: string };
+// Re-export PlatformLink from platforms.ts for backward compatibility
+export type { PlatformLink } from './platforms';
 export type PlatformMeta = { title: string; description: string; tags: string[]; imageUrl: string | null };
 
 type Props = {
@@ -85,10 +87,6 @@ type Props = {
   onJingleChange: (v: boolean) => void;
 };
 
-const PLATFORMS = [
-  { id: 'youtube', label: 'YouTube' },
-  { id: 'mixcloud', label: 'MixCloud' },
-];
 
 // A platform that's already published on this record: link + manage (update
 // metadata / set public / remove the link). Replaces the re-publish toggle so

@@ -38,6 +38,22 @@ function resolve(proc: string, input: unknown): unknown {
       return genres;
     case 'shows.listStates':
       return archiveStates;
+    case 'shows.listPublished':
+      // Derived from the `shows` (drafts) fixture — same ids, same
+      // mediaLinks — so shows.get (which NewUpload.tsx now calls via
+      // useShow) resolves to a consistent state instead of a second,
+      // independently-maintained fixture that can drift out of sync.
+      return [
+        shows.find((s) => s.id === 'show_zonderdak')!,
+        shows.find((s) => s.id === 'show_dubplate')!,
+        {
+          ...shows.find((s) => s.id === 'show_breakfast')!,
+          mediaLinks: [
+            ...shows.find((s) => s.id === 'show_breakfast')!.mediaLinks,
+            { label: 'cs-archive-video', type: 'download', url: 'https://uploader.test/api/public/recordings/x/video' },
+          ],
+        },
+      ];
     case 'shows.get':
       return shows.find((s) => s.id === arg.id) ?? null;
     case 'shows.generateMeta':

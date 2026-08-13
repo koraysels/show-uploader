@@ -117,6 +117,35 @@ export async function listShows(): Promise<AgendaShow[]> {
   return body.items.map(toAgendaShow);
 }
 
+async function fetchPublished(token: string): Promise<Response> {
+  const filter = `(status='published')`;
+  const url =
+    `${pbBase}/api/collections/archive/records` +
+    // listShows caps at 200, fine for the draft backlog. A multi-year
+    // published history can exceed that, so this uses the same 500 cap
+    // listArchiveStates already accepts for "every published record".
+    `?perPage=500&sort=-startTime&expand=${ARCHIVE_EXPAND}&fields=${ARCHIVE_FIELDS}&filter=${encodeURIComponent(filter)}`;
+  return fetch(url, { headers: { Authorization: token } });
+}
+
+/**
+ * Published records in the PocketBase `archive` collection — the pool the
+ * "attach a recording" picker draws from (ui/src/pages/Attach.tsx). Same
+ * shape as listShows, different filter: this app never otherwise sees these
+ * once they're published.
+ */
+export async function listPublishedShows(): Promise<AgendaShow[]> {
+  let token = await getToken();
+  let res = await fetchPublished(token);
+  if (res.status === 401 || res.status === 403) {
+    token = await authenticate();
+    res = await fetchPublished(token);
+  }
+  if (!res.ok) throw new Error(`PocketBase archive error: ${res.status}`);
+  const body = (await res.json()) as { items: ArchiveItem[] };
+  return body.items.map(toAgendaShow);
+}
+
 // Fetch a single archive record (any status) as an AgendaShow — used to read the
 // current PocketBase metadata (title/notes/genres/image/mediaLinks) when syncing
 // a published show to its platforms, PB being the master.

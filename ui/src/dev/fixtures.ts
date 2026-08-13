@@ -31,7 +31,7 @@ export const shows: AgendaShow[] = [
     endTime: '22:00',
     imageUrl: cover('RZ', '#137738'),
     tags: ['talk', 'community'],
-    mediaLinks: [],
+    mediaLinks: [{ label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' }],
     showDescription: 'A monthly programme made with and by people without a roof.',
   },
   {
@@ -70,7 +70,10 @@ export const shows: AgendaShow[] = [
     endTime: '19:00',
     imageUrl: null,
     tags: ['dub', 'reggae'],
-    mediaLinks: [],
+    mediaLinks: [
+      { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo3' },
+      { label: 'MixCloud', type: 'audio', url: 'https://mixcloud.com/demo3' },
+    ],
     showDescription: null,
   },
 ];

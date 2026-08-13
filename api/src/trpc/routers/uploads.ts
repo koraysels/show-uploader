@@ -71,7 +71,10 @@ const CreateUploadSchema = z.object({
   tags: z.array(z.string()).default([]),
   imageUrl: z.string().url().nullable().default(null),
   videoS3Key: z.string().min(1),
-  platforms: z.array(z.enum(['youtube', 'mixcloud'])).min(1),
+  // Empty is valid: attaching a recording to a show already published
+  // elsewhere needs nothing to publish, just the archive step (see the
+  // platforms.length === 0 branch in `create` below).
+  platforms: z.array(z.enum(['youtube', 'mixcloud'])),
   includeJingle: z.boolean().default(true),
   // Auto-detect and cut leading/trailing silence (dead air) via ffmpeg. Manual
   // trim below overrides it.
@@ -222,6 +225,17 @@ export const uploadsRouter = router({
       const delay = live.isLive && live.resumeAt ? Math.max(0, live.resumeAt.getTime() - Date.now()) : 0;
       if (delay > 0) {
         console.log(`Show live — deferring upload ${upload.id} jobs until ${live.resumeAt!.toISOString()}`);
+      }
+
+      // Attach-only: no platform to publish (none picked, or none left to
+      // pick on an already-published show). Nothing will ever call
+      // maybeEnqueueArchive's normal "every platform job is done" trigger
+      // with zero platform jobs to wait on, so start the archive job here —
+      // the same enqueueArchiveJob the remux/compress backfills already use.
+      // Deferred by the same live-guard delay as every other job below, so an
+      // archive-only submission during a live show doesn't jump the queue.
+      if (data.platforms.length === 0) {
+        await enqueueArchiveJob(db, { ...upload, jobs }, { delay });
       }
 
       await Promise.all(

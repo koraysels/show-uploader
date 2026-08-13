@@ -13,6 +13,14 @@ export function useShows() {
   return useQuery(trpc.shows.listShows.queryOptions(undefined, { staleTime: 60_000 }));
 }
 
+// Shows already published elsewhere, for the "attach a recording" picker.
+// Filtered client-side in Attach.tsx to ones with no cs-archive-video link —
+// this returns every published record.
+export function useListPublishedShows() {
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.listPublished.queryOptions(undefined, { staleTime: 30_000 }));
+}
+
 export function useGenres() {
   const trpc = useTRPC();
   return useQuery(trpc.shows.listGenres.queryOptions(undefined, { staleTime: 300_000 }));

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { router, protectedProcedure } from '../trpc';
 import {
   listShows,
+  listPublishedShows,
   listGenres,
   listArchiveStates,
   getArchiveShow,
@@ -43,6 +44,21 @@ export const showsRouter = router({
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch shows',
+      });
+    }
+  }),
+
+  // GET /api/shows/published — shows already live elsewhere, for the "attach
+  // a recording" picker. Filtered to ones missing cs-archive-video client-side
+  // (see ui/src/pages/Attach.tsx) — this returns every published record.
+  listPublished: protectedProcedure.query(async () => {
+    try {
+      return await listPublishedShows();
+    } catch (err) {
+      console.error('Failed to fetch published shows:', err);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch published shows',
       });
     }
   }),
