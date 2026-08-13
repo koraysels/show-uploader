@@ -8,13 +8,20 @@ export async function setJobStatus(
   status: string,
   extra: { result_url?: string; error?: string; progress_pct?: number } = {}
 ) {
+  // Postgres has no integer representation of NaN/Infinity — it rejects the
+  // query outright, and every caller here is a fire-and-forget progress tick,
+  // so a thrown error becomes an unhandled rejection that has, in practice,
+  // crashed the whole worker process. A bad progress value should be dropped
+  // (leaves progress_pct unchanged, same as omitting it), never fatal.
+  const progressPct =
+    extra.progress_pct != null && Number.isFinite(extra.progress_pct) ? extra.progress_pct : null;
   await db`
     UPDATE platform_jobs
     SET
       status = ${status},
       result_url = COALESCE(${extra.result_url ?? null}, result_url),
       error = COALESCE(${extra.error ?? null}, error),
-      progress_pct = COALESCE(${extra.progress_pct ?? null}, progress_pct),
+      progress_pct = COALESCE(${progressPct}, progress_pct),
       updated_at = NOW()
     WHERE id = ${jobId}
       -- Never move a finished job back to processing/queued: a late upload
