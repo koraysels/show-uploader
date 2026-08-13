@@ -17,6 +17,8 @@ import {
   useStaged,
   useSaveShowMetadata,
   useUploads,
+  useProbeExistingArchive,
+  useAdoptArchive,
 } from '../api/hooks';
 import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
@@ -30,6 +32,7 @@ import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
+import { humanSize } from '../format';
 import { c, ROLE, LABEL_SX } from '../theme';
 
 // The agenda site hosts the archive record's admin detail page at
@@ -170,6 +173,13 @@ export default function NewUpload() {
   });
   const videoS3Key = video.state === 'ready' ? video.key : '';
   const videoFilename = video.state === 'ready' || video.state === 'uploading' || video.state === 'error' ? video.filename : '';
+
+  // Only worth asking while there's nothing else going on with the video —
+  // a show published before this tool existed, or migrated by hand, may
+  // already have its file sitting in the right place.
+  const probeArchive = useProbeExistingArchive(showId, video.state === 'none');
+  const foundArchive = probeArchive.data?.exists ? probeArchive.data : null;
+  const adoptArchive = useAdoptArchive();
 
   // Soft claim: opening auto-claims the show, unless someone else holds it — then
   // we show an interstitial and only claim (steal) once the user opts to open anyway.
@@ -568,6 +578,39 @@ export default function NewUpload() {
                 onConvertingChange={setPreviewConverting}
               />
             </>
+          ) : foundArchive ? (
+            <Stack spacing={1.5} sx={{ border: `1px solid ${c.ink}`, px: 2, py: 1.5 }}>
+              <Typography>
+                found an existing recording already at{' '}
+                <Box component="span" sx={{ fontFamily: 'monospace', fontSize: '0.875em' }}>
+                  {foundArchive.videoKey}
+                </Box>
+                {foundArchive.videoSize ? ` (${humanSize(foundArchive.videoSize)})` : ''}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                published before this tool, or moved here by hand — adopt it instead of uploading again.
+                no re-encode; use "generate audio" on the archive page afterward for the downloadable audio.
+              </Typography>
+              <Button
+                variant="contained"
+                color={ROLE.write}
+                disabled={adoptArchive.isPending}
+                onClick={() =>
+                  adoptArchive.mutate(
+                    { showId: selectedShow.id, videoS3Key: foundArchive.videoKey },
+                    { onSuccess: () => navigate({ to: '/archive' }) }
+                  )
+                }
+                sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+              >
+                {adoptArchive.isPending ? 'adopting…' : 'adopt this recording'}
+              </Button>
+              {adoptArchive.isError && (
+                <Typography variant="caption" color="error.main">
+                  adopt failed — try again.
+                </Typography>
+              )}
+            </Stack>
           ) : (
             showId && <UploadControl showId={showId} />
           )}

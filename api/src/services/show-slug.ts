@@ -27,7 +27,7 @@ const ALREADY_SLUG = /^\d{4}-\d{2}-\d{2}-/;
 
 const pad = (n: string) => n.padStart(2, '0');
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')

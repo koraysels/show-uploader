@@ -18,6 +18,8 @@ import {
   listArchivedUploads,
   deleteUpload,
   isPrePublishVideoKey,
+  getLatestUploadForShow,
+  updateJobStatus,
 } from '../../db/queries';
 import { enqueueArchiveJob, enqueueCompressJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
 import { presenceHub } from '../../services/presence-hub';
@@ -51,9 +53,10 @@ import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../..
 import { deleteStagedVideo } from '../../services/staged-video';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
-import { updateArchiveRecord, removeArchiveMediaLink, resolveGenreIds } from '../../services/shows-api';
+import { updateArchiveRecord, removeArchiveMediaLink, resolveGenreIds, getArchiveShow } from '../../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../../services/platform-metadata';
 import { baseTitle } from '../../services/format';
+import { slugify } from '../../services/show-slug';
 import { env } from '../../env';
 
 // tRPC mirror of routes/uploads.ts (non-SSE, non-multipart). Reuses the exact
@@ -433,6 +436,94 @@ export const uploadsRouter = router({
       internal(err, 'Failed to backfill archive links:', 'Failed to backfill archive links');
     }
   }),
+
+  /**
+   * Does this show already have a video sitting in the published S3 layout
+   * with no show_uploads row for it — a show published before this tool
+   * existed, or migrated by hand. NewUpload.tsx calls this whenever a show has
+   * no video attached yet; a hit swaps the upload dropzone for an "adopt this
+   * file" panel instead (see adoptArchive below).
+   *
+   * The key is a guess (same date+title slug convention every other archived
+   * show uses) — not exists is the common, unremarkable case for any show
+   * that really does need a fresh upload, not an error.
+   */
+  probeExistingArchive: protectedProcedure
+    .input(z.object({ showId: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const existing = await getLatestUploadForShow(db, input.showId);
+        if (existing) return { exists: false as const };
+
+        const show = await getArchiveShow(input.showId);
+        if (!show) return { exists: false as const };
+
+        const videoKey = `shows/${show.date}-${slugify(show.title)}/video.mp4`;
+        const info = await objectInfo(videoKey);
+        if (!info.exists) return { exists: false as const };
+
+        return { exists: true as const, videoKey, videoSize: info.size };
+      } catch (err) {
+        internal(err, 'Failed to probe existing archive:', 'Failed to probe existing archive');
+      }
+    }),
+
+  /**
+   * Turn an already-placed S3 file into a real upload record — the other half
+   * of probeExistingArchive. No re-encode: the video is already in the
+   * correct layout, so this only creates DB rows.
+   *
+   * Every platform link already on the PocketBase record becomes a `done`
+   * platform_jobs row carrying that same URL, plus a `done` archive job — so
+   * afterward this show behaves exactly like one published through this app:
+   * visible on the archive page, covered by archiveLinksBackfill, and
+   * "generate audio" (already exists) is how the operator gets the m4a, since
+   * this deliberately doesn't touch audio at all.
+   */
+  adoptArchive: protectedProcedure
+    .input(z.object({ showId: z.string().min(1), videoS3Key: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      try {
+        const existing = await getLatestUploadForShow(db, input.showId);
+        if (existing) {
+          throw new TRPCError({ code: 'CONFLICT', message: 'This show already has an upload record' });
+        }
+
+        const info = await objectInfo(input.videoS3Key);
+        if (!info.exists) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'That file is not on S3' });
+        }
+
+        const show = await getArchiveShow(input.showId);
+        if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+
+        const upload = await createUpload(db, {
+          show_id: input.showId,
+          title: show.title,
+          description: show.description,
+          tags: show.tags ?? [],
+          image_url: show.imageUrl,
+          video_s3_key: input.videoS3Key,
+          jingle_s3_key: null,
+          trim_start: null,
+          trim_end: null,
+        });
+
+        for (const link of show.mediaLinks) {
+          const platform = link.label === 'YouTube' ? 'youtube' : link.label === 'MixCloud' ? 'mixcloud' : null;
+          if (!platform) continue;
+          const job = await createPlatformJob(db, { upload_id: upload.id, platform });
+          await updateJobStatus(db, job.id, { status: 'done', result_url: link.url });
+        }
+
+        const archiveJob = await createPlatformJob(db, { upload_id: upload.id, platform: 'archive' });
+        await updateJobStatus(db, archiveJob.id, { status: 'done' });
+
+        return { uploadId: upload.id };
+      } catch (err) {
+        internal(err, 'Failed to adopt archive:', 'Failed to adopt archive');
+      }
+    }),
 
   // POST /api/uploads/:uploadId/publish — flip the PocketBase archive record to
   // "published" (the explicit, separate step that makes it live on the agenda).
