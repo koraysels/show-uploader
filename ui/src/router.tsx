@@ -27,6 +27,7 @@ import { PageLoading } from './components/Skeleton';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
 import Storage from './pages/Storage';
+import Attach from './pages/Attach';
 
 function AuthedLayout() {
   const { user, loading, userManager } = useAuth();
@@ -149,6 +150,9 @@ function AuthedLayout() {
             <Button component={Link} to="/storage" variant="text" sx={pathname.startsWith('/storage') ? navActiveSx : navSx}>
               storage
             </Button>
+            <Button component={Link} to="/attach" variant="text" sx={pathname.startsWith('/attach') ? navActiveSx : navSx}>
+              attach recording
+            </Button>
           </Stack>
 
           {/* Identity block drops to its own full-width line on phones instead
@@ -233,6 +237,12 @@ const storageRoute = createRoute({
   component: Storage,
 });
 
+const attachRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: '/attach',
+  component: Attach,
+});
+
 const historyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/history',
@@ -244,7 +254,7 @@ const historyRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   callbackRoute,
-  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute, storageRoute]),
+  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute, storageRoute, attachRoute]),
 ]);
 
 export const router = createRouter({ routeTree });
