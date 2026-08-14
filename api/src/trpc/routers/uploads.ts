@@ -50,6 +50,7 @@ async function assertPrePublishVideo(videoS3Key: string): Promise<void> {
   }
 }
 import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../../services/s3';
+import { browse } from '../../services/storage-browse';
 import { deleteStagedVideo } from '../../services/staged-video';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
@@ -108,20 +109,29 @@ function internal(err: unknown, logMessage: string, message: string): never {
 }
 
 /**
- * Where an already-published show's video would live if it followed the same
- * date+title slug convention every archived show uses (see show-slug.ts).
- * Server-derived only, never taken from the client — adoptArchive's whole
- * safety property depends on this being the one source of truth for which
- * key gets associated with which show.
+ * The show's archive folder as it ACTUALLY exists on S3.
+ *
+ * The name the slug convention predicts is only a first guess: plenty of
+ * folders were named before that convention (or from the recording's filename
+ * rather than the agenda title), so e.g. an agenda titled "Lina Ejdaa" can sit
+ * in `shows/2026-07-31-leena/`. The date prefix, though, comes from the agenda
+ * record itself and is the one part that doesn't drift — so when the guess
+ * misses, list `shows/` and take the folder starting with that date.
+ *
+ * Returns null when nothing matches. Still fully server-derived: a caller
+ * never names the folder, so this can only ever resolve to a real folder
+ * belonging to that show's own date.
  */
-function expectedShowVideoKey(show: Pick<AgendaShow, 'date' | 'title'>): string {
-  return `shows/${show.date}-${slugify(show.title)}/video.mp4`;
-}
+async function findShowFolder(show: Pick<AgendaShow, 'date' | 'title'>): Promise<string | null> {
+  const guess = `shows/${show.date}-${slugify(show.title)}/`;
+  if ((await objectInfo(`${guess}video.mp4`)).exists) return guess;
 
-// Same folder, the audio archive's fixed name — see worker/src/services/storage-layout.ts's
-// showAudioKey, which is what wrote it there in the first place.
-function expectedShowAudioKey(show: Pick<AgendaShow, 'date' | 'title'>): string {
-  return `shows/${show.date}-${slugify(show.title)}/audio.m4a`;
+  const listing = await browse('shows/');
+  const matches = listing.folders.filter((f) => f.name.startsWith(show.date));
+  // Ambiguous (two shows the same day) — refuse rather than adopt the wrong
+  // recording. The operator can still upload explicitly.
+  if (matches.length !== 1) return null;
+  return matches[0].key;
 }
 
 export const uploadsRouter = router({
@@ -486,13 +496,16 @@ export const uploadsRouter = router({
         const show = await getArchiveShow(input.showId);
         if (!show) return { exists: false as const };
 
-        const videoKey = expectedShowVideoKey(show);
+        const folder = await findShowFolder(show);
+        if (!folder) return { exists: false as const };
+
+        const videoKey = `${folder}video.mp4`;
         const info = await objectInfo(videoKey);
         if (!info.exists) return { exists: false as const };
 
         // Reported so the "adopt" panel can say upfront whether the audio
         // archive will come along with it — adoptArchive does the same check.
-        const audioInfo = await objectInfo(expectedShowAudioKey(show));
+        const audioInfo = await objectInfo(`${folder}audio.m4a`);
 
         return { exists: true as const, videoKey, videoSize: info.size, hasAudio: audioInfo.exists };
       } catch (err) {
@@ -532,13 +545,18 @@ export const uploadsRouter = router({
         const show = await getArchiveShow(input.showId);
         if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
 
-        const videoS3Key = expectedShowVideoKey(show);
+        const folder = await findShowFolder(show);
+        if (!folder) {
+          throw new TRPCError({ code: 'NOT_FOUND', message: 'No archive folder found on S3 for this show' });
+        }
+
+        const videoS3Key = `${folder}video.mp4`;
         const info = await objectInfo(videoS3Key);
         if (!info.exists) {
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No file found at the expected S3 location' });
         }
 
-        const audioS3Key = expectedShowAudioKey(show);
+        const audioS3Key = `${folder}audio.m4a`;
         const audioInfo = await objectInfo(audioS3Key);
 
         const upload = await createUpload(db, {
