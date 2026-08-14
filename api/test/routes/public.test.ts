@@ -17,7 +17,7 @@ import { getUploadWithJobs } from '../../src/db/queries';
 import { createDownloadPresignedUrl, objectInfo } from '../../src/services/s3';
 import { getArchiveShow } from '../../src/services/shows-api';
 import { findShowFolder } from '../../src/services/show-folder';
-import { resolveRecording } from '../../src/routes/public';
+import { resolveRecording, resolveShowFile } from '../../src/routes/public';
 
 const upload = (over: Record<string, unknown> = {}) =>
   ({
@@ -161,5 +161,67 @@ describe('resolveRecording', () => {
 
     expect(res.status).toBe(500);
     expect(JSON.stringify(res)).not.toContain('connection refused');
+  });
+});
+
+// resolveShowFile backs both the redirect route and the /url JSON route the
+// playout stack consumes, so its behaviour is worth pinning down directly.
+describe('resolveShowFile', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.mocked(createDownloadPresignedUrl).mockImplementation(
+      async (k: string) => `https://signed.example/${k}?sig=abc`
+    );
+    vi.mocked(objectInfo).mockResolvedValue({ exists: true, size: 1 });
+  });
+
+  it('signs the audio key for a valid folder', async () => {
+    const res = await resolveShowFile('2026-07-17-oko-stellar', 'audio');
+    expect(res.status).toBe(302);
+    expect(res).toHaveProperty('url');
+    expect(vi.mocked(createDownloadPresignedUrl)).toHaveBeenCalledWith(
+      'shows/2026-07-17-oko-stellar/audio.m4a'
+    );
+  });
+
+  it('signs the video key for a valid folder', async () => {
+    const res = await resolveShowFile('2026-07-17-oko-stellar', 'video');
+    expect(res.status).toBe(302);
+    expect(vi.mocked(createDownloadPresignedUrl)).toHaveBeenCalledWith(
+      'shows/2026-07-17-oko-stellar/video.mp4'
+    );
+  });
+
+  it('404s without signing when the object is absent', async () => {
+    vi.mocked(objectInfo).mockResolvedValue({ exists: false, size: null });
+    const res = await resolveShowFile('2026-07-17-oko-stellar', 'audio');
+    expect(res.status).toBe(404);
+    expect(vi.mocked(createDownloadPresignedUrl)).not.toHaveBeenCalled();
+  });
+
+  // The folder is caller-supplied, so it must never be able to address a key
+  // outside shows/ — no traversal, no other prefix.
+  it.each([
+    '../etc',
+    'a/b',
+    'has.dot',
+    'Upper',
+    '',
+    'trailing-',
+  ])('rejects %j without touching S3', async (folder) => {
+    const res = await resolveShowFile(folder, 'audio');
+    expect(res.status).toBe(404);
+    expect(vi.mocked(objectInfo)).not.toHaveBeenCalled();
+    expect(vi.mocked(createDownloadPresignedUrl)).not.toHaveBeenCalled();
+  });
+
+  it('returns an opaque 500 when signing fails', async () => {
+    vi.mocked(createDownloadPresignedUrl).mockRejectedValue(
+      new Error('minio credentials rejected')
+    );
+    const res = await resolveShowFile('2026-07-17-oko-stellar', 'audio');
+    expect(res.status).toBe(500);
+    expect(JSON.stringify(res)).not.toContain('credentials rejected');
   });
 });

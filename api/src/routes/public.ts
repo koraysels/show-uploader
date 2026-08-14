@@ -133,6 +133,34 @@ export async function resolveShowFile(
  * YouTube and MixCloud, and the agenda site that renders them has no login.
  */
 for (const which of ['video', 'audio'] as const) {
+  /**
+   * The signed URL as JSON, instead of redirecting to it.
+   *
+   * For machine consumers that cannot follow the redirect safely. Liquidsoap
+   * is the case that forced this: it probes an unknown URL with HEAD to work
+   * out the file type, follows the 302 to the presigned target, and gets 403
+   * — a SigV4 presigned URL is signed for GET, so HEAD is not covered by the
+   * signature. With no content type it cannot infer an extension, saves the
+   * download with none, and every decoder then refuses the file by
+   * extension. Handing over the signed URL directly removes the redirect it
+   * was tripping on: the URL is used once, immediately, so its expiry never
+   * matters.
+   *
+   * Same resolution path as the redirect form below — this only changes how
+   * the result is delivered, so the two can't diverge.
+   */
+  publicRouter.get(`/shows/:folder/${which}/url`, async (req, res) => {
+    const result = await resolveShowFile(req.params.folder, which);
+    if (result.status !== 302) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    // The URL inside is short-lived, so this response must not be cached
+    // either — same reasoning as the redirect.
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ url: result.url });
+  });
+
   publicRouter.get(`/shows/:folder/${which}`, async (req, res) => {
     const result = await resolveShowFile(req.params.folder, which);
     if (result.status !== 302) {
