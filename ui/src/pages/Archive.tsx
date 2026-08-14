@@ -275,6 +275,33 @@ function DownloadLink({ objectKey, label }: { objectKey: string | null; label: s
   );
 }
 
+/**
+ * Copies the permanent /api/public/recordings/:uploadId link — the one
+ * that's actually stable (redirects to a freshly-signed URL on every hit,
+ * never expires), unlike a presigned URL copied straight from the storage
+ * browser. Same origin the app itself is served from; no signing needed.
+ */
+function CopyPermanentLink({ uploadId, kind }: { uploadId: string; kind: 'video' | 'audio' }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const copy = () => {
+    const url = `${window.location.origin}/api/public/recordings/${uploadId}/${kind}`;
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setFailed(false);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => setFailed(true)
+    );
+  };
+  return (
+    <MuiLink component="button" onClick={copy} color={ROLE.navigate} sx={linkSx}>
+      {copied ? 'copied ✓' : failed ? 'copy failed' : 'copy link'}
+    </MuiLink>
+  );
+}
+
 // Inline playback of the archived recording. Native controls give scrubbing for
 // free: the presigned S3 GET honours range requests and the remuxed MP4 carries
 // its moov atom up front (+faststart), so seeking doesn't pull the whole file.
@@ -570,7 +597,9 @@ function ArchiveCard({
 
           <Field label="downloads">
             <DownloadLink objectKey={upload.video_s3_key} label="video" />
+            {upload.video_s3_key && <CopyPermanentLink uploadId={upload.id} kind="video" />}
             <AudioState upload={upload} as="link" />
+            {upload.audio_s3_key && <CopyPermanentLink uploadId={upload.id} kind="audio" />}
             <AudioState upload={upload} as="action" />
           </Field>
 
