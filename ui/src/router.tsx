@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   createRootRoute,
   createRoute,
@@ -11,6 +11,9 @@ import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Button from '@mui/material/Button';
 import Divider from '@mui/material/Divider';
+import IconButton from '@mui/material/IconButton';
+import Menu from '@mui/material/Menu';
+import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { useAuth } from './auth/useAuth';
@@ -33,6 +36,7 @@ function AuthedLayout() {
   const { user, loading, userManager } = useAuth();
   const authCheck = useAuthCheck(!!user);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const [navAnchor, setNavAnchor] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!loading && !user) void userManager.signinRedirect();
@@ -82,6 +86,15 @@ function AuthedLayout() {
     '&:hover': { backgroundColor: 'transparent', color: c.ink, textDecoration: 'none' },
   };
   const navActiveSx = { ...navSx, color: c.paper, backgroundColor: c.ink, '&:hover': { backgroundColor: c.inkHover, color: c.paper } };
+
+  const navLinks = [
+    { to: '/', label: 'upload' },
+    { to: '/history', label: 'jobs queue' },
+    { to: '/archive', label: 'archive' },
+    { to: '/storage', label: 'storage' },
+    { to: '/attach', label: 'attach recording' },
+  ] as const;
+  const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
 
   return (
     <Box sx={{ minHeight: '100vh' }}>
@@ -137,23 +150,44 @@ function AuthedLayout() {
             show uploader
           </Button>
 
-          <Stack component="nav" direction="row" spacing={0.25} sx={{ alignItems: 'center' }}>
-            <Button component={Link} to="/" variant="text" sx={pathname === '/' ? navActiveSx : navSx}>
-              upload
-            </Button>
-            <Button component={Link} to="/history" variant="text" sx={pathname.startsWith('/history') ? navActiveSx : navSx}>
-              jobs queue
-            </Button>
-            <Button component={Link} to="/archive" variant="text" sx={pathname.startsWith('/archive') ? navActiveSx : navSx}>
-              archive
-            </Button>
-            <Button component={Link} to="/storage" variant="text" sx={pathname.startsWith('/storage') ? navActiveSx : navSx}>
-              storage
-            </Button>
-            <Button component={Link} to="/attach" variant="text" sx={pathname.startsWith('/attach') ? navActiveSx : navSx}>
-              attach recording
-            </Button>
+          {/* Full row on tablet+; five tabs (since attach recording joined)
+              no longer fit a phone's width without wrapping mid-header, so
+              phones get a hamburger instead below. */}
+          <Stack
+            component="nav"
+            direction="row"
+            spacing={0.25}
+            sx={{ alignItems: 'center', display: { xs: 'none', sm: 'flex' } }}
+          >
+            {navLinks.map((link) => (
+              <Button key={link.to} component={Link} to={link.to} variant="text" sx={isActive(link.to) ? navActiveSx : navSx}>
+                {link.label}
+              </Button>
+            ))}
           </Stack>
+
+          <IconButton
+            aria-label="menu"
+            onClick={(e) => setNavAnchor(e.currentTarget)}
+            sx={{ display: { xs: 'inline-flex', sm: 'none' }, color: c.ink }}
+          >
+            <Box component="svg" viewBox="0 0 24 24" sx={{ width: 22, height: 22 }} fill="none" aria-hidden>
+              <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth={2} strokeLinecap="round" />
+            </Box>
+          </IconButton>
+          <Menu anchorEl={navAnchor} open={!!navAnchor} onClose={() => setNavAnchor(null)}>
+            {navLinks.map((link) => (
+              <MenuItem
+                key={link.to}
+                component={Link}
+                to={link.to}
+                selected={isActive(link.to)}
+                onClick={() => setNavAnchor(null)}
+              >
+                {link.label}
+              </MenuItem>
+            ))}
+          </Menu>
 
           {/* Identity block drops to its own full-width line on phones instead
               of squeezing the nav off the edge. */}
