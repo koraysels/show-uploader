@@ -41,7 +41,17 @@ async function resolveByShowRecord(showId: string, which: 'video' | 'audio'): Pr
   if (!show?.date) return { status: 404, error: 'Not found' };
 
   const listing = await browse('shows/');
-  const sameDay = listing.folders.filter((f) => f.name.startsWith(show.date));
+  // ±1 day, not the billed date alone: a show billed for one date is often
+  // recorded the evening before (see show-slug.ts), so its folder can carry
+  // either date — "Palmbomen II" is billed 2026-08-07 and filed under
+  // 2026-08-08. Title scoring below is what actually picks between them.
+  const day = (offset: number) => {
+    const d = new Date(`${show.date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
+  const dates = [show.date, day(-1), day(1)];
+  const sameDay = listing.folders.filter((f) => dates.some((d) => f.name.startsWith(d)));
   if (sameDay.length === 0) return { status: 404, error: 'Not found' };
 
   // Several shows air on the same date, so the date alone doesn't identify a
@@ -52,7 +62,8 @@ async function resolveByShowRecord(showId: string, which: 'video' | 'audio'): Pr
     s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
   const showWords = words(show.title);
   const score = (folderName: string) => {
-    const fw = words(folderName.slice(show.date.length));
+    // Strip the leading YYYY-MM-DD, whichever of the candidate dates it is.
+    const fw = words(folderName.replace(/^\d{4}-\d{2}-\d{2}-?/, ''));
     return fw.filter((w) => showWords.some((s) => s.startsWith(w) || w.startsWith(s))).length;
   };
 
