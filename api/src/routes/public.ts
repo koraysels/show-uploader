@@ -41,12 +41,31 @@ async function resolveByShowRecord(showId: string, which: 'video' | 'audio'): Pr
   if (!show?.date) return { status: 404, error: 'Not found' };
 
   const listing = await browse('shows/');
-  const matches = listing.folders.filter((f) => f.name.startsWith(show.date));
-  // Two shows on one date can't be told apart from the record alone; refuse
-  // rather than hand out someone else's recording.
-  if (matches.length !== 1) return { status: 404, error: 'Not found' };
+  const sameDay = listing.folders.filter((f) => f.name.startsWith(show.date));
+  if (sameDay.length === 0) return { status: 404, error: 'Not found' };
 
-  const key = `${matches[0].key}${which === 'video' ? 'video.mp4' : 'audio.m4a'}`;
+  // Several shows air on the same date, so the date alone doesn't identify a
+  // folder. Folder names come from the recording's filename rather than the
+  // agenda title ("Lina Ejdaa" sits in 2026-07-31-leena), so compare on shared
+  // word-stems instead of requiring the slug to match.
+  const words = (s: string) =>
+    s.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2);
+  const showWords = words(show.title);
+  const score = (folderName: string) => {
+    const fw = words(folderName.slice(show.date.length));
+    return fw.filter((w) => showWords.some((s) => s.startsWith(w) || w.startsWith(s))).length;
+  };
+
+  const ranked = sameDay
+    .map((f) => ({ folder: f, score: score(f.name) }))
+    .sort((a, b) => b.score - a.score);
+  // A tie (including everything scoring zero) can't be resolved from the
+  // record alone — refuse rather than hand out another show's recording.
+  if (ranked[0].score === 0 || (ranked[1] && ranked[1].score === ranked[0].score)) {
+    return { status: 404, error: 'Not found' };
+  }
+
+  const key = `${ranked[0].folder.key}${which === 'video' ? 'video.mp4' : 'audio.m4a'}`;
   if (!(await objectInfo(key)).exists) return { status: 404, error: 'Not available' };
 
   return { status: 302, url: await createDownloadPresignedUrl(key) };
@@ -65,11 +84,18 @@ export async function resolveRecording(
     upload = null;
   }
 
-  // Only serve what the archive job actually finished. Before that the video key
-  // still points at an unprocessed recording — wrong container, untrimmed, not
-  // loudness-matched — and the audio archive does not exist at all.
-  const archived = upload?.jobs?.some((j) => j.platform === 'archive' && j.status === 'done');
   const key = which === 'video' ? upload?.video_s3_key : upload?.audio_s3_key;
+
+  // Only serve what the archive job actually finished: before that the video
+  // key still points at an unprocessed recording — wrong container, untrimmed,
+  // not loudness-matched — and the audio archive doesn't exist at all.
+  //
+  // The key itself proves that, and the job row doesn't: `shows/` is the
+  // published layout, written only when the archive job completes, whereas a
+  // job is a transient work record an operator may delete once it's done.
+  // Checking the job instead took every recording offline the moment its
+  // finished job was cleared from the queue.
+  const archived = !!key && key.startsWith('shows/');
 
   if (!upload || !archived || !key) {
     // No usable upload row — resolve straight from the archive record instead.
