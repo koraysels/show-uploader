@@ -38,6 +38,7 @@ import SignedVideoPlayer from '../components/SignedVideoPlayer';
 import { humanSize } from '../format';
 import { useSignObjectOnDemand } from '../api/hooks';
 import type { UploadWithJobs, AgendaShow } from '../api/client';
+import { platformOfLabel } from '../components/platforms';
 import { c, ROLE, LABEL_SX } from '../theme';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -47,7 +48,9 @@ const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 
 const AGENDA_BASE = import.meta.env.VITE_POCKETBASE_URL ?? 'https://agenda.coming-soon.space';
 
 type Platform = 'youtube' | 'mixcloud';
-const LABEL_TO_ID: Record<string, Platform> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
+// Label casing varies in the agenda ("Youtube", "Mixcloud"), so resolve the
+// platform rather than matching the string.
+const toPlatform = (label: string) => platformOfLabel(label) as Platform | null;
 
 // Agenda descriptions are HTML (the record is edited with a rich-text field).
 // The sync preview was printing the tags literally — "<p>Monthly show…</p>" —
@@ -102,10 +105,10 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
   const show = useShow(showId, true);
   const sync = useSyncPlatforms();
   const setPublic = usePlatformSetPublic();
-  const ytLink = links.find((l) => l.label === 'YouTube');
+  const ytLink = links.find((l) => toPlatform(l.label) === 'youtube');
   const ytStatus = useYoutubeStatus(ytLink?.url ?? '', !!ytLink);
 
-  const present = links.map((l) => LABEL_TO_ID[l.label]).filter(Boolean) as Platform[];
+  const present = links.map((l) => toPlatform(l.label)).filter(Boolean) as Platform[];
   const [selected, setSelected] = useState<Platform[]>(present);
   const toggle = (p: Platform) => setSelected((s) => (s.includes(p) ? s.filter((x) => x !== p) : [...s, p]));
   const results = sync.data?.results;
@@ -156,7 +159,7 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
 
           <Stack spacing={0.75}>
             {links.map((l) => {
-              const p = LABEL_TO_ID[l.label];
+              const p = toPlatform(l.label);
               if (!p) return null;
               const r = results?.[p];
               return (
@@ -545,7 +548,7 @@ function ArchiveCard({
   const unpublish = useUnpublishRecord();
   // Platform links come off the agenda record, not off finished platform jobs
   // — the record outlives them, and it's what the website actually renders.
-  const links = show.mediaLinks.filter((l) => l.label === 'YouTube' || l.label === 'MixCloud');
+  const links = show.mediaLinks.filter((l) => toPlatform(l.label) !== null);
   const archiveVideo = show.mediaLinks.find((l) => l.label === 'cs-archive-video');
   const archiveAudio = show.mediaLinks.find((l) => l.label === 'cs-archive-audio');
   // The archived file lives on S3 whether or not a job row survives, so read
@@ -627,7 +630,7 @@ function ArchiveCard({
           <Field label="platform links" stacked>
             {links.length > 0 ? (
               links.map((l) => (
-                <PublishedLink key={l.label} platform={LABEL_TO_ID[l.label] ?? l.label} url={l.url} />
+                <PublishedLink key={l.label} platform={toPlatform(l.label) ?? l.label} url={l.url} />
               ))
             ) : (
               <Typography variant="body2" color="text.disabled">

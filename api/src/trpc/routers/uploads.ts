@@ -60,6 +60,7 @@ import {
   resolveGenreIds,
   getArchiveShow,
   listArchivedShows,
+  platformOfLabel,
   type AgendaShow,
 } from '../../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../../services/platform-metadata';
@@ -213,6 +214,25 @@ export const uploadsRouter = router({
   create: protectedProcedure.input(CreateUploadSchema).mutation(async ({ input: data }) => {
     const jingleS3Key = env.JINGLE_S3_KEY ?? null;
     try {
+      // Refuse to publish somewhere this show already is. The form hides those
+      // platforms, but that's a view of the record as it looked when the page
+      // loaded — someone can add a link in the agenda meanwhile, or an old tab
+      // can submit. Publishing twice creates a second video or cloudcast that
+      // has to be taken down by hand, so it's worth a check the UI can't skip.
+      if (data.platforms.length > 0) {
+        const show = await getArchiveShow(data.showId);
+        const already = new Set(
+          (show?.mediaLinks ?? []).map((l) => platformOfLabel(l.label)).filter(Boolean)
+        );
+        const duplicate = data.platforms.filter((p) => already.has(p));
+        if (duplicate.length > 0) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: `This show is already published to ${duplicate.join(' and ')}. Remove the existing link on the agenda record first if you mean to publish again.`,
+          });
+        }
+      }
+
       const upload = await createUpload(db, {
         show_id: data.showId,
         title: data.title,
@@ -561,7 +581,7 @@ export const uploadsRouter = router({
         });
 
         for (const link of show.mediaLinks) {
-          const platform = link.label === 'YouTube' ? 'youtube' : link.label === 'MixCloud' ? 'mixcloud' : null;
+          const platform = platformOfLabel(link.label);
           if (!platform) continue;
           const job = await createPlatformJob(db, { upload_id: upload.id, platform });
           await updateJobStatus(db, job.id, { status: 'done', result_url: link.url });

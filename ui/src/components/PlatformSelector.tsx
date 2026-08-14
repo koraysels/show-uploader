@@ -13,7 +13,7 @@ import { usePlatformUpdate, usePlatformSetPublic, usePlatformRemove, useYoutubeS
 import ConfirmAction from './ConfirmAction';
 import PlatformIcon from './PlatformIcon';
 import { c, ROLE } from '../theme';
-import { PLATFORMS, PlatformLink } from './platforms';
+import { PLATFORMS, PlatformLink, platformOfLabel } from './platforms';
 
 // Play button to preview the configured jingle (lazy-fetches a presigned URL).
 function JinglePreview() {
@@ -214,20 +214,22 @@ export default function PlatformSelector({
   onChange,
   onJingleChange,
 }: Props) {
-  const linkFor = (label: string) => existingLinks.find((l) => l.label === label);
+  // Matched on the platform the label refers to, not the label's exact
+  // spelling — the agenda carries "Youtube" and "Mixcloud" too.
+  const linkFor = (id: string) => existingLinks.find((l) => platformOfLabel(l.label) === id);
   const toggle = (id: string) => {
     onChange(platforms.includes(id) ? platforms.filter((p) => p !== id) : [...platforms, id]);
   };
 
   // Platforms with no existing link yet → re-publishable via the toggle.
-  const selectable = PLATFORMS.filter((p) => !linkFor(p.label));
+  const selectable = PLATFORMS.filter((p) => !linkFor(p.id));
 
   return (
     <Stack spacing={2}>
       {existingLinks.length > 0 && (
         <Stack spacing={1}>
           {PLATFORMS.map((p) => {
-            const link = linkFor(p.label);
+            const link = linkFor(p.id);
             if (!link) return null;
             return <PublishedPlatform key={p.id} id={p.id} label={p.label} url={link.url} showId={showId} meta={meta} />;
           })}
