@@ -128,12 +128,57 @@ export async function resolveRecording(
 }
 
 /**
+ * A show folder name: exactly what showSlug() produces, and nothing that could
+ * step outside `shows/`. No slashes, no dots, so no traversal and no way to
+ * address another prefix.
+ */
+const FOLDER = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/**
+ * Resolve a recording from the folder named in the URL.
+ *
+ * The durable form: the agenda record stores the S3 folder as part of the link
+ * itself, so nothing has to be looked up or inferred at read time. The
+ * uploadId form below has to find the key — through an upload row that may
+ * have been deleted, or failing that by matching folders on date and title —
+ * and that inference is exactly what kept breaking.
+ *
+ * The folder is a caller-supplied string, so it is pattern-checked and can
+ * only ever name `shows/<folder>/{video.mp4,audio.m4a}`.
+ */
+export async function resolveShowFile(
+  folder: string,
+  which: 'video' | 'audio'
+): Promise<RecordingResult> {
+  if (!FOLDER.test(folder)) return { status: 404, error: 'Not found' };
+
+  const key = `shows/${folder}/${which === 'video' ? 'video.mp4' : 'audio.m4a'}`;
+  try {
+    if (!(await objectInfo(key)).exists) return { status: 404, error: 'Not available' };
+    return { status: 302, url: await createDownloadPresignedUrl(key) };
+  } catch (err) {
+    console.error('public show file lookup failed:', err);
+    return { status: 500, error: 'Failed to resolve recording' };
+  }
+}
+
+/**
  * Permanent, unauthenticated links to a published recording.
  *
  * Deliberately public: these are the same recordings already published to
  * YouTube and MixCloud, and the agenda site that renders them has no login.
  */
 for (const which of ['video', 'audio'] as const) {
+  publicRouter.get(`/shows/:folder/${which}`, async (req, res) => {
+    const result = await resolveShowFile(req.params.folder, which);
+    if (result.status !== 302) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+    res.setHeader('Cache-Control', 'no-store');
+    res.redirect(302, result.url);
+  });
+
   publicRouter.get(`/recordings/:uploadId/${which}`, async (req, res) => {
     const result = await resolveRecording(req.params.uploadId, which);
     if (result.status !== 302) {

@@ -113,7 +113,7 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'done', { result_url: audioKey, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 100 });
 
-    await publishArchiveLinks(uploadId);
+    await publishArchiveLinks(uploadId, audioKey);
 
     return JSON.stringify({ uploadId, platform: 'archive', key: audioKey });
   } catch (err) {
@@ -143,7 +143,7 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
  * PocketBase hiccup must not fail the job or trigger a retry that would redo the
  * whole transcode.
  */
-async function publishArchiveLinks(uploadId: string): Promise<void> {
+async function publishArchiveLinks(uploadId: string, archiveKey: string): Promise<void> {
   if (!env.APP_PUBLIC_URL) {
     console.warn('APP_PUBLIC_URL unset — skipping archive links on the agenda record');
     return;
@@ -152,7 +152,12 @@ async function publishArchiveLinks(uploadId: string): Promise<void> {
     const row = await getUploadRow(uploadId);
     if (!row?.show_id) return;
 
-    const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${uploadId}`;
+    // Keyed by the show's own S3 folder, which this job just wrote and so
+    // knows exactly. That makes the stored link self-describing: resolving it
+    // needs no upload row and no guessing at which folder belongs to which
+    // show — the two things that kept taking archived recordings offline.
+    const folder = archiveKey.split('/')[1];
+    const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/shows/${folder}`;
     await finalizeArchiveRecord(row.show_id, {
       mediaLinks: [
         { label: 'cs-archive-video', type: 'cs-archive-video', url: `${base}/video` },

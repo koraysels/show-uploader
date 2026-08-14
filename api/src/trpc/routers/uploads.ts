@@ -452,30 +452,38 @@ export const uploadsRouter = router({
       throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'APP_PUBLIC_URL is not configured' });
     }
     try {
-      // Keyed by the agenda record's own id, not the upload's: an upload row
-      // is disposable (deleting a finished job takes it with it) and a link
-      // built on one dies with it, while the record id is permanent. The
-      // public endpoint resolves either.
+      // Writes the show's S3 folder into the link itself, so resolving it
+      // later needs no upload row and no inference. Finding that folder is
+      // the inference — done once, here, and stored; the worker knows it
+      // outright for everything archived from now on.
       const archived = await listArchivedShows();
-      const uploads = archived.map((s) => ({ id: s.id, show_id: s.id }));
       let updated = 0;
-      for (const u of uploads) {
-        const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${u.id}`;
+      const unresolved: string[] = [];
+      for (const show of archived) {
+        const folder = await findShowFolder(show);
+        if (!folder) {
+          // Nothing to point at that we can be sure of — leave the record's
+          // existing link alone rather than overwrite it with a wrong guess.
+          unresolved.push(show.title);
+          continue;
+        }
+        const name = folder.replace(/^shows\//, '').replace(/\/$/, '');
+        const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/shows/${name}`;
         try {
-          await updateArchiveRecord(u.show_id, {
+          await updateArchiveRecord(show.id, {
             mediaLinks: [
               { label: 'cs-archive-video', type: 'cs-archive-video', url: `${base}/video` },
               { label: 'cs-archive-audio', type: 'cs-archive-audio', url: `${base}/audio` },
             ],
           });
-          await removeArchiveMediaLink(u.show_id, 'Recording');
-          await removeArchiveMediaLink(u.show_id, 'Audio');
+          await removeArchiveMediaLink(show.id, 'Recording');
+          await removeArchiveMediaLink(show.id, 'Audio');
           updated++;
         } catch (err) {
-          console.error(`archiveLinksBackfill: failed for upload ${u.id} (show ${u.show_id}):`, err);
+          console.error(`archiveLinksBackfill: failed for show ${show.id}:`, err);
         }
       }
-      return { updated, total: uploads.length };
+      return { updated, total: archived.length, unresolved };
     } catch (err) {
       internal(err, 'Failed to backfill archive links:', 'Failed to backfill archive links');
     }

@@ -166,14 +166,15 @@ describe('archive video remux', () => {
 
   describe('agenda write-back', () => {
     // Permanent links, not presigned ones: PocketBase stores these forever and a
-    // signed URL would be dead within hours.
+    // signed URL would be dead within hours. Keyed by the show's S3 folder —
+    // which this job just wrote — so resolving one later needs no upload row.
     it('attaches stable recording links to the agenda record', async () => {
       await processArchive(makeJob());
 
       expect(vi.mocked(finalizeArchiveRecord)).toHaveBeenCalledWith('show-1', {
         mediaLinks: [
-          { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/recordings/up-1/video' },
-          { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/recordings/up-1/audio' },
+          { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/shows/rec/video' },
+          { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/shows/rec/audio' },
         ],
       });
     });
