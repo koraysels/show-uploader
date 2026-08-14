@@ -133,6 +133,12 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
  * within hours, and PocketBase stores these forever. /api/public redirects to a
  * freshly signed URL per request, so the stored link never rots.
  *
+ * `type` matches `label` exactly (`cs-archive-video`/`cs-archive-audio`), not
+ * `'download'` — radio-scheduler's addArchiveToPlaylists() gates Liquidsoap
+ * playlist eligibility on `type === 'cs-archive-audio'` specifically, treating
+ * `type` (not the free-text label) as the controlled vocabulary. See
+ * cursor-pointer/radio-sheduler#9, which also retyped every existing record.
+ *
  * Best-effort by design — the archive itself is already safely on S3, so a
  * PocketBase hiccup must not fail the job or trigger a retry that would redo the
  * whole transcode.
@@ -149,8 +155,8 @@ async function publishArchiveLinks(uploadId: string): Promise<void> {
     const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${uploadId}`;
     await finalizeArchiveRecord(row.show_id, {
       mediaLinks: [
-        { label: 'cs-archive-video', type: 'download', url: `${base}/video` },
-        { label: 'cs-archive-audio', type: 'download', url: `${base}/audio` },
+        { label: 'cs-archive-video', type: 'cs-archive-video', url: `${base}/video` },
+        { label: 'cs-archive-audio', type: 'cs-archive-audio', url: `${base}/audio` },
       ],
     });
   } catch (err) {

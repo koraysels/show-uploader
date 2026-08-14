@@ -424,6 +424,11 @@ export const uploadsRouter = router({
    * old writer — would otherwise carry both forever. removeArchiveMediaLink is
    * a no-op when the label isn't present, so this is safe to run any number of
    * times on records that never had the old labels.
+   *
+   * `type` matches `label` (not `'download'`) for the same reason the worker's
+   * writer does — see cursor-pointer/radio-sheduler#9, which gates Liquidsoap
+   * playlist eligibility on `type === 'cs-archive-audio'` specifically. Also
+   * doubles as the retype for any record whose link predates that PR.
    */
   archiveLinksBackfill: protectedProcedure.mutation(async () => {
     if (!env.APP_PUBLIC_URL) {
@@ -437,8 +442,8 @@ export const uploadsRouter = router({
         try {
           await updateArchiveRecord(u.show_id, {
             mediaLinks: [
-              { label: 'cs-archive-video', type: 'download', url: `${base}/video` },
-              { label: 'cs-archive-audio', type: 'download', url: `${base}/audio` },
+              { label: 'cs-archive-video', type: 'cs-archive-video', url: `${base}/video` },
+              { label: 'cs-archive-audio', type: 'cs-archive-audio', url: `${base}/audio` },
             ],
           });
           await removeArchiveMediaLink(u.show_id, 'Recording');
