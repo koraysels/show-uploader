@@ -50,7 +50,7 @@ function resolve(proc: string, input: unknown): unknown {
           ...shows.find((s) => s.id === 'show_breakfast')!,
           mediaLinks: [
             ...shows.find((s) => s.id === 'show_breakfast')!.mediaLinks,
-            { label: 'cs-archive-video', type: 'download', url: 'https://uploader.test/api/public/recordings/x/video' },
+            { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/recordings/x/video' },
           ],
         },
       ];
