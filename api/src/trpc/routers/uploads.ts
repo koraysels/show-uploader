@@ -59,6 +59,7 @@ import {
   removeArchiveMediaLink,
   resolveGenreIds,
   getArchiveShow,
+  listArchivedShows,
   type AgendaShow,
 } from '../../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../../services/platform-metadata';
@@ -451,7 +452,12 @@ export const uploadsRouter = router({
       throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'APP_PUBLIC_URL is not configured' });
     }
     try {
-      const uploads = await listArchivedUploads(db);
+      // Keyed by the agenda record's own id, not the upload's: an upload row
+      // is disposable (deleting a finished job takes it with it) and a link
+      // built on one dies with it, while the record id is permanent. The
+      // public endpoint resolves either.
+      const archived = await listArchivedShows();
+      const uploads = archived.map((s) => ({ id: s.id, show_id: s.id }));
       let updated = 0;
       for (const u of uploads) {
         const base = `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/recordings/${u.id}`;
