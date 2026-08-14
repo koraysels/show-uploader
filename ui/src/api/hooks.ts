@@ -175,9 +175,9 @@ export function useStorageOverview() {
 }
 
 // One level of the bucket. Keyed by prefix, so stepping back is instant.
-export function useBrowseStorage(prefix: string) {
+export function useBrowseStorage(prefix: string, enabled = true) {
   const trpc = useTRPC();
-  return useQuery(trpc.storage.browse.queryOptions({ prefix }, { staleTime: 30_000 }));
+  return useQuery(trpc.storage.browse.queryOptions({ prefix }, { staleTime: 30_000, enabled }));
 }
 
 /**

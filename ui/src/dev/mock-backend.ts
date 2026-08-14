@@ -51,12 +51,23 @@ function resolve(proc: string, input: unknown): unknown {
             { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/recordings/show_breakfast/audio' },
           ],
         },
+        // No entry in the `uploads` fixture: the archived-but-no-job-row case.
+        {
+          ...shows.find((s) => s.id === 'show_breakfast')!,
+          id: 'show_orphan',
+          title: 'Orphaned Archive (no job row)',
+          mediaLinks: [
+            { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo9' },
+            { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/shows/2026-07-31-zonderdak/video' },
+            { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/shows/2026-07-31-zonderdak/audio' },
+          ],
+        },
         {
           ...shows.find((s) => s.id === 'show_zonderdak')!,
           mediaLinks: [
             { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' },
-            { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/recordings/show_zonderdak/video' },
-            { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/recordings/show_zonderdak/audio' },
+            { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/shows/2026-07-31-zonderdak/video' },
+            { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/shows/2026-07-31-zonderdak/audio' },
           ],
         },
       ];
@@ -170,6 +181,12 @@ function resolve(proc: string, input: unknown): unknown {
           { key: 'incoming/', name: 'incoming', bytes: null, modified: null },
           { key: 'shows/', name: 'shows', bytes: null, modified: null },
           { key: 'jingles/', name: 'jingles', bytes: null, modified: null },
+        ] };
+      }
+      if (p === 'shows/2026-07-31-zonderdak/') {
+        return { prefix: p, truncated: false, folders: [], files: [
+          { key: `${p}video.mp4`, name: 'video.mp4', bytes: 2_600_000_000, modified: new Date().toISOString() },
+          { key: `${p}audio.m4a`, name: 'audio.m4a', bytes: 270_000_000, modified: new Date().toISOString() },
         ] };
       }
       if (p === 'shows/') {
