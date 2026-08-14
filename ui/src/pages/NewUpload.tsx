@@ -24,7 +24,7 @@ import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
-import { selectablePlatformCount } from '../components/platforms';
+import { selectablePlatformCount, publishedPlatforms } from '../components/platforms';
 import { PageLoading } from '../components/Skeleton';
 import TrimFields from '../components/TrimFields';
 import VideoPreview from '../components/VideoPreview';
@@ -230,8 +230,8 @@ export default function NewUpload() {
 
     // Re-publish smarts: pre-select only the platform(s) not yet up. If both are
     // already published, select NONE (never re-publish → duplicate).
-    const already = (selectedShow.mediaLinks ?? []).map((l) => LABEL_TO_PLATFORM[l.label]).filter(Boolean);
-    setPlatforms(ALL_PLATFORMS.filter((p) => !already.includes(p)));
+    const already = publishedPlatforms(selectedShow.mediaLinks ?? []);
+    setPlatforms(ALL_PLATFORMS.filter((p) => !already.has(p)));
   }, [selectedShow?.id]);
 
   // The AI description is a SUGGESTION (a button in the form), not an auto-
