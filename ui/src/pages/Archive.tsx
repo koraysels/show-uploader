@@ -28,6 +28,7 @@ import {
   useVideoInfo,
   useCompressVideo,
   useListArchivedShows,
+  useBrowseStorage,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
@@ -547,6 +548,14 @@ function ArchiveCard({
   const links = show.mediaLinks.filter((l) => l.label === 'YouTube' || l.label === 'MixCloud');
   const archiveVideo = show.mediaLinks.find((l) => l.label === 'cs-archive-video');
   const archiveAudio = show.mediaLinks.find((l) => l.label === 'cs-archive-audio');
+  // The archived file lives on S3 whether or not a job row survives, so read
+  // its size from the bucket like the downloads above do — reading it off the
+  // job row instead left this column blank for shows whose recording is
+  // plainly there and downloadable.
+  const folder = archiveVideo?.url.match(/\/api\/public\/shows\/([^/]+)\//)?.[1] ?? null;
+  const archivedFiles = useBrowseStorage(folder ? `shows/${folder}/` : '', !!folder);
+  const archivedVideoSize =
+    archivedFiles.data?.files.find((f) => f.name === 'video.mp4')?.bytes ?? null;
   // Only the remuxed MP4 plays in a browser; an upload still stored as MKV
   // stays download-only until its archive job has run.
   const playable = !!upload && /\.mp4$/i.test(upload.video_s3_key);
@@ -655,9 +664,37 @@ function ArchiveCard({
             )}
           </Field>
 
-          <Field label="source file">
+          <Field label="archived file">
             {upload ? (
               <SourceVideo upload={upload} />
+            ) : archivedVideoSize !== null ? (
+              // Same file the video download serves. Replace and shrink work
+              // through the job row, so they're absent until one is attached.
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+                <Typography variant="body2" sx={{ color: c.muted }}>
+                  {humanSize(archivedVideoSize)}
+                </Typography>
+                <Tooltip title="on s3 and downloadable. attach a recording to get replace, shrink and in-browser playback back — those work through this app's job row, which this show no longer has">
+                  <Box
+                    sx={{
+                      fontSize: '0.6875rem',
+                      '& a': {
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        minHeight: 32,
+                        color: c.link,
+                        textDecoration: 'underline',
+                        textUnderlineOffset: '2px',
+                      },
+                      '& a:hover': { color: c.ink },
+                    }}
+                  >
+                    <Link to="/upload/$showId" params={{ showId: show.id }}>
+                      attach
+                    </Link>
+                  </Box>
+                </Tooltip>
+              </Stack>
             ) : (
               // No job row. The archived files are fine — the downloads above
               // serve them — so say what's actually missing rather than
