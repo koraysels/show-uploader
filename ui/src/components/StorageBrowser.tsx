@@ -48,6 +48,21 @@ export default function StorageBrowser() {
       });
   };
 
+  // Same signing as `open`, just written to the clipboard instead of a new
+  // tab. `copiedKey` flips the label back after a couple seconds so a second
+  // copy of the same file still gives visible feedback.
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyLink = (key: string) => {
+    setSignError(null);
+    sign(key)
+      .then(({ url }) => {
+        void navigator.clipboard.writeText(url);
+        setCopiedKey(key);
+        setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 2000);
+      })
+      .catch((err: Error) => setSignError(err.message));
+  };
+
   // useDeleteObject's mutation state is shared across every row; tracking
   // which key is in flight is what keeps only that row's button showing it.
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
@@ -139,6 +154,13 @@ export default function StorageBrowser() {
                     sx={{ minHeight: 28, fontSize: '0.6875rem' }}
                   >
                     open
+                  </Button>
+                  <Button
+                    variant="text"
+                    onClick={() => copyLink(f.key)}
+                    sx={{ minHeight: 28, fontSize: '0.6875rem' }}
+                  >
+                    {copiedKey === f.key ? 'copied ✓' : 'copy link'}
                   </Button>
                   <ConfirmAction
                     label="delete"
