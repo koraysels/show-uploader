@@ -11,12 +11,12 @@ vi.mock('../../src/services/s3', () => ({
 // "no such record" so the upload-row tests below exercise only their own path;
 // the fallback's own behaviour is covered by its dedicated tests.
 vi.mock('../../src/services/shows-api', () => ({ getArchiveShow: vi.fn(async () => null) }));
-vi.mock('../../src/services/storage-browse', () => ({ browse: vi.fn(async () => ({ folders: [], files: [] })) }));
+vi.mock('../../src/services/show-folder', () => ({ findShowFolder: vi.fn(async () => null) }));
 
 import { getUploadWithJobs } from '../../src/db/queries';
 import { createDownloadPresignedUrl, objectInfo } from '../../src/services/s3';
 import { getArchiveShow } from '../../src/services/shows-api';
-import { browse } from '../../src/services/storage-browse';
+import { findShowFolder } from '../../src/services/show-folder';
 import { resolveRecording } from '../../src/routes/public';
 
 const upload = (over: Record<string, unknown> = {}) =>
@@ -37,7 +37,7 @@ describe('resolveRecording', () => {
     );
     vi.mocked(objectInfo).mockResolvedValue({ exists: true, size: 1 });
     vi.mocked(getArchiveShow).mockResolvedValue(null as any);
-    vi.mocked(browse).mockResolvedValue({ folders: [], files: [] } as any);
+    vi.mocked(findShowFolder).mockResolvedValue(null);
   });
 
   it('signs the video archive', async () => {
@@ -112,10 +112,7 @@ describe('resolveRecording', () => {
   it('falls back to the archive record when the upload lookup throws', async () => {
     vi.mocked(getUploadWithJobs).mockRejectedValue(new Error('invalid input syntax for type uuid'));
     vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31', title: 'Leena' } as any);
-    vi.mocked(browse).mockResolvedValue({
-      folders: [{ key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null }],
-      files: [],
-    } as any);
+    vi.mocked(findShowFolder).mockResolvedValue('shows/2026-07-31-leena/');
 
     await expect(resolveRecording('pb1', 'audio')).resolves.toEqual({
       status: 302,
@@ -128,10 +125,7 @@ describe('resolveRecording', () => {
   it('serves a recording whose upload row is gone, via the archive record', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
     vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-17', title: 'Oko Stellar' } as any);
-    vi.mocked(browse).mockResolvedValue({
-      folders: [{ key: 'shows/2026-07-17-oko-stellar/', name: '2026-07-17-oko-stellar', bytes: null, modified: null }],
-      files: [],
-    } as any);
+    vi.mocked(findShowFolder).mockResolvedValue('shows/2026-07-17-oko-stellar/');
 
     await expect(resolveRecording('pb1', 'video')).resolves.toEqual({
       status: 302,
@@ -143,13 +137,8 @@ describe('resolveRecording', () => {
   it('refuses rather than guess when two folders share the date', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
     vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31', title: 'Leena' } as any);
-    vi.mocked(browse).mockResolvedValue({
-      folders: [
-        { key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null },
-        { key: 'shows/2026-07-31-leena-2/', name: '2026-07-31-leena-2', bytes: null, modified: null },
-      ],
-      files: [],
-    } as any);
+    // findShowFolder refuses on a tie rather than pick a show at random.
+    vi.mocked(findShowFolder).mockResolvedValue(null);
 
     expect((await resolveRecording('pb1', 'video')).status).toBe(404);
     expect(vi.mocked(createDownloadPresignedUrl)).not.toHaveBeenCalled();
@@ -158,10 +147,7 @@ describe('resolveRecording', () => {
   it('404s when the folder exists but that artefact does not', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
     vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31', title: 'Leena' } as any);
-    vi.mocked(browse).mockResolvedValue({
-      folders: [{ key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null }],
-      files: [],
-    } as any);
+    vi.mocked(findShowFolder).mockResolvedValue('shows/2026-07-31-leena/');
     vi.mocked(objectInfo).mockResolvedValue({ exists: false, size: null });
 
     expect((await resolveRecording('pb1', 'audio')).status).toBe(404);

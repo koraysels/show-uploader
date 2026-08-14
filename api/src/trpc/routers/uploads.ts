@@ -50,7 +50,7 @@ async function assertPrePublishVideo(videoS3Key: string): Promise<void> {
   }
 }
 import { createDownloadPresignedUrl, listUploadedParts, objectInfo } from '../../services/s3';
-import { browse } from '../../services/storage-browse';
+import { findShowFolder } from '../../services/show-folder';
 import { deleteStagedVideo } from '../../services/staged-video';
 import { withDownloadUrls } from '../../services/upload-urls';
 import { getLiveState } from '../../services/live-guard';
@@ -107,32 +107,6 @@ function internal(err: unknown, logMessage: string, message: string): never {
   if (err instanceof TRPCError) throw err;
   console.error(logMessage, err);
   throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
-}
-
-/**
- * The show's archive folder as it ACTUALLY exists on S3.
- *
- * The name the slug convention predicts is only a first guess: plenty of
- * folders were named before that convention (or from the recording's filename
- * rather than the agenda title), so e.g. an agenda titled "Lina Ejdaa" can sit
- * in `shows/2026-07-31-leena/`. The date prefix, though, comes from the agenda
- * record itself and is the one part that doesn't drift — so when the guess
- * misses, list `shows/` and take the folder starting with that date.
- *
- * Returns null when nothing matches. Still fully server-derived: a caller
- * never names the folder, so this can only ever resolve to a real folder
- * belonging to that show's own date.
- */
-async function findShowFolder(show: Pick<AgendaShow, 'date' | 'title'>): Promise<string | null> {
-  const guess = `shows/${show.date}-${slugify(show.title)}/`;
-  if ((await objectInfo(`${guess}video.mp4`)).exists) return guess;
-
-  const listing = await browse('shows/');
-  const matches = listing.folders.filter((f) => f.name.startsWith(show.date));
-  // Ambiguous (two shows the same day) — refuse rather than adopt the wrong
-  // recording. The operator can still upload explicitly.
-  if (matches.length !== 1) return null;
-  return matches[0].key;
 }
 
 export const uploadsRouter = router({
