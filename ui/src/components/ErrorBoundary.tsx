@@ -8,11 +8,29 @@ import { userManager } from '../auth/AuthProvider';
 type Props = { children: ReactNode };
 type State = { error: Error | null };
 
+const RELOADED = 'stale-chunk-reloaded';
+
+/**
+ * A lazy chunk that 404s because the build it belonged to is gone. Browsers
+ * word this differently (Firefox "error loading dynamically imported module",
+ * Chrome "Failed to fetch dynamically imported module", Safari "Importing a
+ * module script failed"), so match on the shared shape rather than one string.
+ */
+function isStaleChunk(error: Error): boolean {
+  return /dynamically imported module|importing a module script failed/i.test(error.message ?? '');
+}
+
 // A render crash used to blank the whole page (no boundary → React unmounts the
 // tree). This catches it and shows a recoverable screen instead — reload, or
 // re-authenticate (the common cause is a session that went bad after long idle).
 export class ErrorBoundary extends Component<Props, State> {
   state: State = { error: null };
+
+  // Rendering at all means this build loaded fine, so the next stale-chunk
+  // error (after some future deploy) gets its own one-shot reload.
+  componentDidMount() {
+    sessionStorage.removeItem(RELOADED);
+  }
 
   static getDerivedStateFromError(error: Error): State {
     return { error };
@@ -20,6 +38,18 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: unknown) {
     console.error('UI crashed:', error, info);
+
+    // A deploy renames every chunk (content hashes), so a tab left open across
+    // one fails the moment it lazy-loads a chunk that no longer exists. The fix
+    // is always the same — load the new build — so do it rather than showing an
+    // error the operator can only respond to by reloading anyway.
+    //
+    // Guarded by a session flag: if the reload doesn't fix it, the second crash
+    // shows the error screen instead of reloading forever.
+    if (isStaleChunk(error) && !sessionStorage.getItem(RELOADED)) {
+      sessionStorage.setItem(RELOADED, '1');
+      window.location.reload();
+    }
   }
 
   render() {
