@@ -82,7 +82,7 @@ function resolve(proc: string, input: unknown): unknown {
       return { url: '' };
     case 'uploads.probeExistingArchive':
       return arg.showId === 'show_latenight'
-        ? { exists: true, videoKey: 'shows/2026-07-28-late-night-tape-deck/video.mp4', videoSize: 2_200_000_000 }
+        ? { exists: true, videoKey: 'shows/2026-07-28-late-night-tape-deck/video.mp4', videoSize: 2_200_000_000, hasAudio: true }
         : { exists: false };
     case 'uploads.adoptArchive':
       return { uploadId: 'upl_adopted' };

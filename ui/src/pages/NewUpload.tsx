@@ -588,8 +588,10 @@ export default function NewUpload() {
                 {foundArchive.videoSize ? ` (${humanSize(foundArchive.videoSize)})` : ''}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                published before this tool, or moved here by hand — adopt it instead of uploading again.
-                no re-encode; use "generate audio" on the archive page afterward for the downloadable audio.
+                published before this tool, or moved here by hand — adopt it instead of uploading again. no re-encode.{' '}
+                {foundArchive.hasAudio
+                  ? 'the downloadable audio is already there too and comes along with it.'
+                  : 'no downloadable audio found next to it — use "generate audio" on the archive page afterward.'}
               </Typography>
               <Button
                 variant="contained"

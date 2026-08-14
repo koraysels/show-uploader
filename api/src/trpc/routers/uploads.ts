@@ -118,6 +118,12 @@ function expectedShowVideoKey(show: Pick<AgendaShow, 'date' | 'title'>): string 
   return `shows/${show.date}-${slugify(show.title)}/video.mp4`;
 }
 
+// Same folder, the audio archive's fixed name — see worker/src/services/storage-layout.ts's
+// showAudioKey, which is what wrote it there in the first place.
+function expectedShowAudioKey(show: Pick<AgendaShow, 'date' | 'title'>): string {
+  return `shows/${show.date}-${slugify(show.title)}/audio.m4a`;
+}
+
 export const uploadsRouter = router({
   /**
    * GET /api/uploads — every upload with its jobs. Keys, not signed URLs.
@@ -484,7 +490,11 @@ export const uploadsRouter = router({
         const info = await objectInfo(videoKey);
         if (!info.exists) return { exists: false as const };
 
-        return { exists: true as const, videoKey, videoSize: info.size };
+        // Reported so the "adopt" panel can say upfront whether the audio
+        // archive will come along with it — adoptArchive does the same check.
+        const audioInfo = await objectInfo(expectedShowAudioKey(show));
+
+        return { exists: true as const, videoKey, videoSize: info.size, hasAudio: audioInfo.exists };
       } catch (err) {
         internal(err, 'Failed to probe existing archive:', 'Failed to probe existing archive');
       }
@@ -503,9 +513,12 @@ export const uploadsRouter = router({
    * Every platform link already on the PocketBase record becomes a `done`
    * platform_jobs row carrying that same URL, plus a `done` archive job — so
    * afterward this show behaves exactly like one published through this app:
-   * visible on the archive page, covered by archiveLinksBackfill, and
-   * "generate audio" (already exists) is how the operator gets the m4a, since
-   * this deliberately doesn't touch audio at all.
+   * visible on the archive page, covered by archiveLinksBackfill. The audio
+   * archive (audio.m4a) is picked up the same way, alongside the video, when
+   * it's already sitting in the same folder — the archive job always wrote
+   * both together, so a video that's there almost always has its audio right
+   * next to it. "generate audio" stays the fallback only for the genuine edge
+   * case where it isn't.
    */
   adoptArchive: protectedProcedure
     .input(z.object({ showId: z.string().min(1) }))
@@ -525,6 +538,9 @@ export const uploadsRouter = router({
           throw new TRPCError({ code: 'NOT_FOUND', message: 'No file found at the expected S3 location' });
         }
 
+        const audioS3Key = expectedShowAudioKey(show);
+        const audioInfo = await objectInfo(audioS3Key);
+
         const upload = await createUpload(db, {
           show_id: input.showId,
           title: show.title,
@@ -532,6 +548,7 @@ export const uploadsRouter = router({
           tags: show.tags ?? [],
           image_url: show.imageUrl,
           video_s3_key: videoS3Key,
+          audio_s3_key: audioInfo.exists ? audioS3Key : null,
           jingle_s3_key: null,
           trim_start: null,
           trim_end: null,
