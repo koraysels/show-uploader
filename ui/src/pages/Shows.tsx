@@ -27,10 +27,10 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { useShows, useStagedShowIds, useUploads, useUploadingProgress } from '../api/hooks';
+import { useShows } from '../api/hooks';
+import ShowStatusView, { useShowStatuses, showStatusRank } from '../components/ShowStatus';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
-import { useUpload, type UploadItem } from '../upload/UploadProvider';
 import { shortName } from '../components/PresenceRoster';
 import PlatformIcon from '../components/PlatformIcon';
 import { c, ROLE, LABEL_SX } from '../theme';
@@ -39,81 +39,6 @@ const col = createColumnHelper<AgendaShow>();
 
 const SHORT: Record<string, string> = { YouTube: 'YT', MixCloud: 'MC' };
 const LABEL_TO_PLATFORM: Record<string, string> = { YouTube: 'youtube', MixCloud: 'mixcloud' };
-
-// Per-show video state in the table: live upload progress, "ready" when a
-// recording is staged (uploaded, not yet published), "uploaded" when it's already
-// been published (the staged row is cleared on publish, but the archived video
-// still exists), else nothing.
-function VideoCell({
-  showId,
-  uploads,
-  staged,
-  uploaded,
-  uploadingElsewhere,
-}: {
-  showId: string;
-  uploads: Record<string, UploadItem>;
-  staged: Set<string>;
-  uploaded: Set<string>;
-  // show_id → server-computed % (null when it couldn't be read); presence in the
-  // map means an upload is in progress on some machine.
-  uploadingElsewhere: Map<string, number | null>;
-}) {
-  const item = uploads[showId];
-
-  if (item?.status === 'uploading') {
-    const pct = Math.round(item.fraction * 100);
-    return (
-      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-        <LinearProgress variant="determinate" value={pct} sx={{ width: 64, height: 6, flexShrink: 0 }} />
-        <Typography variant="body2" sx={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-          {pct}%
-        </Typography>
-      </Stack>
-    );
-  }
-  if (item?.status === 'error') {
-    return (
-      <Tooltip title={item.error ?? 'upload failed'}>
-        <Chip label="✕ failed" sx={{ borderColor: c.danger, color: c.danger, bgcolor: c.dangerSoft }} />
-      </Tooltip>
-    );
-  }
-  if (item?.status === 'done' || staged.has(showId)) {
-    return (
-      <Tooltip title="recording ready to publish">
-        <Chip
-          label="● ready"
-          sx={{ borderColor: c.ok, color: c.ok, bgcolor: c.okSoft, fontWeight: 600 }}
-        />
-      </Tooltip>
-    );
-  }
-  if (uploaded.has(showId)) {
-    return (
-      <Tooltip title="already uploaded — the archived video is available on the archive page">
-        <Chip label="● uploaded" sx={{ color: c.muted }} />
-      </Tooltip>
-    );
-  }
-  // A browser elsewhere is mid-upload — show the server-computed %.
-  if (uploadingElsewhere.has(showId)) {
-    const pct = uploadingElsewhere.get(showId);
-    return (
-      <Tooltip title="a recording is being uploaded on another machine">
-        <Chip
-          label={`● uploading elsewhere${typeof pct === 'number' ? ` · ${pct}%` : ''}`}
-          sx={{ borderColor: c.ink, color: c.ink }}
-        />
-      </Tooltip>
-    );
-  }
-  return (
-    <Typography variant="body2" color="text.disabled">
-      — no video
-    </Typography>
-  );
-}
 
 function LinksCell({ show }: { show: AgendaShow }) {
   const links = show.mediaLinks ?? [];
@@ -175,20 +100,9 @@ export default function Shows() {
   const navigate = useNavigate();
   const { data: shows = [], isLoading, isError } = useShows();
   const { claims, myUserId } = usePresence();
-  const { uploads } = useUpload();
-  const { data: stagedIds = [] } = useStagedShowIds();
-  const staged = useMemo(() => new Set(stagedIds), [stagedIds]);
-  // Shows that already have a completed upload (published → staged row cleared, but
-  // the recording was uploaded + archived). Keeps the Video column honest.
-  const { data: uploadList = [] } = useUploads();
-  const uploaded = useMemo(() => new Set(uploadList.map((u) => u.show_id)), [uploadList]);
-  // In-progress multipart uploads on any machine (show_id → %) → "uploading
-  // elsewhere · N%" here.
-  const { data: uploadingList = [] } = useUploadingProgress();
-  const uploadingElsewhere = useMemo(
-    () => new Map(uploadingList.map((u) => [u.show_id, u.pct])),
-    [uploadingList]
-  );
+  // One place decides what a show's recording is doing; this screen and the
+  // attach list render the same component over it.
+  const statusFor = useShowStatuses();
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }]);
   const [filter, setFilter] = useState('');
 
@@ -214,31 +128,11 @@ export default function Shows() {
         header: 'show',
         cell: (c) => <Typography sx={{ fontWeight: 500 }}>{c.getValue()}</Typography>,
       }),
-      col.accessor(
-        (s) =>
-          uploads[s.id]?.status === 'uploading'
-            ? 4
-            : uploads[s.id]?.status === 'done' || staged.has(s.id)
-            ? 3
-            : uploaded.has(s.id)
-            ? 2
-            : uploadingElsewhere.has(s.id)
-            ? 1
-            : 0,
-        {
-          id: 'video',
-          header: 'video',
-          cell: (c) => (
-            <VideoCell
-              showId={c.row.original.id}
-              uploads={uploads}
-              staged={staged}
-              uploaded={uploaded}
-              uploadingElsewhere={uploadingElsewhere}
-            />
-          ),
-        }
-      ),
+      col.accessor((s) => showStatusRank(statusFor(s.id)), {
+        id: 'video',
+        header: 'video',
+        cell: (c) => <ShowStatusView status={statusFor(c.row.original.id)} />,
+      }),
       col.accessor((s) => s.mediaLinks?.length ?? 0, {
         id: 'links',
         header: 'links',
@@ -262,7 +156,7 @@ export default function Shows() {
         },
       }),
     ],
-    [claims, myUserId, uploads, staged, uploaded, uploadingElsewhere]
+    [claims, myUserId, statusFor]
   );
 
   const table = useReactTable({
@@ -362,13 +256,7 @@ export default function Shows() {
                     spacing={1}
                     sx={{ mt: 1.25, alignItems: 'center', flexWrap: 'wrap', rowGap: 1 }}
                   >
-                    <VideoCell
-                      showId={s.id}
-                      uploads={uploads}
-                      staged={staged}
-                      uploaded={uploaded}
-                      uploadingElsewhere={uploadingElsewhere}
-                    />
+                    <ShowStatusView status={statusFor(s.id)} />
                     <Box sx={{ flex: 1 }} />
                     {claim && <ClaimBadge claim={claim} mine={claim.userSub === myUserId} />}
                   </Stack>
