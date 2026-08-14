@@ -659,13 +659,34 @@ function ArchiveCard({
             {upload ? (
               <SourceVideo upload={upload} />
             ) : (
-              // No job row — the recording is still archived and playable, but
-              // the source file, replace and shrink all live on the upload.
-              <Tooltip title="no upload record for this show — the archived files are on s3, but there's no job row for replacing or re-encoding them">
-                <Typography variant="body2" color="text.disabled">
-                  no upload record
-                </Typography>
-              </Tooltip>
+              // No job row. The archived files are fine — the downloads above
+              // serve them — so say what's actually missing rather than
+              // "no upload record", which reads as "the file is gone".
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+                <Tooltip title="the archived video and audio are on s3 and download fine. what's missing is this app's job row, which is what replace, shrink and in-browser playback work through — attach the recording to rebuild it">
+                  <Typography variant="body2" color="text.disabled">
+                    no job row
+                  </Typography>
+                </Tooltip>
+                <Box
+                  sx={{
+                    fontSize: '0.6875rem',
+                    '& a': {
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      minHeight: 32,
+                      color: c.link,
+                      textDecoration: 'underline',
+                      textUnderlineOffset: '2px',
+                    },
+                    '& a:hover': { color: c.ink },
+                  }}
+                >
+                  <Link to="/upload/$showId" params={{ showId: show.id }}>
+                    attach
+                  </Link>
+                </Box>
+              </Stack>
             )}
           </Field>
         </Columns>
