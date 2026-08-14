@@ -22,8 +22,8 @@ import { resolveRecording } from '../../src/routes/public';
 const upload = (over: Record<string, unknown> = {}) =>
   ({
     id: 'up-1',
-    video_s3_key: 'uploads/rec.mp4',
-    audio_s3_key: 'archive/rec.m4a',
+    video_s3_key: 'shows/2026-07-17-rec/video.mp4',
+    audio_s3_key: 'shows/2026-07-17-rec/audio.m4a',
     jobs: [{ platform: 'archive', status: 'done' }],
     ...over,
   }) as any;
@@ -45,7 +45,7 @@ describe('resolveRecording', () => {
 
     await expect(resolveRecording('up-1', 'video')).resolves.toEqual({
       status: 302,
-      url: 'https://signed.example/uploads/rec.mp4?sig=abc',
+      url: 'https://signed.example/shows/2026-07-17-rec/video.mp4?sig=abc',
     });
   });
 
@@ -54,15 +54,16 @@ describe('resolveRecording', () => {
 
     await expect(resolveRecording('up-1', 'audio')).resolves.toEqual({
       status: 302,
-      url: 'https://signed.example/archive/rec.m4a?sig=abc',
+      url: 'https://signed.example/shows/2026-07-17-rec/audio.m4a?sig=abc',
     });
   });
 
   // Before the archive job finishes, video_s3_key still points at the raw
-  // recording — wrong container, untrimmed, not loudness-matched.
-  it('refuses a recording whose archive job has not finished', async () => {
+  // recording under incoming/ — wrong container, untrimmed, not
+  // loudness-matched. The key's prefix is what says so; the job row doesn't.
+  it('refuses a recording still sitting outside the published layout', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(
-      upload({ jobs: [{ platform: 'archive', status: 'processing' }] })
+      upload({ video_s3_key: 'incoming/rec.mkv', jobs: [{ platform: 'archive', status: 'processing' }] })
     );
 
     const res = await resolveRecording('up-1', 'video');
@@ -71,10 +72,15 @@ describe('resolveRecording', () => {
     expect(vi.mocked(createDownloadPresignedUrl)).not.toHaveBeenCalled();
   });
 
-  it('refuses when there is no archive job at all', async () => {
-    vi.mocked(getUploadWithJobs).mockResolvedValue(upload({ jobs: [{ platform: 'youtube', status: 'done' }] }));
+  // The regression this replaced: an operator clearing a finished job from the
+  // queue must not take the recording it produced offline.
+  it('still serves a published recording whose archive job row is gone', async () => {
+    vi.mocked(getUploadWithJobs).mockResolvedValue(upload({ jobs: [] }));
 
-    expect((await resolveRecording('up-1', 'video')).status).toBe(404);
+    await expect(resolveRecording('up-1', 'video')).resolves.toEqual({
+      status: 302,
+      url: 'https://signed.example/shows/2026-07-17-rec/video.mp4?sig=abc',
+    });
   });
 
   it('404s when the audio archive does not exist', async () => {
@@ -105,7 +111,7 @@ describe('resolveRecording', () => {
   // not an error — it must not surface as a 500.
   it('falls back to the archive record when the upload lookup throws', async () => {
     vi.mocked(getUploadWithJobs).mockRejectedValue(new Error('invalid input syntax for type uuid'));
-    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31' } as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31', title: 'Leena' } as any);
     vi.mocked(browse).mockResolvedValue({
       folders: [{ key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null }],
       files: [],
@@ -121,7 +127,7 @@ describe('resolveRecording', () => {
   // must not take its recording offline.
   it('serves a recording whose upload row is gone, via the archive record', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
-    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-17' } as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-17', title: 'Oko Stellar' } as any);
     vi.mocked(browse).mockResolvedValue({
       folders: [{ key: 'shows/2026-07-17-oko-stellar/', name: '2026-07-17-oko-stellar', bytes: null, modified: null }],
       files: [],
@@ -136,11 +142,11 @@ describe('resolveRecording', () => {
   // Two shows on one date can't be told apart from the record alone.
   it('refuses rather than guess when two folders share the date', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
-    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31' } as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31', title: 'Leena' } as any);
     vi.mocked(browse).mockResolvedValue({
       folders: [
-        { key: 'shows/2026-07-31-a/', name: '2026-07-31-a', bytes: null, modified: null },
-        { key: 'shows/2026-07-31-b/', name: '2026-07-31-b', bytes: null, modified: null },
+        { key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null },
+        { key: 'shows/2026-07-31-leena-2/', name: '2026-07-31-leena-2', bytes: null, modified: null },
       ],
       files: [],
     } as any);
@@ -151,7 +157,7 @@ describe('resolveRecording', () => {
 
   it('404s when the folder exists but that artefact does not', async () => {
     vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
-    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31' } as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31', title: 'Leena' } as any);
     vi.mocked(browse).mockResolvedValue({
       folders: [{ key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null }],
       files: [],
