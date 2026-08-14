@@ -30,14 +30,22 @@ export type PlatformJob = {
 
 export function createUpload(
   db: Sql,
-  data: Pick<ShowUpload, 'show_id' | 'title' | 'description' | 'tags' | 'image_url' | 'video_s3_key' | 'jingle_s3_key' | 'trim_start' | 'trim_end'>
+  data: Pick<
+    ShowUpload,
+    'show_id' | 'title' | 'description' | 'tags' | 'image_url' | 'video_s3_key' | 'jingle_s3_key' | 'trim_start' | 'trim_end'
+  > & {
+    // Optional: adoptArchive sets this when the m4a already sits on S3
+    // alongside the video, so "generate audio" isn't a needless re-extract of
+    // a file that's already there. Every other caller leaves it unset (null).
+    audio_s3_key?: string | null;
+  }
 ) {
   return db<ShowUpload[]>`
-    INSERT INTO show_uploads (show_id, title, description, tags, image_url, video_s3_key, jingle_s3_key, trim_start, trim_end)
+    INSERT INTO show_uploads (show_id, title, description, tags, image_url, video_s3_key, audio_s3_key, jingle_s3_key, trim_start, trim_end)
     VALUES (
       ${data.show_id}, ${data.title}, ${data.description ?? null},
       ${db.array(data.tags)}, ${data.image_url ?? null},
-      ${data.video_s3_key}, ${data.jingle_s3_key ?? null},
+      ${data.video_s3_key}, ${data.audio_s3_key ?? null}, ${data.jingle_s3_key ?? null},
       ${data.trim_start ?? null}, ${data.trim_end ?? null}
     )
     RETURNING *
