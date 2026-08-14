@@ -27,6 +27,7 @@ import {
   useUnpublishRecord,
   useVideoInfo,
   useCompressVideo,
+  useListArchivedShows,
 } from '../api/hooks';
 import { usePaged, Pager } from '../components/Pager';
 import { ListSkeleton } from '../components/Skeleton';
@@ -35,7 +36,7 @@ import PlatformIcon from '../components/PlatformIcon';
 import SignedVideoPlayer from '../components/SignedVideoPlayer';
 import { humanSize } from '../format';
 import { useSignObjectOnDemand } from '../api/hooks';
-import type { UploadWithJobs } from '../api/client';
+import type { UploadWithJobs, AgendaShow } from '../api/client';
 import { c, ROLE, LABEL_SX } from '../theme';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -281,6 +282,27 @@ function DownloadLink({ objectKey, label }: { objectKey: string | null; label: s
  * never expires), unlike a presigned URL copied straight from the storage
  * browser. Same origin the app itself is served from; no signing needed.
  */
+/** Copies a link that's already permanent — the agenda record's own. */
+function CopyLink({ url }: { url: string }) {
+  const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setFailed(false);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      },
+      () => setFailed(true)
+    );
+  };
+  return (
+    <MuiLink component="button" onClick={copy} color={ROLE.navigate} sx={linkSx}>
+      {copied ? 'copied ✓' : failed ? 'copy failed' : 'copy link'}
+    </MuiLink>
+  );
+}
+
 function CopyPermanentLink({ uploadId, kind }: { uploadId: string; kind: 'video' | 'audio' }) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -501,11 +523,17 @@ function Columns({ children, count = 4 }: { children: React.ReactNode; count?: n
 // coverUrl comes from the PocketBase record (the master), not the stored
 // upload.image_url snapshot — so the thumbnail is always the current agenda image.
 function ArchiveCard({
+  show,
   upload,
   coverUrl,
   live,
 }: {
-  upload: UploadWithJobs;
+  // The agenda record — the archive's source of truth for what exists.
+  show: AgendaShow;
+  // The job-side row, when one still exists. Null for a recording whose job
+  // was deleted (or that predates this app): everything that reads from
+  // PocketBase still works, only the job-only extras below go away.
+  upload: UploadWithJobs | null;
   coverUrl: string | null;
   // PocketBase's own status, not this session's click history.
   live: boolean;
@@ -514,16 +542,17 @@ function ArchiveCard({
   const [playerOpen, setPlayerOpen] = useState(false);
   const publish = usePublishRecord();
   const unpublish = useUnpublishRecord();
-  const pub = publishedJobs(upload);
-  // Only the remuxed MP4 plays in a browser; an upload still stored as MKV stays
-  // download-only until its archive job has run.
+  // Platform links come off the agenda record, not off finished platform jobs
+  // — the record outlives them, and it's what the website actually renders.
+  const links = show.mediaLinks.filter((l) => l.label === 'YouTube' || l.label === 'MixCloud');
+  const archiveVideo = show.mediaLinks.find((l) => l.label === 'cs-archive-video');
+  const archiveAudio = show.mediaLinks.find((l) => l.label === 'cs-archive-audio');
   // Only the remuxed MP4 plays in a browser; an upload still stored as MKV
   // stays download-only until its archive job has run.
-  const playable = /\.mp4$/i.test(upload.video_s3_key);
+  const playable = !!upload && /\.mp4$/i.test(upload.video_s3_key);
   // Editing happens in the PocketBase agenda admin — the master record. There's
   // no duplicate record here, so the "edit" action just opens it there.
-  const agendaUrl = `${AGENDA_BASE}/#/archive/${upload.show_id}`;
-  const links = pub.map((j) => ({ label: PLATFORM_LABELS[j.platform] ?? j.platform, url: j.result_url! }));
+  const agendaUrl = `${AGENDA_BASE}/#/archive/${show.id}`;
 
   return (
     <Paper variant="outlined" sx={{ p: { xs: 2, sm: 3 } }}>
@@ -552,10 +581,11 @@ function ArchiveCard({
           <Typography
             sx={{ fontSize: '1.0625rem', fontWeight: 700, lineHeight: 1.3, overflowWrap: 'anywhere' }}
           >
-            {upload.title}
+            {show.title}
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            {new Date(upload.created_at).toLocaleString()}
+            {show.date}
+            {show.startTime ? ` · ${show.startTime}` : ''}
           </Typography>
         </Box>
       </Stack>
@@ -586,8 +616,10 @@ function ArchiveCard({
           </Field>
 
           <Field label="platform links" stacked>
-            {pub.length > 0 ? (
-              pub.map((j) => <PublishedLink key={j.platform} platform={j.platform} url={j.result_url!} />)
+            {links.length > 0 ? (
+              links.map((l) => (
+                <PublishedLink key={l.label} platform={LABEL_TO_ID[l.label] ?? l.label} url={l.url} />
+              ))
             ) : (
               <Typography variant="body2" color="text.disabled">
                 —
@@ -595,16 +627,46 @@ function ArchiveCard({
             )}
           </Field>
 
-          <Field label="downloads">
-            <DownloadLink objectKey={upload.video_s3_key} label="video" />
-            {upload.video_s3_key && <CopyPermanentLink uploadId={upload.id} kind="video" />}
-            <AudioState upload={upload} as="link" />
-            {upload.audio_s3_key && <CopyPermanentLink uploadId={upload.id} kind="audio" />}
-            <AudioState upload={upload} as="action" />
+          {/* The agenda record's own permanent links: they resolve straight
+              from S3 and keep working with no job row behind them, which is
+              exactly what the archive needs to survive a deleted job. */}
+          <Field label="downloads" stacked>
+            {archiveVideo ? (
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <MuiLink href={archiveVideo.url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={linkSx}>
+                  video ↓
+                </MuiLink>
+                <CopyLink url={archiveVideo.url} />
+              </Stack>
+            ) : (
+              <Typography variant="body2" color="text.disabled">
+                video —
+              </Typography>
+            )}
+            {archiveAudio ? (
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                <MuiLink href={archiveAudio.url} target="_blank" rel="noreferrer" color={ROLE.navigate} sx={linkSx}>
+                  audio ↓
+                </MuiLink>
+                <CopyLink url={archiveAudio.url} />
+              </Stack>
+            ) : (
+              upload && <AudioState upload={upload} as="action" />
+            )}
           </Field>
 
           <Field label="source file">
-            <SourceVideo upload={upload} />
+            {upload ? (
+              <SourceVideo upload={upload} />
+            ) : (
+              // No job row — the recording is still archived and playable, but
+              // the source file, replace and shrink all live on the upload.
+              <Tooltip title="no upload record for this show — the archived files are on s3, but there's no job row for replacing or re-encoding them">
+                <Typography variant="body2" color="text.disabled">
+                  no upload record
+                </Typography>
+              </Tooltip>
+            )}
           </Field>
         </Columns>
       </Box>
@@ -634,13 +696,13 @@ function ArchiveCard({
                 question="back to draft?"
                 pending={unpublish.isPending}
                 pendingLabel="unpublishing…"
-                onConfirm={() => unpublish.mutate(upload.id)}
+                onConfirm={() => unpublish.mutate(show.id)}
                 title="set the agenda record back to draft — removes it from the main website. platform uploads are untouched"
               />
             ) : (
               <Tooltip title="set the agenda record to published — makes it live on the main website">
                 <Button
-                  onClick={() => publish.mutate(upload.id)}
+                  onClick={() => publish.mutate(show.id)}
                   disabled={publish.isPending}
                   color={ROLE.write}
                   sx={actionSx}
@@ -689,8 +751,8 @@ function ArchiveCard({
         </Typography>
       )}
 
-      {playerOpen && playable && <SignedVideoPlayer objectKey={upload.video_s3_key} />}
-      {syncOpen && <SyncPanel showId={upload.show_id} links={links} />}
+      {playerOpen && playable && upload && <SignedVideoPlayer objectKey={upload.video_s3_key} />}
+      {syncOpen && <SyncPanel showId={show.id} links={links} />}
     </Paper>
   );
 }
@@ -763,14 +825,23 @@ function RemuxBackfill({ pending }: { pending: number }) {
 }
 
 export default function Archive() {
-  const { data: uploads = [], isPending } = useUploads();
+  // PocketBase is the archive's source of truth: every record carrying a
+  // cs-archive-* link, whether or not a job row still exists for it. Jobs are
+  // transient work units — deleting a finished one must not take the recording
+  // it produced off the archive.
+  const { data: shows = [], isPending } = useListArchivedShows();
+  // The upload row, when there still is one, adds what only it knows: the
+  // source file on S3, live job progress, replace/shrink.
+  const { data: uploads = [] } = useUploads();
+  const uploadByShow = new Map(
+    [...uploads]
+      .sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at))
+      .map((u) => [u.show_id, u])
+  );
   // Cover + real publish status per show from PocketBase, keyed by show_id —
   // polled, so a change made elsewhere shows up here.
   const { data: states = {} } = useArchiveStates();
-  const archived = uploads
-    .filter((u) => publishedJobs(u).length > 0)
-    .sort((a, b) => +new Date(b.created_at) - +new Date(a.created_at));
-  const paged = usePaged(archived, (u) => u.title);
+  const paged = usePaged(shows, (s) => s.title);
   const needsRemux = uploads.filter(needsMp4Remux).length;
 
   return (
@@ -801,17 +872,18 @@ export default function Archive() {
 
       {isPending ? (
         <ListSkeleton />
-      ) : archived.length === 0 ? (
-        <Typography color="text.secondary">no published shows yet.</Typography>
+      ) : shows.length === 0 ? (
+        <Typography color="text.secondary">nothing archived yet.</Typography>
       ) : (
         <>
           <Stack spacing={2}>
-            {paged.slice.map((u) => (
+            {paged.slice.map((s) => (
               <ArchiveCard
-                key={u.id}
-                upload={u}
-                coverUrl={states[u.show_id]?.cover ?? null}
-                live={states[u.show_id]?.status === 'published'}
+                key={s.id}
+                show={s}
+                upload={uploadByShow.get(s.id) ?? null}
+                coverUrl={states[s.id]?.cover ?? s.imageUrl ?? null}
+                live={states[s.id]?.status === 'published'}
               />
             ))}
           </Stack>

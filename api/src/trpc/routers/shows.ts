@@ -4,6 +4,7 @@ import { router, protectedProcedure } from '../trpc';
 import {
   listShows,
   listPublishedShows,
+  listArchivedShows,
   listGenres,
   listArchiveStates,
   getArchiveShow,
@@ -59,6 +60,21 @@ export const showsRouter = router({
       throw new TRPCError({
         code: 'INTERNAL_SERVER_ERROR',
         message: 'Failed to fetch published shows',
+      });
+    }
+  }),
+
+  // Everything this app has archived, as PocketBase records — what the archive
+  // page lists. Deliberately independent of show_uploads/platform_jobs: a
+  // deleted job must not take the recording it produced off the archive.
+  listArchived: protectedProcedure.query(async () => {
+    try {
+      return await listArchivedShows();
+    } catch (err) {
+      console.error('Failed to fetch archived shows:', err);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch archived shows',
       });
     }
   }),

@@ -146,6 +146,28 @@ export async function listPublishedShows(): Promise<AgendaShow[]> {
   return body.items.map(toAgendaShow);
 }
 
+/**
+ * Every archive record carrying a cs-archive-* link — i.e. everything this app
+ * has ever archived, as PocketBase sees it.
+ *
+ * This is what the archive page lists, deliberately sourced from PocketBase
+ * rather than from show_uploads/platform_jobs. A job is a unit of work that
+ * ran once; deleting a finished one must not make the recording it produced
+ * disappear from the archive. The mediaLinks are the durable record.
+ */
+export async function listArchivedShows(): Promise<AgendaShow[]> {
+  // Substring match on the serialised JSON field: PocketBase can't index into
+  // a JSON array, and both labels share this prefix.
+  const filter = `mediaLinks~'cs-archive'`;
+  const path =
+    `/api/collections/archive/records` +
+    `?perPage=500&sort=-startTime&expand=${ARCHIVE_EXPAND}&fields=${ARCHIVE_FIELDS}&filter=${encodeURIComponent(filter)}`;
+  const res = await pbFetch(path);
+  if (!res.ok) throw new Error(`PocketBase archive error: ${res.status}`);
+  const body = (await res.json()) as { items: ArchiveItem[] };
+  return body.items.map(toAgendaShow);
+}
+
 // Fetch a single archive record (any status) as an AgendaShow — used to read the
 // current PocketBase metadata (title/notes/genres/image/mediaLinks) when syncing
 // a published show to its platforms, PB being the master.

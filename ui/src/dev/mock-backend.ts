@@ -38,6 +38,28 @@ function resolve(proc: string, input: unknown): unknown {
       return genres;
     case 'shows.listStates':
       return archiveStates;
+    // The archive page's source: records carrying a cs-archive-* link. The
+    // second one deliberately has no upload row in the `uploads` fixture, so
+    // the "archived but no job row" case is what the page actually renders.
+    case 'shows.listArchived':
+      return [
+        {
+          ...shows.find((s) => s.id === 'show_breakfast')!,
+          mediaLinks: [
+            ...shows.find((s) => s.id === 'show_breakfast')!.mediaLinks,
+            { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/recordings/show_breakfast/video' },
+            { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/recordings/show_breakfast/audio' },
+          ],
+        },
+        {
+          ...shows.find((s) => s.id === 'show_zonderdak')!,
+          mediaLinks: [
+            { label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' },
+            { label: 'cs-archive-video', type: 'cs-archive-video', url: 'https://uploader.test/api/public/recordings/show_zonderdak/video' },
+            { label: 'cs-archive-audio', type: 'cs-archive-audio', url: 'https://uploader.test/api/public/recordings/show_zonderdak/audio' },
+          ],
+        },
+      ];
     case 'shows.listPublished':
       // Derived from the `shows` (drafts) fixture — same ids, same
       // mediaLinks — so shows.get (which NewUpload.tsx now calls via

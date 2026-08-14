@@ -137,9 +137,14 @@ export function useRetryJob(uploadId: string) {
   });
 }
 
+// Takes the agenda record id, not an upload id — publishing only writes to
+// PocketBase, so it must keep working for an archived show with no job row.
 export function usePublishRecord() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
   return useMutation({
-    mutationFn: (uploadId: string) => trpcClient.uploads.publishRecord.mutate({ uploadId }),
+    mutationFn: (showId: string) => trpcClient.uploads.publishRecord.mutate({ showId }),
+    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
   });
 }
 
@@ -263,9 +268,17 @@ export function useUnpublishRecord() {
   const qc = useQueryClient();
   const trpc = useTRPC();
   return useMutation({
-    mutationFn: (uploadId: string) => trpcClient.uploads.unpublishRecord.mutate({ uploadId }),
-    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+    mutationFn: (showId: string) => trpcClient.uploads.unpublishRecord.mutate({ showId }),
+    onSuccess: () => qc.invalidateQueries(trpc.shows.pathFilter()),
   });
+}
+
+// Every archive record PocketBase holds a cs-archive-* link for — the archive
+// page's source of truth. Independent of jobs by design: deleting a finished
+// job must not take its recording off the archive.
+export function useListArchivedShows() {
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.listArchived.queryOptions(undefined, { staleTime: 30_000 }));
 }
 
 // Removes the upload and its jobs from the queue. Files on S3 and the

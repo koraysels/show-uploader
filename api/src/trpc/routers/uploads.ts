@@ -590,11 +590,12 @@ export const uploadsRouter = router({
 
   // POST /api/uploads/:uploadId/publish — flip the PocketBase archive record to
   // "published" (the explicit, separate step that makes it live on the agenda).
-  publishRecord: protectedProcedure.input(z.object({ uploadId: z.string() })).mutation(async ({ input }) => {
+  // Takes the agenda record's own id: this only ever writes to PocketBase, so
+  // routing it through an upload row (just to read show_id back off it) would
+  // make publishing fail for an archived show whose job was since deleted.
+  publishRecord: protectedProcedure.input(z.object({ showId: z.string().min(1) })).mutation(async ({ input }) => {
     try {
-      const upload = await getUploadWithJobs(db, input.uploadId);
-      if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
-      await updateArchiveRecord(upload.show_id, { status: 'published' });
+      await updateArchiveRecord(input.showId, { status: 'published' });
       return { ok: true };
     } catch (err) {
       internal(err, 'Failed to publish archive record:', 'Failed to publish archive record');
@@ -682,11 +683,10 @@ export const uploadsRouter = router({
   // The inverse: put the agenda record back to draft so it drops off the main
   // website. Only touches PocketBase status — the platform uploads and their
   // links stay exactly as they are.
-  unpublishRecord: protectedProcedure.input(z.object({ uploadId: z.string() })).mutation(async ({ input }) => {
+  // Agenda record id, for the same reason publishRecord takes one.
+  unpublishRecord: protectedProcedure.input(z.object({ showId: z.string().min(1) })).mutation(async ({ input }) => {
     try {
-      const upload = await getUploadWithJobs(db, input.uploadId);
-      if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
-      await updateArchiveRecord(upload.show_id, { status: 'draft' });
+      await updateArchiveRecord(input.showId, { status: 'draft' });
       return { ok: true };
     } catch (err) {
       internal(err, 'Failed to unpublish archive record:', 'Failed to unpublish archive record');

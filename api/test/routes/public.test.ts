@@ -5,10 +5,18 @@ vi.mock('../../src/db/client', () => ({ db: {} }));
 vi.mock('../../src/db/queries', () => ({ getUploadWithJobs: vi.fn() }));
 vi.mock('../../src/services/s3', () => ({
   createDownloadPresignedUrl: vi.fn(async (k: string) => `https://signed.example/${k}?sig=abc`),
+  objectInfo: vi.fn(async () => ({ exists: true, size: 1 })),
 }));
+// The show-record fallback (used when no usable upload row exists). Default to
+// "no such record" so the upload-row tests below exercise only their own path;
+// the fallback's own behaviour is covered by its dedicated tests.
+vi.mock('../../src/services/shows-api', () => ({ getArchiveShow: vi.fn(async () => null) }));
+vi.mock('../../src/services/storage-browse', () => ({ browse: vi.fn(async () => ({ folders: [], files: [] })) }));
 
 import { getUploadWithJobs } from '../../src/db/queries';
-import { createDownloadPresignedUrl } from '../../src/services/s3';
+import { createDownloadPresignedUrl, objectInfo } from '../../src/services/s3';
+import { getArchiveShow } from '../../src/services/shows-api';
+import { browse } from '../../src/services/storage-browse';
 import { resolveRecording } from '../../src/routes/public';
 
 const upload = (over: Record<string, unknown> = {}) =>
@@ -27,6 +35,9 @@ describe('resolveRecording', () => {
     vi.mocked(createDownloadPresignedUrl).mockImplementation(
       async (k: string) => `https://signed.example/${k}?sig=abc`
     );
+    vi.mocked(objectInfo).mockResolvedValue({ exists: true, size: 1 });
+    vi.mocked(getArchiveShow).mockResolvedValue(null as any);
+    vi.mocked(browse).mockResolvedValue({ folders: [], files: [] } as any);
   });
 
   it('signs the video archive', async () => {
@@ -89,10 +100,72 @@ describe('resolveRecording', () => {
     expect(JSON.stringify(res)).not.toContain('credentials');
   });
 
-  it('returns an opaque 500 when the lookup itself fails', async () => {
-    vi.mocked(getUploadWithJobs).mockRejectedValue(new Error('db connection refused'));
+  // A PocketBase record id isn't a UUID, so the upload lookup throws on the
+  // cast rather than returning null. That's the fallback's normal entry path,
+  // not an error — it must not surface as a 500.
+  it('falls back to the archive record when the upload lookup throws', async () => {
+    vi.mocked(getUploadWithJobs).mockRejectedValue(new Error('invalid input syntax for type uuid'));
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31' } as any);
+    vi.mocked(browse).mockResolvedValue({
+      folders: [{ key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null }],
+      files: [],
+    } as any);
 
-    const res = await resolveRecording('up-1', 'video');
+    await expect(resolveRecording('pb1', 'audio')).resolves.toEqual({
+      status: 302,
+      url: 'https://signed.example/shows/2026-07-31-leena/audio.m4a?sig=abc',
+    });
+  });
+
+  // The whole point of the fallback: a finished job that was later deleted
+  // must not take its recording offline.
+  it('serves a recording whose upload row is gone, via the archive record', async () => {
+    vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-17' } as any);
+    vi.mocked(browse).mockResolvedValue({
+      folders: [{ key: 'shows/2026-07-17-oko-stellar/', name: '2026-07-17-oko-stellar', bytes: null, modified: null }],
+      files: [],
+    } as any);
+
+    await expect(resolveRecording('pb1', 'video')).resolves.toEqual({
+      status: 302,
+      url: 'https://signed.example/shows/2026-07-17-oko-stellar/video.mp4?sig=abc',
+    });
+  });
+
+  // Two shows on one date can't be told apart from the record alone.
+  it('refuses rather than guess when two folders share the date', async () => {
+    vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31' } as any);
+    vi.mocked(browse).mockResolvedValue({
+      folders: [
+        { key: 'shows/2026-07-31-a/', name: '2026-07-31-a', bytes: null, modified: null },
+        { key: 'shows/2026-07-31-b/', name: '2026-07-31-b', bytes: null, modified: null },
+      ],
+      files: [],
+    } as any);
+
+    expect((await resolveRecording('pb1', 'video')).status).toBe(404);
+    expect(vi.mocked(createDownloadPresignedUrl)).not.toHaveBeenCalled();
+  });
+
+  it('404s when the folder exists but that artefact does not', async () => {
+    vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
+    vi.mocked(getArchiveShow).mockResolvedValue({ id: 'pb1', date: '2026-07-31' } as any);
+    vi.mocked(browse).mockResolvedValue({
+      folders: [{ key: 'shows/2026-07-31-leena/', name: '2026-07-31-leena', bytes: null, modified: null }],
+      files: [],
+    } as any);
+    vi.mocked(objectInfo).mockResolvedValue({ exists: false, size: null });
+
+    expect((await resolveRecording('pb1', 'audio')).status).toBe(404);
+  });
+
+  it('returns an opaque 500 when the fallback itself fails', async () => {
+    vi.mocked(getUploadWithJobs).mockResolvedValue(null as any);
+    vi.mocked(getArchiveShow).mockRejectedValue(new Error('pocketbase connection refused'));
+
+    const res = await resolveRecording('pb1', 'video');
 
     expect(res.status).toBe(500);
     expect(JSON.stringify(res)).not.toContain('connection refused');
