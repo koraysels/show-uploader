@@ -55,12 +55,12 @@ export default function StorageBrowser() {
   const copyLink = (key: string) => {
     setSignError(null);
     sign(key)
-      .then(({ url }) => {
-        void navigator.clipboard.writeText(url);
+      .then(({ url }) => navigator.clipboard.writeText(url))
+      .then(() => {
         setCopiedKey(key);
         setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 2000);
       })
-      .catch((err: Error) => setSignError(err.message));
+      .catch((err: Error) => setSignError(err.message ?? 'copy failed'));
   };
 
   // useDeleteObject's mutation state is shared across every row; tracking
