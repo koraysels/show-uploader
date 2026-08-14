@@ -43,10 +43,15 @@ function phaseLabel(platform: string, pct: number, status: string): string {
     return 'uploading to mixcloud';
   }
   if (platform === 'archive') {
-    // Matches the worker's split: download → audio → remux → upload.
+    // Matches the checkpoints jobs/archive.ts reports. The two analysis passes
+    // are named because they're the slow, silent ones: each decodes the whole
+    // recording and can't report progress from inside ffmpeg, so the bar holds
+    // still there and the label is the only thing saying what's happening.
     if (pct < 20) return 'downloading';
-    if (pct < 50) return 'extracting audio';
-    if (pct < 80) return 'remuxing to mp4';
+    if (pct < 25) return 'detecting silence';
+    if (pct < 30) return 'measuring loudness';
+    if (pct < 60) return 'extracting audio';
+    if (pct < 90) return 'converting to mp4';
     return 'storing archive';
   }
   return 'processing';

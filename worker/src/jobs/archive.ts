@@ -71,17 +71,31 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
   const audioPath = ws.path('archive.m4a');
   const mp4Path = ws.path('archive.mp4');
 
+  // Both stores in one call: the row drives the archive page, the job event
+  // drives the live SSE bar, and letting them drift makes a finished job look
+  // stuck on one screen and not the other.
+  const report = async (pct: number) => {
+    await setJobStatus(jobId, 'processing', { progress_pct: pct });
+    await job.updateProgress({ uploadId, platform: 'archive', pct });
+  };
+
   try {
     await job.updateProgress({ uploadId, platform: 'archive', pct: 5 });
     await downloadFromS3(videoS3Key, inputPath);
 
-    await setJobStatus(jobId, 'processing', { progress_pct: 20 });
-    await job.updateProgress({ uploadId, platform: 'archive', pct: 20 });
+    await report(20);
 
     // Two archives come out of the recording: a trimmed m4a the operator can
     // download on its own, and a trimmed MP4 that replaces the original upload
     // as the video archive (MKV doesn't play in a browser).
+    //
+    // The next two steps each decode the whole recording and neither can
+    // report progress from inside ffmpeg — silencedetect and loudnorm's
+    // measuring pass both only emit a result at the end. On a two-hour show
+    // that is minutes of apparent standstill, so mark the boundaries: the bar
+    // moving between them is what says the job is alive rather than hung.
     const trim = await resolveTrim(inputPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
+    await report(25);
 
     // Measured once and reused for both archives, so the downloadable audio and
     // the archived video sit at exactly the same level.
@@ -89,24 +103,20 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
       trimStart: trim.trimStart,
       trimEnd: trim.trimEnd,
     });
+    await report(30);
 
     await extractAudio(inputPath, audioPath, {
       trimStart: trim.trimStart,
       trimEnd: trim.trimEnd,
       loudness,
-      onProgress: async (pct) => {
-        const adjusted = 20 + Math.round(pct * 0.3);
-        await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
-        await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
-      },
+      onProgress: async (pct) => report(30 + Math.round(pct * 0.25)),
     });
 
     const audioKey = showAudioKey(videoS3Key);
     await uploadToS3(audioPath, audioKey, 'audio/mp4');
     await setAudioKey(uploadId, audioKey);
 
-    await setJobStatus(jobId, 'processing', { progress_pct: 50 });
-    await job.updateProgress({ uploadId, platform: 'archive', pct: 50 });
+    await report(60);
 
     await remuxVideoToMp4(job, { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness });
 
@@ -202,7 +212,7 @@ async function remuxVideoToMp4(
   if (isMp4 && !hasTrim && !loudness) return;
 
   const onProgress = async (pct: number) => {
-    const adjusted = 50 + Math.round(pct * 0.3);
+    const adjusted = 60 + Math.round(pct * 0.3);
     await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
     await job.updateProgress({ uploadId, platform: 'archive', pct: adjusted });
   };
