@@ -18,6 +18,7 @@ import {
   useUploads,
   useArchiveStates,
   usePublishRecord,
+  usePublishToPlatform,
   useGenerateAudio,
   useYoutubeStatus,
   usePlatformSetPublic,
@@ -39,7 +40,7 @@ import SignedVideoPlayer from '../components/SignedVideoPlayer';
 import { humanSize } from '../format';
 import { useSignObjectOnDemand } from '../api/hooks';
 import type { UploadWithJobs, AgendaShow } from '../api/client';
-import { platformOfLabel } from '../components/platforms';
+import { platformOfLabel, PLATFORMS } from '../components/platforms';
 import { c, ROLE, LABEL_SX } from '../theme';
 
 const PLATFORM_LABELS: Record<string, string> = { youtube: 'YouTube', mixcloud: 'MixCloud' };
@@ -559,6 +560,7 @@ function ArchiveCard({
   const publish = usePublishRecord();
   const unpublish = useUnpublishRecord();
   const compressNoRow = useCompressVideo();
+  const publishPlatform = usePublishToPlatform();
   // Platform links come off the agenda record, not off finished platform jobs
   // — the record outlives them, and it's what the website actually renders.
   const links = show.mediaLinks.filter((l) => toPlatform(l.label) !== null);
@@ -661,6 +663,23 @@ function ArchiveCard({
                 —
               </Typography>
             )}
+            {/* Post the archived recording to a platform it skipped — a thin
+                upload of the shows/ artefacts, server-guarded against posting
+                to a platform the record already links. */}
+            {archiveVideo &&
+              PLATFORMS.filter((p) => !links.some((l) => toPlatform(l.label) === p.id)).map((p) => (
+                <ConfirmAction
+                  key={p.id}
+                  label={`post to ${p.label.toLowerCase()}`}
+                  question={`uploads the archived recording to ${p.label} and links it on the agenda record. proceed?`}
+                  pending={publishPlatform.isPending && publishPlatform.variables?.platform === p.id}
+                  pendingLabel="starting…"
+                  onConfirm={() =>
+                    publishPlatform.mutate({ showId: show.id, platform: p.id as 'youtube' | 'mixcloud' })
+                  }
+                  title={`publish this archived recording to ${p.label} now`}
+                />
+              ))}
           </Field>
 
           {/* The agenda record's own permanent links: they resolve straight
