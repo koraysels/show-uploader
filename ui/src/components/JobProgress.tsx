@@ -57,6 +57,14 @@ function phaseLabel(platform: string, pct: number, status: string): string {
   return 'processing';
 }
 
+// Archive jobs done before the public-link change stored the raw S3 key
+// (shows/<folder>/audio.m4a) as their result. Rendered as an href that 404s —
+// map it onto the permanent public endpoint instead. Real URLs pass through.
+function resultHref(url: string): string {
+  const legacy = /^shows\/([^/]+)\/(video|audio)\.[a-z0-9]+$/i.exec(url);
+  return legacy ? `/api/public/shows/${legacy[1]}/${legacy[2]}` : url;
+}
+
 export default function JobProgress({ uploadId, jobs }: Props) {
   const { user } = useAuth();
   const retry = useRetryJob(uploadId);
@@ -151,7 +159,7 @@ export default function JobProgress({ uploadId, jobs }: Props) {
 
               {s.status === 'done' && s.url ? (
                 <Link
-                  href={s.url}
+                  href={resultHref(s.url)}
                   target="_blank"
                   rel="noreferrer"
                   variant="caption"

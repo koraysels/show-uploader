@@ -57,6 +57,17 @@ const toPlatform = (label: string) => platformOfLabel(label) as Platform | null;
 // The sync preview was printing the tags literally — "<p>Monthly show…</p>" —
 // so read the text out instead. DOMParser builds an inert document: nothing in
 // the string is fetched or executed.
+// PocketBase's `updated` is UTC ("2026-08-15 11:06:32.123Z"); the operator
+// reads and writes everything in Brussels time, so render it there explicitly
+// instead of showing the raw UTC string (which sat two hours behind all
+// summer). The space→T normalisation is for Safari, which refuses the
+// space-separated form. sv-SE keeps the compact YYYY-MM-DD HH:mm shape.
+function fmtBrussels(utc: string): string {
+  const d = new Date(utc.replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return utc.slice(0, 16);
+  return d.toLocaleString('sv-SE', { timeZone: 'Europe/Brussels' }).slice(0, 16);
+}
+
 function htmlToText(html: string): string {
   return new DOMParser().parseFromString(html, 'text/html').body.textContent?.trim() ?? '';
 }
@@ -608,7 +619,7 @@ function ArchiveCard({
             {show.updated && (
               <Box component="span" sx={{ color: c.faint }}>
                 {' '}
-                · updated {show.updated.slice(0, 16)}
+                · updated {fmtBrussels(show.updated)}
               </Box>
             )}
           </Typography>
