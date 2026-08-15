@@ -33,6 +33,7 @@ export const shows: AgendaShow[] = [
     tags: ['talk', 'community'],
     mediaLinks: [{ label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' }],
     showDescription: 'A monthly programme made with and by people without a roof.',
+    updated: '2026-08-01 12:00:00.000Z',
   },
   {
     id: 'show_latenight',
@@ -45,6 +46,7 @@ export const shows: AgendaShow[] = [
     tags: ['ambient', 'tape', 'experimental', 'drone', 'field recordings'],
     mediaLinks: [{ label: 'YouTube', type: 'video', url: 'https://youtube.com/watch?v=demo1' }],
     showDescription: null,
+    updated: '2026-08-01 12:00:00.000Z',
   },
   {
     id: 'show_breakfast',
@@ -60,6 +62,7 @@ export const shows: AgendaShow[] = [
       { label: 'MixCloud', type: 'audio', url: 'https://mixcloud.com/demo2' },
     ],
     showDescription: null,
+    updated: '2026-08-01 12:00:00.000Z',
   },
   {
     id: 'show_dubplate',
@@ -75,6 +78,7 @@ export const shows: AgendaShow[] = [
       { label: 'MixCloud', type: 'audio', url: 'https://mixcloud.com/demo3' },
     ],
     showDescription: null,
+    updated: '2026-08-01 12:00:00.000Z',
   },
 ];
 

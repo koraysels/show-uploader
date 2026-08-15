@@ -899,9 +899,15 @@ export default function Archive() {
   // Cover + real publish status per show from PocketBase, keyed by show_id —
   // polled, so a change made elsewhere shows up here.
   const { data: states = {} } = useArchiveStates();
-  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title'>('date-desc');
+  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title' | 'updated'>('date-desc');
   const sorted = [...shows].sort((a, b) =>
-    sort === 'title' ? a.title.localeCompare(b.title) : sort === 'date-asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)
+    sort === 'title'
+      ? a.title.localeCompare(b.title)
+      : sort === 'updated'
+      ? b.updated.localeCompare(a.updated)
+      : sort === 'date-asc'
+      ? a.date.localeCompare(b.date)
+      : b.date.localeCompare(a.date)
   );
   const paged = usePaged(sorted, (s) => s.title);
   const needsRemux = uploads.filter(needsMp4Remux).length;
@@ -932,6 +938,7 @@ export default function Archive() {
             <MenuItem value="date-desc">date · newest</MenuItem>
             <MenuItem value="date-asc">date · oldest</MenuItem>
             <MenuItem value="title">title · a–z</MenuItem>
+            <MenuItem value="updated">last updated</MenuItem>
           </TextField>
           <TextField
             size="small"

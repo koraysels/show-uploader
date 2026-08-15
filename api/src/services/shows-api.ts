@@ -22,6 +22,9 @@ export type AgendaShow = {
   // the upload description: seed from it when the episode has no notes of its own,
   // and feed it to the AI suggestion. Null when there's no linked show.
   showDescription: string | null;
+  // PocketBase's own record timestamp — when anything on the record last
+  // changed. Drives the "last updated" sort on the archive catalogue.
+  updated: string;
 };
 
 // PocketBase serialises datetimes as "YYYY-MM-DD HH:MM:SS.sssZ".
@@ -33,13 +36,17 @@ function splitDateTime(ts: string | undefined): { date: string; time: string } {
 type ArchiveItem = Pick<
   ArchiveRecord,
   'id' | 'title' | 'notes' | 'startTime' | 'endTime' | 'image' | 'genres' | 'mediaLinks'
-> & { collectionId: string; expand?: { genres?: { name: string }[]; show?: { description?: string } } };
+> & {
+  collectionId: string;
+  updated?: string;
+  expand?: { genres?: { name: string }[]; show?: { description?: string } };
+};
 
 // The relation-expand string used everywhere we read an archive record — the
 // genre names for tags + the linked show's description for the upload context.
 const ARCHIVE_EXPAND = 'genres,show';
 const ARCHIVE_FIELDS =
-  'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,expand.genres.name,expand.show.description';
+  'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,updated,expand.genres.name,expand.show.description';
 
 export function toAgendaShow(rec: ArchiveItem): AgendaShow {
   const start = splitDateTime(rec.startTime);
@@ -58,6 +65,7 @@ export function toAgendaShow(rec: ArchiveItem): AgendaShow {
     tags: rec.expand?.genres?.length ? rec.expand.genres.map((g) => g.name).filter(Boolean) : null,
     mediaLinks: Array.isArray(rec.mediaLinks) ? (rec.mediaLinks as MediaLink[]) : [],
     showDescription: rec.expand?.show?.description || null,
+    updated: rec.updated ?? '',
   };
 }
 
