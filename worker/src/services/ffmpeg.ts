@@ -415,10 +415,18 @@ export async function trimVideoCopy(
 ): Promise<void> {
   const cmd = ffmpeg(input);
   applyTrim(cmd, opts.trimStart, opts.trimEnd);
-  // Copy everything, then let the audio encoder below override -c for audio only
-  // when normalising — the video stream stays a bit-exact copy either way.
-  cmd.outputOptions(['-c', 'copy', '-map', '0']);
-  if (opts.loudness) applyLoudnorm(cmd, opts.loudness);
+  if (opts.loudness) {
+    // Normalising re-encodes the audio, so the copy must be per-stream: a
+    // global `-c copy` cannot be overridden for one stream, because
+    // fluent-ffmpeg emits `-acodec` before custom outputOptions — the trailing
+    // `-c copy` won, leaving the loudnorm filter attached to a copied stream,
+    // which ffmpeg rejects outright ("Filtering and streamcopy cannot be used
+    // together", exit 234). The video stays a bit-exact copy either way.
+    cmd.outputOptions(['-map', '0', '-c:v', 'copy']);
+    applyLoudnorm(cmd, opts.loudness);
+  } else {
+    cmd.outputOptions(['-c', 'copy', '-map', '0']);
+  }
   // This writes a NEW container, so the input's progressive layout is not
   // inherited — an archive trimmed here would not stream/seek in the browser.
   // Opt-in because the YouTube path trims into the source's own container,
