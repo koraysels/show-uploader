@@ -86,7 +86,9 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
 
     const mp4Key = await remuxVideoToMp4(job, { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness });
 
-    await setJobStatus(jobId, 'done', { result_url: audioKey, progress_pct: 100 });
+    // The permanent public link, not the raw S3 key: this lands verbatim as the
+    // job's "view" link in the UI, and a key rendered as an href 404s.
+    await setJobStatus(jobId, 'done', { result_url: publicShowUrl(audioKey) ?? audioKey, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 100 });
 
     await publishArchiveLinks(uploadId, audioKey);
@@ -140,6 +142,17 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
  * PocketBase hiccup must not fail the job or trigger a retry that would redo the
  * whole transcode.
  */
+// The permanent public link for an archived artefact, keyed by the show's own
+// S3 folder (shows/<folder>/audio.m4a → …/api/public/shows/<folder>/audio).
+// Null when APP_PUBLIC_URL is unset — callers keep their fallback.
+function publicShowUrl(archiveKey: string): string | null {
+  if (!env.APP_PUBLIC_URL) return null;
+  const [, folder, file] = archiveKey.split('/');
+  if (!folder || !file) return null;
+  const which = file.split('.')[0];
+  return `${env.APP_PUBLIC_URL.replace(/\/$/, '')}/api/public/shows/${folder}/${which}`;
+}
+
 async function publishArchiveLinks(uploadId: string, archiveKey: string): Promise<void> {
   if (!env.APP_PUBLIC_URL) {
     console.warn('APP_PUBLIC_URL unset — skipping archive links on the agenda record');

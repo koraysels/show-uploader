@@ -48,7 +48,12 @@ const worker = new Worker<JobPayload>(
   },
   {
     connection: redis,
-    concurrency: 2,
+    // Strictly one at a time: an archive job is a 1.5GB download plus several
+    // whole-file ffmpeg passes, and two of those in parallel put the VPS at
+    // load >100 (pure IO-wait) — Redis stopped answering, BullMQ locks
+    // expired, and the box was unreachable for a quarter of an hour
+    // (2026-08-15). Serial is slower on burst days and stays alive.
+    concurrency: 1,
   }
 );
 

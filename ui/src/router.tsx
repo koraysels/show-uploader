@@ -16,6 +16,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
+import MuiLink from '@mui/material/Link';
 import { useAuth } from './auth/useAuth';
 import { useAuthCheck } from './api/hooks';
 import { c, withAlpha } from './theme';
@@ -283,7 +284,25 @@ const routeTree = rootRoute.addChildren([
   authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute, storageRoute]),
 ]);
 
-export const router = createRouter({ routeTree });
+// An unknown path renders a small in-app page rather than a blank screen —
+// stale bookmarks and mistyped links land somewhere with a way back.
+function NotFound() {
+  return (
+    <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center', textAlign: 'center', px: 2 }}>
+      <Box>
+        <Typography sx={{ fontWeight: 700, mb: 1 }}>404 — page not found</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          this page does not exist (anymore).
+        </Typography>
+        <MuiLink component={Link} to="/" sx={{ fontSize: '0.875rem' }}>
+          back to uploads
+        </MuiLink>
+      </Box>
+    </Box>
+  );
+}
+
+export const router = createRouter({ routeTree, defaultNotFoundComponent: NotFound });
 
 declare module '@tanstack/react-router' {
   interface Register {

@@ -7,6 +7,33 @@ import { findShowFolder } from '../services/show-folder';
 
 export const publicRouter = Router();
 
+// These links get opened by people (pasted in chats, clicked from the agenda),
+// not only by machines — so a browser gets a small readable page instead of
+// bare JSON, while API consumers keep the JSON contract.
+function sendError(req: { headers: { accept?: string } }, res: any, status: number, error: string): void {
+  if (!req.headers.accept?.includes('text/html')) {
+    res.status(status).json({ error });
+    return;
+  }
+  const hint =
+    status === 404
+      ? 'The recording may not be archived yet, or the link is outdated.'
+      : 'Something went wrong on our side — try again in a minute.';
+  res
+    .status(status)
+    .type('html')
+    .send(`<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${status} · show uploader</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fbfbfb;color:#1a1a1a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  main{max-width:32rem;padding:2rem;text-align:center}
+  h1{font-size:1rem;font-weight:700;margin:0 0 .5rem}
+  p{font-size:.875rem;color:#666;margin:0;line-height:1.6}
+</style></head>
+<body><main><h1>${status} — ${error.toLowerCase()}</h1><p>${hint}</p></main></body></html>`);
+}
+
 export type RecordingResult =
   | { status: 302; url: string }
   | { status: 404; error: string }
@@ -164,7 +191,7 @@ for (const which of ['video', 'audio'] as const) {
   publicRouter.get(`/shows/:folder/${which}`, async (req, res) => {
     const result = await resolveShowFile(req.params.folder, which);
     if (result.status !== 302) {
-      res.status(result.status).json({ error: result.error });
+      sendError(req, res, result.status, result.error);
       return;
     }
     res.setHeader('Cache-Control', 'no-store');
@@ -174,7 +201,7 @@ for (const which of ['video', 'audio'] as const) {
   publicRouter.get(`/recordings/:uploadId/${which}`, async (req, res) => {
     const result = await resolveRecording(req.params.uploadId, which);
     if (result.status !== 302) {
-      res.status(result.status).json({ error: result.error });
+      sendError(req, res, result.status, result.error);
       return;
     }
     // The signed target expires, so the redirect itself must never be cached — a

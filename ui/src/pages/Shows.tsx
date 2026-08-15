@@ -27,7 +27,7 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { useShows, useListPublishedShows } from '../api/hooks';
+import { useShows, useListPublishedShows, useStagedShowIds } from '../api/hooks';
 import ShowStatusView, { useShowStatuses, showStatusRank } from '../components/ShowStatus';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
@@ -104,9 +104,17 @@ export default function Shows() {
   // nothing — the platforms it's already on stay untouched and the result is
   // archive links on the record. The badge is what tells them apart.
   const { data: published = [] } = useListPublishedShows();
+  // A staged (uploaded-but-unpublished) recording keeps its show in this list
+  // even when the show is already archived: that's the replace flow, and
+  // without this the show vanishes from every tab the moment its archive links
+  // exist — leaving the freshly staged file reachable only by pasting the URL.
+  const { data: stagedIds = [] } = useStagedShowIds();
   const attachable = useMemo(
-    () => published.filter((s) => !s.mediaLinks.some((l) => l.label.startsWith('cs-archive'))),
-    [published]
+    () =>
+      published.filter(
+        (s) => !s.mediaLinks.some((l) => l.label.startsWith('cs-archive')) || stagedIds.includes(s.id)
+      ),
+    [published, stagedIds]
   );
   const attachableIds = useMemo(() => new Set(attachable.map((s) => s.id)), [attachable]);
   const shows = useMemo(() => {

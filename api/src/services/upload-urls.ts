@@ -19,7 +19,9 @@ export async function withDownloadUrls<
   ]);
   const jobs = await Promise.all(
     upload.jobs.map(async (j) =>
-      j.platform === 'archive' && j.result_url
+      // New archive jobs store the permanent public link (already a URL); only
+      // legacy rows still hold a raw S3 key that needs presigning.
+      j.platform === 'archive' && j.result_url && !j.result_url.startsWith('http')
         ? { ...j, result_url: await createDownloadPresignedUrl(j.result_url) }
         : j
     )

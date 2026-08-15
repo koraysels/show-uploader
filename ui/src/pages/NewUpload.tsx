@@ -22,7 +22,7 @@ import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
 import { FullPageDropzone, UploadControl } from '../components/Dropzone';
 import PlatformSelector from '../components/PlatformSelector';
-import { selectablePlatformCount, publishedPlatforms } from '../components/platforms';
+import { publishedPlatforms } from '../components/platforms';
 import { PageLoading } from '../components/Skeleton';
 import TrimFields from '../components/TrimFields';
 import VideoPreview from '../components/VideoPreview';
@@ -261,7 +261,6 @@ export default function NewUpload() {
 
   const handleSubmit = () => {
     if (!selectedShow || !videoS3Key) return;
-    if (platforms.length === 0 && selectablePlatformCount(existingLinks) > 0) return;
     createUpload.mutate(
       {
         showId: selectedShow.id,
@@ -293,10 +292,10 @@ export default function NewUpload() {
   const canSubmit =
     !!selectedShow &&
     !!videoS3Key &&
-    // Zero platforms is only valid when there's genuinely nothing left to
-    // pick (both already published) — never a silent accidental submit on a
-    // real draft.
-    (platforms.length > 0 || selectablePlatformCount(existingLinks) === 0) &&
+    // Zero platforms is always a valid submit: it archives the recording and
+    // touches no platform. The replace flow depends on it (forcing a platform
+    // pick here is what caused duplicate MixCloud posts), and the button
+    // labels the choice loudly — "save & archive this recording".
     !createUpload.isPending &&
     !previewConverting;
   const pendingVideos = pending.data ?? [];
