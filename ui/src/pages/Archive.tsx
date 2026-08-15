@@ -916,17 +916,18 @@ export default function Archive() {
   // Cover + real publish status per show from PocketBase, keyed by show_id —
   // polled, so a change made elsewhere shows up here.
   const { data: states = {} } = useArchiveStates();
-  // The updated autodate landed on the collection but only stamps a record on
-  // its next save, so most are still empty — they sort below anything with a
-  // real timestamp, and the picture completes itself as records get touched.
-  // Default stays date-desc until enough records carry one to make
-  // last-updated the more useful default.
-  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title' | 'updated'>('date-desc');
+  // The updated autodate only stamps a record on its next save, so untouched
+  // records are still empty — they sort below anything with a real timestamp,
+  // and the picture completes itself as records get touched. Last-updated is
+  // the default (operator request): the record you just worked on is on top.
+  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title' | 'updated'>('updated');
   const sorted = [...shows].sort((a, b) =>
     sort === 'title'
       ? a.title.localeCompare(b.title)
       : sort === 'updated'
-      ? b.updated.localeCompare(a.updated)
+      ? // Tie-break on date so the never-touched tail (empty `updated`) still
+        // reads chronologically instead of in PB fetch order.
+        b.updated.localeCompare(a.updated) || b.date.localeCompare(a.date)
       : sort === 'date-asc'
       ? a.date.localeCompare(b.date)
       : b.date.localeCompare(a.date)
