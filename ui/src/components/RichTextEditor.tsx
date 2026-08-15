@@ -122,7 +122,10 @@ export default function RichTextEditor({
   // applying the AI suggestion) — but not while the user is actively typing (that
   // would fight the caret). Compare against the current HTML to avoid a loop.
   useEffect(() => {
-    if (!editor) return;
+    // isDestroyed too: @tiptap/react tears the instance down on a 1ms timer after
+    // unmount, so a lazy/Suspense remount can hand this effect a destroyed editor
+    // whose schema is already nulled — getHTML() then dies on `schema.cached`.
+    if (!editor || editor.isDestroyed) return;
     const current = editor.getHTML();
     const next = value || '';
     const currentNorm = current === '<p></p>' ? '' : current;
