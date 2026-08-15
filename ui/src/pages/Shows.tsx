@@ -27,13 +27,13 @@ import TableRow from '@mui/material/TableRow';
 import TextField from '@mui/material/TextField';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
-import { useShows } from '../api/hooks';
+import { useShows, useListPublishedShows } from '../api/hooks';
 import ShowStatusView, { useShowStatuses, showStatusRank } from '../components/ShowStatus';
 import type { AgendaShow, ClaimView } from '../api/client';
 import { usePresence } from '../presence/PresenceProvider';
 import { shortName } from '../components/PresenceRoster';
 import PlatformIcon from '../components/PlatformIcon';
-import { c, ROLE, LABEL_SX } from '../theme';
+import { c, c as c2, ROLE, LABEL_SX } from '../theme';
 
 const col = createColumnHelper<AgendaShow>();
 
@@ -98,7 +98,23 @@ function ClaimBadge({ claim, mine }: { claim: ClaimView | undefined; mine: boole
 
 export default function Shows() {
   const navigate = useNavigate();
-  const { data: shows = [], isLoading, isError } = useShows();
+  const { data: drafts = [], isLoading, isError } = useShows();
+  // Published shows with no archived recording yet join the same list: the
+  // work to do on them is the same (upload a recording), it just publishes to
+  // nothing — the platforms it's already on stay untouched and the result is
+  // archive links on the record. The badge is what tells them apart.
+  const { data: published = [] } = useListPublishedShows();
+  const attachable = useMemo(
+    () => published.filter((s) => !s.mediaLinks.some((l) => l.label.startsWith('cs-archive'))),
+    [published]
+  );
+  const attachableIds = useMemo(() => new Set(attachable.map((s) => s.id)), [attachable]);
+  const shows = useMemo(() => {
+    // A record flips draft→published between the two queries' refetches, so
+    // both can briefly hold it — the draft entry wins, one row per record.
+    const draftIds = new Set(drafts.map((s) => s.id));
+    return [...drafts, ...attachable.filter((s) => !draftIds.has(s.id))];
+  }, [drafts, attachable]);
   const { claims, myUserId } = usePresence();
   // One place decides what a show's recording is doing; this screen and the
   // attach list render the same component over it.
@@ -126,7 +142,16 @@ export default function Shows() {
       }),
       col.accessor('title', {
         header: 'show',
-        cell: (c) => <Typography sx={{ fontWeight: 500 }}>{c.getValue()}</Typography>,
+        cell: (c) => (
+          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+            <Typography sx={{ fontWeight: 500 }}>{c.getValue()}</Typography>
+            {attachableIds.has(c.row.original.id) && (
+              <Tooltip title="already live on its platforms — uploading a recording here only archives it (mp4 + audio on s3, links on the agenda record); the existing platform links stay untouched">
+                <Chip label="published · archive only" sx={{ color: c2.muted, borderColor: c2.line }} />
+              </Tooltip>
+            )}
+          </Stack>
+        ),
       }),
       col.accessor((s) => showStatusRank(statusFor(s.id)), {
         id: 'video',
@@ -156,7 +181,7 @@ export default function Shows() {
         },
       }),
     ],
-    [claims, myUserId, statusFor]
+    [claims, myUserId, statusFor, attachableIds]
   );
 
   const table = useReactTable({
@@ -247,6 +272,9 @@ export default function Shows() {
                   }}
                 >
                   <Typography sx={{ fontWeight: 500, overflowWrap: 'anywhere' }}>{s.title}</Typography>
+                  {attachableIds.has(s.id) && (
+                    <Chip label="published · archive only" sx={{ mt: 0.5, color: c.muted, borderColor: c.line }} />
+                  )}
                   <Typography variant="caption" color="text.secondary" sx={{ mt: 0.25, display: 'block' }}>
                     {s.date} · {s.startTime}
                     {s.tags?.length ? ` · ${s.tags.length} tags` : ''}
