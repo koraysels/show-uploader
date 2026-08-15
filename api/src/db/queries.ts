@@ -170,6 +170,25 @@ export function listUploadingSessions(db: Sql) {
   `;
 }
 
+// Most recent upload for a show, with its jobs — for actions that operate on a
+// show (the durable thing) and only reach for the row as bookkeeping.
+export function getLatestUploadWithJobsForShow(db: Sql, showId: string) {
+  return db<(ShowUpload & { jobs: PlatformJob[] })[]>`
+    SELECT
+      u.*,
+      COALESCE(
+        json_agg(j ORDER BY j.created_at) FILTER (WHERE j.id IS NOT NULL),
+        '[]'
+      ) AS jobs
+    FROM show_uploads u
+    LEFT JOIN platform_jobs j ON j.upload_id = u.id
+    WHERE u.show_id = ${showId}
+    GROUP BY u.id
+    ORDER BY u.created_at DESC
+    LIMIT 1
+  `.then((rows) => rows[0] ?? null);
+}
+
 // Most recent upload for a show — used to restore its (published) video into the
 // form after the staged row has been cleared.
 export function getLatestUploadForShow(db: Sql, showId: string) {

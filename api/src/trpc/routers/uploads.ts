@@ -19,6 +19,7 @@ import {
   deleteUpload,
   isPrePublishVideoKey,
   getLatestUploadForShow,
+  getLatestUploadWithJobsForShow,
   updateJobStatus,
 } from '../../db/queries';
 import { enqueueArchiveJob, enqueueCompressJob, readyToArchive, cancelQueuedJobs } from '../../services/archive-jobs';
@@ -368,28 +369,56 @@ export const uploadsRouter = router({
   // Unlike remux this is lossy and operator-triggered per show, for the rare
   // recording that came out of OBS at a much higher bitrate than usual.
   compressArchiveVideo: protectedProcedure
-    .input(z.object({ uploadId: z.string() }))
+    .input(z.object({ showId: z.string().min(1) }))
     .mutation(async ({ input }) => {
       try {
-        const upload = await getUploadWithJobs(db, input.uploadId);
-        if (!upload) throw new TRPCError({ code: 'NOT_FOUND', message: 'Upload not found' });
-        if (!/\.mp4$/i.test(upload.video_s3_key)) {
+        // The action creates whatever bookkeeping it needs — the operator
+        // never prepares a row so that a button becomes pressable. A show
+        // whose upload row was cleared along with its finished jobs gets a
+        // fresh one here, built from the archive record and its S3 folder,
+        // exactly like adopting does.
+        let upload = await getLatestUploadWithJobsForShow(db, input.showId);
+
+        if (!upload) {
+          const show = await getArchiveShow(input.showId);
+          if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+          const folder = await findShowFolder(show);
+          if (!folder) throw new TRPCError({ code: 'NOT_FOUND', message: 'No archived recording found on S3' });
+          const videoS3Key = `${folder}video.mp4`;
+          if (!(await objectInfo(videoS3Key)).exists) {
+            throw new TRPCError({ code: 'NOT_FOUND', message: 'No archived video found on S3' });
+          }
+          const audioS3Key = `${folder}audio.m4a`;
+          const audioInfo = await objectInfo(audioS3Key);
+          const row = await createUpload(db, {
+            show_id: input.showId,
+            title: show.title,
+            description: show.description,
+            tags: show.tags ?? [],
+            image_url: show.imageUrl,
+            video_s3_key: videoS3Key,
+            audio_s3_key: audioInfo.exists ? audioS3Key : null,
+            jingle_s3_key: null,
+            trim_start: null,
+            trim_end: null,
+          });
+          upload = { ...row, jobs: [] };
+        }
+
+        // The key's location carries the "safe to rewrite" guarantee: shows/
+        // is the published layout, written only when archiving completed, so
+        // nothing else is still reading or writing this object — except a job
+        // in flight right now, which is the one thing left to check.
+        if (!upload.video_s3_key.startsWith('shows/') || !/\.mp4$/i.test(upload.video_s3_key)) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'Not an mp4 archive yet — run the mp4 conversion first',
+            message: 'Not an archived mp4 yet — run the mp4 conversion first',
           });
         }
-        // The archive job only reaches 'done' once every platform job is done
-        // AND its own remux has finished — the same source-key-is-settled
-        // guarantee readyToArchive gives the archive job itself. Compress
-        // rewrites that same key, so it needs the same guarantee: otherwise a
-        // still-running platform job (reading the original) or a still-running
-        // remux (writing it) could race the compress job over the same object.
-        const archiveJob = upload.jobs.find((j) => j.platform === 'archive');
-        if (archiveJob?.status !== 'done') {
+        if (upload.jobs.some((j) => j.status === 'queued' || j.status === 'processing')) {
           throw new TRPCError({
             code: 'PRECONDITION_FAILED',
-            message: 'This recording is still being processed — try again once archiving is done',
+            message: 'This recording is still being processed — try again once it finishes',
           });
         }
         const queued = await enqueueCompressJob(db, upload);
