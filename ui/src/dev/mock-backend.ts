@@ -105,6 +105,8 @@ function resolve(proc: string, input: unknown): unknown {
       };
     case 'shows.saveMetadata':
       return { ok: true };
+    case 'shows.syncTimes':
+      return { youtube: '2026-08-14T09:12:00.000Z', mixcloud: '2026-08-15T10:41:00.000Z' };
     case 'shows.syncPlatforms':
       return { results: { youtube: 'ok', mixcloud: 'ok' } };
     case 'uploads.list':

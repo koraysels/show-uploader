@@ -44,8 +44,21 @@ export function useShow(id: string, enabled: boolean) {
 
 // Re-sync a published show's metadata/cover from PocketBase to selected platforms.
 export function useSyncPlatforms() {
+  const qc = useQueryClient();
   const trpc = useTRPC();
-  return useMutation(trpc.shows.syncPlatforms.mutationOptions());
+  return useMutation(
+    trpc.shows.syncPlatforms.mutationOptions({
+      // A successful sync stamps platform_syncs — refresh the "last synced"
+      // line the panel shows.
+      onSuccess: () => qc.invalidateQueries(trpc.shows.syncTimes.pathFilter()),
+    })
+  );
+}
+
+// When each platform last accepted a metadata sync for this show.
+export function useSyncTimes(showId: string, enabled: boolean) {
+  const trpc = useTRPC();
+  return useQuery(trpc.shows.syncTimes.queryOptions({ id: showId }, { enabled, staleTime: 30_000 }));
 }
 
 // Save the upload-page edits (title/description/tags) straight to the PocketBase

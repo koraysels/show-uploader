@@ -24,6 +24,7 @@ import {
   usePlatformSetPublic,
   useShow,
   useSyncPlatforms,
+  useSyncTimes,
   useRemuxBackfill,
   useArchiveLinksBackfill,
   useUnpublishRecord,
@@ -117,6 +118,7 @@ function PublishedLink({ platform, url }: { platform: string; url: string }) {
 function SyncPanel({ showId, links }: { showId: string; links: { label: string; url: string }[] }) {
   const show = useShow(showId, true);
   const sync = useSyncPlatforms();
+  const syncTimes = useSyncTimes(showId, true);
   const setPublic = usePlatformSetPublic();
   const ytLink = links.find((l) => toPlatform(l.label) === 'youtube');
   const ytStatus = useYoutubeStatus(ytLink?.url ?? '', !!ytLink);
@@ -182,6 +184,11 @@ function SyncPanel({ showId, links }: { showId: string; links: { label: string; 
                     label={l.label}
                     sx={{ ml: 0, mr: 0 }}
                   />
+                  {syncTimes.data?.[p] && (
+                    <Typography variant="caption" sx={{ color: c.faint }}>
+                      last synced {fmtBrussels(syncTimes.data[p])}
+                    </Typography>
+                  )}
                   {p === 'youtube' && ytStatus.data?.privacyStatus && (
                     <Typography
                       variant="caption"
