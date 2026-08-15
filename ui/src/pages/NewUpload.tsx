@@ -17,8 +17,6 @@ import {
   useStaged,
   useSaveShowMetadata,
   useUploads,
-  useProbeExistingArchive,
-  useAdoptArchive,
 } from '../api/hooks';
 import { trpcClient } from '../api/trpc';
 import MetadataForm from '../components/MetadataForm';
@@ -173,13 +171,6 @@ export default function NewUpload() {
   });
   const videoS3Key = video.state === 'ready' ? video.key : '';
   const videoFilename = video.state === 'ready' || video.state === 'uploading' || video.state === 'error' ? video.filename : '';
-
-  // Only worth asking while there's nothing else going on with the video —
-  // a show published before this tool existed, or migrated by hand, may
-  // already have its file sitting in the right place.
-  const probeArchive = useProbeExistingArchive(showId, video.state === 'none');
-  const foundArchive = probeArchive.data?.exists ? probeArchive.data : null;
-  const adoptArchive = useAdoptArchive();
 
   // Soft claim: opening auto-claims the show, unless someone else holds it — then
   // we show an interstitial and only claim (steal) once the user opts to open anyway.
@@ -578,42 +569,6 @@ export default function NewUpload() {
                 onConvertingChange={setPreviewConverting}
               />
             </>
-          ) : foundArchive ? (
-            <Stack spacing={1.5} sx={{ border: `1px solid ${c.ink}`, px: 2, py: 1.5 }}>
-              <Typography>
-                found an existing recording already at{' '}
-                <Box component="span" sx={{ fontFamily: 'monospace', fontSize: '0.875em' }}>
-                  {foundArchive.videoKey}
-                </Box>
-                {foundArchive.videoSize ? ` (${humanSize(foundArchive.videoSize)})` : ''}
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                published before this tool, or moved here by hand — adopt it instead of uploading again. no re-encode.{' '}
-                {foundArchive.hasAudio
-                  ? 'the downloadable audio is already there too and comes along with it.'
-                  : 'no downloadable audio found next to it — use "generate audio" on the archive page afterward.'}
-              </Typography>
-              <Button
-                variant="contained"
-                color={ROLE.write}
-                disabled={adoptArchive.isPending}
-                onClick={() =>
-                  adoptArchive.mutate(selectedShow.id, { onSuccess: () => navigate({ to: '/archive' }) })
-                }
-                sx={{ alignSelf: 'flex-start', minHeight: 44 }}
-              >
-                {adoptArchive.isPending ? 'adopting…' : 'adopt this recording'}
-              </Button>
-              {adoptArchive.isError && (
-                <Typography variant="caption" color="error.main">
-                  adopt failed — try again.
-                </Typography>
-              )}
-            </Stack>
-          ) : probeArchive.isPending ? (
-            // Otherwise an operator can start a real upload before the probe
-            // (which only takes one S3 HEAD request) has had a chance to land.
-            <Typography color="text.secondary">checking for an existing recording…</Typography>
           ) : (
             showId && <UploadControl showId={showId} />
           )}

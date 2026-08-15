@@ -43,6 +43,14 @@ function resolve(proc: string, input: unknown): unknown {
     // the "archived but no job row" case is what the page actually renders.
     case 'shows.listArchived':
       return [
+        // Published elsewhere, nothing archived here yet — the catalogue
+        // shows it with an "upload recording" action instead of downloads.
+        {
+          ...shows.find((s) => s.id === 'show_dubplate')!,
+          id: 'show_unarchived',
+          title: 'Published But Not Archived',
+          mediaLinks: [{ label: 'Youtube', type: 'video', url: 'https://youtube.com/watch?v=demo7' }],
+        },
         {
           ...shows.find((s) => s.id === 'show_breakfast')!,
           mediaLinks: [
@@ -113,12 +121,6 @@ function resolve(proc: string, input: unknown): unknown {
       return videoInfo[arg.uploadId] ?? { exists: false, size: null, filename: 'unknown' };
     case 'uploads.getJinglePreview':
       return { url: '' };
-    case 'uploads.probeExistingArchive':
-      return arg.showId === 'show_latenight'
-        ? { exists: true, videoKey: 'shows/2026-07-28-late-night-tape-deck/video.mp4', videoSize: 2_200_000_000, hasAudio: true }
-        : { exists: false };
-    case 'uploads.adoptArchive':
-      return { uploadId: 'upl_adopted' };
     // Walks the real state machine: the first poll reports converting, and after
     // a few it flips to ready — so the progress UI and the player are both
     // reachable without ffmpeg, redis or s3.

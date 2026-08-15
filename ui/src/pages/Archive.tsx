@@ -8,6 +8,7 @@ import Chip from '@mui/material/Chip';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import FormControlLabel from '@mui/material/FormControlLabel';
+import MenuItem from '@mui/material/MenuItem';
 import MuiLink from '@mui/material/Link';
 import Paper from '@mui/material/Paper';
 import TextField from '@mui/material/TextField';
@@ -625,9 +626,15 @@ function ArchiveCard({
                 {playerOpen ? '× close player' : '▸ watch'}
               </Button>
             ) : (
-              <Tooltip title="only mp4 plays in a browser — convert this recording to watch it here">
+              <Tooltip
+                title={
+                  archiveVideo
+                    ? 'only mp4 plays in a browser — convert this recording to watch it here'
+                    : 'no archived recording yet — upload one and it becomes watchable here'
+                }
+              >
                 <Typography variant="body2" color="text.disabled">
-                  download only
+                  {archiveVideo ? 'download only' : 'not archived'}
                 </Typography>
               </Tooltip>
             )}
@@ -676,6 +683,28 @@ function ArchiveCard({
           <Field label="archived file">
             {upload ? (
               <SourceVideo upload={upload} />
+            ) : !archiveVideo ? (
+              // Nothing archived yet: the one useful action is uploading a
+              // recording, same flow as a draft — existing platform links are
+              // untouched, the result is mp4+audio on s3 and links on the record.
+              <Box
+                sx={{
+                  fontSize: '0.6875rem',
+                  '& a': {
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    minHeight: 32,
+                    color: c.link,
+                    textDecoration: 'underline',
+                    textUnderlineOffset: '2px',
+                  },
+                  '& a:hover': { color: c.ink },
+                }}
+              >
+                <Link to="/upload/$showId" params={{ showId: show.id }}>
+                  upload recording
+                </Link>
+              </Box>
             ) : (
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
                 <Typography variant="body2" sx={{ color: c.muted }}>
@@ -890,7 +919,11 @@ export default function Archive() {
   // Cover + real publish status per show from PocketBase, keyed by show_id —
   // polled, so a change made elsewhere shows up here.
   const { data: states = {} } = useArchiveStates();
-  const paged = usePaged(shows, (s) => s.title);
+  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title'>('date-desc');
+  const sorted = [...shows].sort((a, b) =>
+    sort === 'title' ? a.title.localeCompare(b.title) : sort === 'date-asc' ? a.date.localeCompare(b.date) : b.date.localeCompare(a.date)
+  );
+  const paged = usePaged(sorted, (s) => s.title);
   const needsRemux = uploads.filter(needsMp4Remux).length;
 
   return (
@@ -910,10 +943,21 @@ export default function Archive() {
           <ArchiveLinksBackfill />
           <RemuxBackfill pending={needsRemux} />
           <TextField
+            select
+            size="small"
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            sx={{ width: { xs: '100%', sm: 160 } }}
+          >
+            <MenuItem value="date-desc">date · newest</MenuItem>
+            <MenuItem value="date-asc">date · oldest</MenuItem>
+            <MenuItem value="title">title · a–z</MenuItem>
+          </TextField>
+          <TextField
             size="small"
             value={paged.query}
             onChange={(e) => paged.setQuery(e.target.value)}
-            placeholder="filter archive…"
+            placeholder="search archive…"
             sx={{ width: { xs: '100%', sm: 256 } }}
           />
         </Stack>

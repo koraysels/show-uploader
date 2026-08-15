@@ -30,7 +30,6 @@ import { PageLoading } from './components/Skeleton';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
 import Storage from './pages/Storage';
-import Attach from './pages/Attach';
 
 function AuthedLayout() {
   const { user, loading, userManager } = useAuth();
@@ -92,7 +91,6 @@ function AuthedLayout() {
     { to: '/history', label: 'jobs queue' },
     { to: '/archive', label: 'archive' },
     { to: '/storage', label: 'storage' },
-    { to: '/attach', label: 'attach recording' },
   ] as const;
   const isActive = (to: string) => (to === '/' ? pathname === '/' : pathname.startsWith(to));
 
@@ -271,12 +269,6 @@ const storageRoute = createRoute({
   component: Storage,
 });
 
-const attachRoute = createRoute({
-  getParentRoute: () => authedRoute,
-  path: '/attach',
-  component: Attach,
-});
-
 const historyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: '/history',
@@ -288,7 +280,7 @@ const historyRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   callbackRoute,
-  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute, storageRoute, attachRoute]),
+  authedRoute.addChildren([indexRoute, uploadRoute, historyRoute, archiveRoute, storageRoute]),
 ]);
 
 export const router = createRouter({ routeTree });

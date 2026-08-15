@@ -292,28 +292,6 @@ export function useDeleteUpload() {
   });
 }
 
-// Does this show already have a video sitting in the published S3 layout
-// with no upload record for it — a show published before this tool existed.
-// Only worth asking while the form has no video attached yet.
-export function useProbeExistingArchive(showId: string | undefined, enabled: boolean) {
-  const trpc = useTRPC();
-  return useQuery(
-    trpc.uploads.probeExistingArchive.queryOptions({ showId: showId ?? '' }, { enabled: enabled && !!showId })
-  );
-}
-
-// Turns a probed-existing S3 file into a real upload record — no re-encode,
-// just the DB rows (see probeExistingArchive above). Takes only showId: the
-// key is re-derived server-side from the show record, not sent by the client.
-export function useAdoptArchive() {
-  const qc = useQueryClient();
-  const trpc = useTRPC();
-  return useMutation({
-    mutationFn: (showId: string) => trpcClient.uploads.adoptArchive.mutate({ showId }),
-    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
-  });
-}
-
 // Re-encodes an already-archived show's video to shrink it — lossy, replaces
 // the original on S3 in place. Manual and per-recording: never auto-triggered,
 // unlike the other platform jobs. Safe to re-run (creating a new/reset job row

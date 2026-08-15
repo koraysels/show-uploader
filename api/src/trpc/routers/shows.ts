@@ -4,7 +4,7 @@ import { router, protectedProcedure } from '../trpc';
 import {
   listShows,
   listPublishedShows,
-  listArchivedShows,
+  listAllArchiveShows,
   listGenres,
   listArchiveStates,
   getArchiveShow,
@@ -64,12 +64,12 @@ export const showsRouter = router({
     }
   }),
 
-  // Everything this app has archived, as PocketBase records — what the archive
-  // page lists. Deliberately independent of show_uploads/platform_jobs: a
-  // deleted job must not take the recording it produced off the archive.
+  // The whole archive catalogue, every record and status — what the archive
+  // page lists. Independent of show_uploads/platform_jobs: a deleted job must
+  // not hide a record.
   listArchived: protectedProcedure.query(async () => {
     try {
-      return await listArchivedShows();
+      return await listAllArchiveShows();
     } catch (err) {
       console.error('Failed to fetch archived shows:', err);
       throw new TRPCError({
