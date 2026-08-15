@@ -158,16 +158,26 @@ export default function JobProgress({ uploadId, jobs }: Props) {
               </Stack>
 
               {s.status === 'done' && s.url ? (
-                <Link
-                  href={resultHref(s.url)}
-                  target="_blank"
-                  rel="noreferrer"
-                  variant="caption"
-                  color={ROLE.navigate}
-                  sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 32, fontWeight: 500 }}
-                >
-                  view ↗
-                </Link>
+                (() => {
+                  const href = resultHref(s.url);
+                  // The archive job produces two artefacts but stores one link
+                  // (the audio); its sibling lives at the same folder's /video.
+                  const videoHref =
+                    platform === 'archive' && href.endsWith('/audio') ? href.replace(/\/audio$/, '/video') : null;
+                  const linkSx = { display: 'inline-flex', alignItems: 'center', minHeight: 32, fontWeight: 500 } as const;
+                  return (
+                    <Stack direction="row" spacing={1.5}>
+                      {videoHref && (
+                        <Link href={videoHref} target="_blank" rel="noreferrer" variant="caption" color={ROLE.navigate} sx={linkSx}>
+                          video ↗
+                        </Link>
+                      )}
+                      <Link href={href} target="_blank" rel="noreferrer" variant="caption" color={ROLE.navigate} sx={linkSx}>
+                        {videoHref ? 'audio ↗' : 'view ↗'}
+                      </Link>
+                    </Stack>
+                  );
+                })()
               ) : s.status === 'done' ? (
                 <Typography variant="caption" color="success.main">
                   done

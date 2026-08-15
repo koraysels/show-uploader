@@ -292,6 +292,19 @@ export function useDeleteUpload() {
   });
 }
 
+// Posts an archived recording to one platform it isn't on yet, straight from
+// the shows/ artefacts — no re-upload, no re-processing. The server refuses a
+// platform the record already links (same guard as a normal publish).
+export function usePublishToPlatform() {
+  const qc = useQueryClient();
+  const trpc = useTRPC();
+  return useMutation({
+    mutationFn: (input: { showId: string; platform: 'youtube' | 'mixcloud' }) =>
+      trpcClient.uploads.publishToPlatform.mutate(input),
+    onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
+  });
+}
+
 // Re-encodes an already-archived show's video to shrink it — lossy, replaces
 // the original on S3 in place. Manual and per-recording: never auto-triggered,
 // unlike the other platform jobs. Safe to re-run (creating a new/reset job row

@@ -157,6 +157,8 @@ function resolve(proc: string, input: unknown): unknown {
       return { ok: true };
     case 'uploads.compressArchiveVideo':
       return { ok: true };
+    case 'uploads.publishToPlatform':
+      return { ok: true, jobId: 'job_mock' };
     // Deliberately unhealthy figures: a nearly-full object disk and a stale job
     // folder, so the warning states are reachable without staging a real outage.
     case 'storage.overview':

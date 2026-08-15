@@ -5,6 +5,7 @@ import { db } from '../../db/client';
 import {
   createUpload,
   createPlatformJob,
+  type PlatformJob,
   listUploadsWithJobs,
   getUploadWithJobs,
   releaseClaimForShow,
@@ -65,7 +66,7 @@ import {
   type AgendaShow,
 } from '../../services/shows-api';
 import { syncYoutubeMetadata, syncMixcloudMetadata } from '../../services/platform-metadata';
-import { baseTitle } from '../../services/format';
+import { baseTitle, platformTitle } from '../../services/format';
 import { slugify } from '../../services/show-slug';
 import { env } from '../../env';
 
@@ -109,6 +110,41 @@ function internal(err: unknown, logMessage: string, message: string): never {
   if (err instanceof TRPCError) throw err;
   console.error(logMessage, err);
   throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message });
+}
+
+// An upload row for an archived show, found or created. Actions on the archive
+// catalogue (shrink, publish-to-platform) create whatever bookkeeping they need
+// — the operator never prepares a row so that a button becomes pressable. A
+// show whose upload row was cleared along with its finished jobs gets a fresh
+// one here, built from the archive record and its S3 folder, exactly like
+// adopting does.
+async function adoptArchivedUpload(showId: string) {
+  const existing = await getLatestUploadWithJobsForShow(db, showId);
+  if (existing) return existing;
+
+  const show = await getArchiveShow(showId);
+  if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+  const folder = await findShowFolder(show);
+  if (!folder) throw new TRPCError({ code: 'NOT_FOUND', message: 'No archived recording found on S3' });
+  const videoS3Key = `${folder}video.mp4`;
+  if (!(await objectInfo(videoS3Key)).exists) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'No archived video found on S3' });
+  }
+  const audioS3Key = `${folder}audio.m4a`;
+  const audioInfo = await objectInfo(audioS3Key);
+  const row = await createUpload(db, {
+    show_id: showId,
+    title: show.title,
+    description: show.description,
+    tags: show.tags ?? [],
+    image_url: show.imageUrl,
+    video_s3_key: videoS3Key,
+    audio_s3_key: audioInfo.exists ? audioS3Key : null,
+    jingle_s3_key: null,
+    trim_start: null,
+    trim_end: null,
+  });
+  return { ...row, jobs: [] as PlatformJob[] };
 }
 
 export const uploadsRouter = router({
@@ -359,42 +395,73 @@ export const uploadsRouter = router({
   // video via a real re-encode (see worker/src/services/ffmpeg.ts compressVideo).
   // Unlike remux this is lossy and operator-triggered per show, for the rare
   // recording that came out of OBS at a much higher bitrate than usual.
+
+  /**
+   * POST an archived recording to one platform it isn't on yet — no re-upload,
+   * no new processing: the job is the same thin platform upload the archive
+   * pipeline enqueues, fed the finished shows/<folder>/ artefacts. This is how
+   * a show that skipped MixCloud (or any platform added later — the enum is
+   * the only gate) gets published there afterwards.
+   */
+  publishToPlatform: protectedProcedure
+    .input(z.object({ showId: z.string().min(1), platform: z.enum(['youtube', 'mixcloud']) }))
+    .mutation(async ({ input }) => {
+      try {
+        const show = await getArchiveShow(input.showId);
+        if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+        // Same duplicate guard as create: the record's links are the truth
+        // about where this show already lives.
+        if ((show.mediaLinks ?? []).some((l) => platformOfLabel(l.label) === input.platform)) {
+          throw new TRPCError({ code: 'CONFLICT', message: `Already published on ${input.platform}` });
+        }
+
+        const upload = await adoptArchivedUpload(input.showId);
+        if (!upload.video_s3_key.startsWith('shows/')) {
+          throw new TRPCError({
+            code: 'PRECONDITION_FAILED',
+            message: 'Not archived yet — the archive job must finish first',
+          });
+        }
+        if (input.platform === 'mixcloud' && !upload.audio_s3_key) {
+          throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No archived audio for this show' });
+        }
+        if (upload.jobs.some((j) => j.platform === input.platform && (j.status === 'queued' || j.status === 'processing'))) {
+          throw new TRPCError({ code: 'CONFLICT', message: `A ${input.platform} upload is already running` });
+        }
+
+        const job = await createPlatformJob(db, { upload_id: upload.id, platform: input.platform });
+        await uploadQueue.add(input.platform, {
+          jobId: job.id,
+          uploadId: upload.id,
+          platform: input.platform,
+          videoS3Key: upload.video_s3_key,
+          audioS3Key: upload.audio_s3_key,
+          // platformTitle strips any existing "<date> @ coming soon" suffix
+          // before re-adding, so it's correct for both a fresh row (raw record
+          // title) and an old one that already carries the convention.
+          title: platformTitle(upload.title, show.date),
+          description: upload.description ?? '',
+          tags: upload.tags ?? [],
+          imageUrl: show.imageUrl,
+          // The archived audio is jingle-less by design (the jingle is
+          // prepended per platform); posting later should sound like posting
+          // right away, so the configured jingle rides along.
+          jingleS3Key: env.JINGLE_S3_KEY ?? null,
+          includeJingle: !!env.JINGLE_S3_KEY,
+          trimStart: null,
+          trimEnd: null,
+        });
+        return { ok: true, jobId: job.id };
+      } catch (err) {
+        internal(err, 'Failed to enqueue platform publish:', 'Failed to start the platform upload');
+      }
+    }),
+
   compressArchiveVideo: protectedProcedure
     .input(z.object({ showId: z.string().min(1) }))
     .mutation(async ({ input }) => {
       try {
-        // The action creates whatever bookkeeping it needs — the operator
-        // never prepares a row so that a button becomes pressable. A show
-        // whose upload row was cleared along with its finished jobs gets a
-        // fresh one here, built from the archive record and its S3 folder,
-        // exactly like adopting does.
-        let upload = await getLatestUploadWithJobsForShow(db, input.showId);
-
-        if (!upload) {
-          const show = await getArchiveShow(input.showId);
-          if (!show) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
-          const folder = await findShowFolder(show);
-          if (!folder) throw new TRPCError({ code: 'NOT_FOUND', message: 'No archived recording found on S3' });
-          const videoS3Key = `${folder}video.mp4`;
-          if (!(await objectInfo(videoS3Key)).exists) {
-            throw new TRPCError({ code: 'NOT_FOUND', message: 'No archived video found on S3' });
-          }
-          const audioS3Key = `${folder}audio.m4a`;
-          const audioInfo = await objectInfo(audioS3Key);
-          const row = await createUpload(db, {
-            show_id: input.showId,
-            title: show.title,
-            description: show.description,
-            tags: show.tags ?? [],
-            image_url: show.imageUrl,
-            video_s3_key: videoS3Key,
-            audio_s3_key: audioInfo.exists ? audioS3Key : null,
-            jingle_s3_key: null,
-            trim_start: null,
-            trim_end: null,
-          });
-          upload = { ...row, jobs: [] };
-        }
+        let upload = await adoptArchivedUpload(input.showId);
 
         // The key's location carries the "safe to rewrite" guarantee: shows/
         // is the published layout, written only when archiving completed, so
