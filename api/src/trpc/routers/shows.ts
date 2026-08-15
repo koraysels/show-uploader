@@ -15,6 +15,8 @@ import {
 } from '../../services/shows-api';
 import { baseTitle } from '../../services/format';
 import { generateMeta } from '../../services/groq';
+import { db } from '../../db/client';
+import { recordPlatformSync, getPlatformSyncs } from '../../db/queries';
 
 // tRPC mirror of the plain request/response endpoints in routes/shows.ts. The SSE
 // routes stay REST; this router lives ALONGSIDE the Express routes (additive) and
@@ -141,6 +143,11 @@ export const showsRouter = router({
       try {
         const results = await syncShowToPlatforms(input.id, input.platforms ?? null);
         if (!results) throw new TRPCError({ code: 'NOT_FOUND', message: 'Show not found' });
+        // Stamp only what the platform accepted — a failed sync must not look
+        // fresh.
+        for (const [platform, outcome] of Object.entries(results)) {
+          if (outcome === 'ok') await recordPlatformSync(db, input.id, platform);
+        }
         return { results };
       } catch (err) {
         if (err instanceof TRPCError) throw err;
@@ -148,6 +155,18 @@ export const showsRouter = router({
         throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to sync platforms' });
       }
     }),
+
+  // GET — when each platform last accepted a metadata sync for this show, for
+  // the sync panel's "last synced" line.
+  syncTimes: protectedProcedure.input(z.object({ id: z.string().min(1) })).query(async ({ input }) => {
+    try {
+      const rows = await getPlatformSyncs(db, input.id);
+      return Object.fromEntries(rows.map((r) => [r.platform, r.synced_at])) as Record<string, string>;
+    } catch (err) {
+      console.error('Failed to read sync times:', err);
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Failed to read sync times' });
+    }
+  }),
 
   // Persist the operator's in-progress edits straight to the PocketBase archive
   // record (the master), independent of the upload finishing — so edits on the

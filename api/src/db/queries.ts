@@ -438,3 +438,20 @@ export async function repointStorageKey(db: Sql, from: string, to: string): Prom
   await db`UPDATE pending_videos SET s3_key = ${to} WHERE s3_key = ${from}`;
   await db`UPDATE staged_uploads SET s3_key = ${to} WHERE s3_key = ${from}`;
 }
+
+// Last successful metadata sync per platform for one show. Upserted on every
+// sync that the platform accepted; failures leave the previous stamp alone, so
+// the timestamp always answers "when did the platform last match the agenda".
+export function recordPlatformSync(db: Sql, showId: string, platform: string) {
+  return db`
+    INSERT INTO platform_syncs (show_id, platform, synced_at)
+    VALUES (${showId}, ${platform}, NOW())
+    ON CONFLICT (show_id, platform) DO UPDATE SET synced_at = NOW()
+  `;
+}
+
+export function getPlatformSyncs(db: Sql, showId: string) {
+  return db<{ platform: string; synced_at: string }[]>`
+    SELECT platform, synced_at FROM platform_syncs WHERE show_id = ${showId}
+  `;
+}
