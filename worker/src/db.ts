@@ -24,9 +24,13 @@ export async function setJobStatus(
       progress_pct = COALESCE(${progressPct}, progress_pct),
       updated_at = NOW()
     WHERE id = ${jobId}
-      -- Never move a finished job back to processing/queued: a late upload
-      -- progress callback firing after 'done' must not un-finish the job.
-      AND (status NOT IN ('done', 'failed') OR ${status} IN ('done', 'failed'))
+      -- 'done' is terminal. A duplicate queue entry (double-clicked retry)
+      -- running after the real one finished has, in production, overwritten
+      -- 'done' with 'failed' over a source file the winner had already moved —
+      -- a red row and a retry button on a job that succeeded. Late progress
+      -- callbacks must not un-finish it either. Retry goes through
+      -- resetPlatformJobForRetry, which is a direct UPDATE and unaffected.
+      AND (status <> 'done' OR ${status} = 'done')
   `;
 }
 
