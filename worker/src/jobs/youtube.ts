@@ -1,23 +1,28 @@
 import type { Job } from 'bullmq';
-import path from 'path';
 import type { JobPayload } from '../types';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToYoutube } from '../services/youtube-client';
 import { setJobStatus, getUploadRow } from '../db';
-import { cleanup, resolveTrim, trimVideoCopy, measureLoudness } from '../services/ffmpeg';
 import { createWorkspace } from '../services/workspace';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle, htmlToText } from '../services/format';
-import { maybeEnqueueArchive } from './archive';
 
+/**
+ * Upload the ARCHIVED video to YouTube.
+ *
+ * A thin upload on purpose: the archive job already trimmed, normalised and
+ * remuxed the recording — this job is enqueued by it, receives the finished
+ * shows/<slug>/video.mp4, and does nothing to it. What YouTube serves is
+ * bit-identical to what the archive holds, and the transcode work happens
+ * exactly once, in the one job whose name says so.
+ */
 export async function processYoutube(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key, title, description, tags, trimStart, trimEnd, autoTrimSilence } = job.data;
+  const { jobId, uploadId, videoS3Key, title, description, tags } = job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
   const ws = createWorkspace(jobId);
-  const videoPath = ws.path(path.basename(videoS3Key));
-  const trimmedPath = ws.path(`yt-trimmed${path.extname(videoS3Key) || '.mkv'}`);
+  const videoPath = ws.path('video.mp4');
   try {
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 5 });
     await downloadFromS3(videoS3Key, videoPath);
@@ -25,24 +30,8 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
     await setJobStatus(jobId, 'processing', { progress_pct: 20 });
     await job.updateProgress({ uploadId, platform: 'youtube', pct: 20 });
 
-    // Trim dead air off the raw recording before upload, and bring it to the
-    // delivery target. Video is still stream-copied; only the audio is re-encoded.
-    const trim = await resolveTrim(videoPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
-    const loudness = await measureLoudness(videoPath, {
-      trimStart: trim.trimStart,
-      trimEnd: trim.trimEnd,
-    });
-
-    let uploadPath = videoPath;
-    // Normalising is work in its own right, so this no longer short-circuits on
-    // "no trim" — the raw recording is only uploaded when there is nothing to do.
-    if (trim.trimStart || trim.trimEnd || loudness) {
-      await trimVideoCopy(videoPath, trimmedPath, { ...trim, loudness });
-      uploadPath = trimmedPath;
-    }
-
     const resultUrl = await uploadToYoutube({
-      videoPath: uploadPath,
+      videoPath,
       title,
       // YouTube wants plain text; the description is rich-text HTML (the PB master).
       description: htmlToText(description),
@@ -69,8 +58,6 @@ export async function processYoutube(job: Job<JobPayload>): Promise<string> {
         mediaLinks: [{ label: 'YouTube', type: 'video', url: resultUrl }],
       });
     }
-
-    await maybeEnqueueArchive(job.data);
 
     return JSON.stringify({ uploadId, platform: 'youtube', url: resultUrl });
   } catch (err) {
