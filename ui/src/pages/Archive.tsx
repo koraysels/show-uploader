@@ -605,6 +605,12 @@ function ArchiveCard({
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {show.date}
             {show.startTime ? ` · ${show.startTime}` : ''}
+            {show.updated && (
+              <Box component="span" sx={{ color: c.faint }}>
+                {' '}
+                · updated {show.updated.slice(0, 16)}
+              </Box>
+            )}
           </Typography>
         </Box>
       </Stack>
