@@ -626,15 +626,9 @@ function ArchiveCard({
                 {playerOpen ? '× close player' : '▸ watch'}
               </Button>
             ) : (
-              <Tooltip
-                title={
-                  archiveVideo
-                    ? 'only mp4 plays in a browser — convert this recording to watch it here'
-                    : 'no archived recording yet — upload one and it becomes watchable here'
-                }
-              >
+              <Tooltip title="only mp4 plays in a browser — convert this recording to watch it here">
                 <Typography variant="body2" color="text.disabled">
-                  {archiveVideo ? 'download only' : 'not archived'}
+                  download only
                 </Typography>
               </Tooltip>
             )}
@@ -683,28 +677,6 @@ function ArchiveCard({
           <Field label="archived file">
             {upload ? (
               <SourceVideo upload={upload} />
-            ) : !archiveVideo ? (
-              // Nothing archived yet: the one useful action is uploading a
-              // recording, same flow as a draft — existing platform links are
-              // untouched, the result is mp4+audio on s3 and links on the record.
-              <Box
-                sx={{
-                  fontSize: '0.6875rem',
-                  '& a': {
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    minHeight: 32,
-                    color: c.link,
-                    textDecoration: 'underline',
-                    textUnderlineOffset: '2px',
-                  },
-                  '& a:hover': { color: c.ink },
-                }}
-              >
-                <Link to="/upload/$showId" params={{ showId: show.id }}>
-                  upload recording
-                </Link>
-              </Box>
             ) : (
               <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
                 <Typography variant="body2" sx={{ color: c.muted }}>
@@ -907,7 +879,15 @@ export default function Archive() {
   // cs-archive-* link, whether or not a job row still exists for it. Jobs are
   // transient work units — deleting a finished one must not take the recording
   // it produced off the archive.
-  const { data: shows = [], isPending } = useListArchivedShows();
+  const { data: allShows = [], isPending } = useListArchivedShows();
+  // Archived means both artefacts are linked on the record — video and audio
+  // are written together by the archive job, and a record carrying only one
+  // (or neither) isn't done and belongs on the to-process list instead.
+  const shows = allShows.filter(
+    (s) =>
+      s.mediaLinks.some((l) => l.label === 'cs-archive-video') &&
+      s.mediaLinks.some((l) => l.label === 'cs-archive-audio')
+  );
   // The upload row, when there still is one, adds what only it knows: the
   // source file on S3, live job progress, replace/shrink.
   const { data: uploads = [] } = useUploads();
