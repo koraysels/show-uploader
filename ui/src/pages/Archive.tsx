@@ -899,7 +899,9 @@ export default function Archive() {
   // Cover + real publish status per show from PocketBase, keyed by show_id —
   // polled, so a change made elsewhere shows up here.
   const { data: states = {} } = useArchiveStates();
-  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title' | 'updated'>('date-desc');
+  // Last-updated by default: whatever the operator just archived, linked or
+  // edited is what they came back to find.
+  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title' | 'updated'>('updated');
   const sorted = [...shows].sort((a, b) =>
     sort === 'title'
       ? a.title.localeCompare(b.title)
