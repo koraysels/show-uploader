@@ -17,6 +17,10 @@ export type JobPayload = {
   // platform_jobs row + SSE progress plumbing that the other three rely on.
   platform: 'youtube' | 'mixcloud' | 'archive' | 'compress';
   videoS3Key: string;
+  // The archived audio (shows/<slug>/audio.m4a). Set on platform jobs by the
+  // archive job that enqueues them — platforms upload archive artefacts, they
+  // never process the source recording themselves.
+  audioS3Key?: string | null;
   title: string;
   description: string;
   tags: string[];

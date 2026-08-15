@@ -25,40 +25,6 @@ import { uploadQueue } from '../queue';
 import { createWorkspace } from '../services/workspace';
 import { showAudioKey, showVideoKey } from '../services/storage-layout';
 
-// PocketBase write-back now happens per-platform (in each job) the moment that
-// platform finishes — no waiting on the others. This only enqueues the archive.
-export async function maybeEnqueueArchive(payload: JobPayload): Promise<void> {
-  const { uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle, trimStart, trimEnd } = payload;
-
-  const jobs = await getPlatformJobsForUpload(uploadId);
-  const platformJobs = jobs.filter((j) => j.platform !== 'archive');
-  const allDone = platformJobs.length > 0 && platformJobs.every((j) => j.status === 'done');
-  const archiveExists = jobs.some((j) => j.platform === 'archive');
-
-  // Once every platform is done, always extract the downloadable audio archive
-  // (the original upload is already the video archive on S3). Runs once per
-  // upload — archiveExists guards re-runs when a platform is added later.
-  if (!allDone || archiveExists) return;
-
-  const archiveJobId = await createArchiveJobRecord(uploadId);
-  if (!archiveJobId) return;
-
-  await uploadQueue.add('archive', {
-    jobId: archiveJobId,
-    uploadId,
-    platform: 'archive',
-    videoS3Key,
-    title,
-    description,
-    tags,
-    imageUrl,
-    jingleS3Key,
-    includeJingle,
-    trimStart,
-    trimEnd,
-  });
-}
-
 export async function processArchive(job: Job<JobPayload>): Promise<string> {
   const { jobId, uploadId, videoS3Key, trimStart, trimEnd, autoTrimSilence } = job.data;
 
@@ -118,12 +84,33 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
 
     await report(60);
 
-    await remuxVideoToMp4(job, { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness });
+    const mp4Key = await remuxVideoToMp4(job, { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness });
 
     await setJobStatus(jobId, 'done', { result_url: audioKey, progress_pct: 100 });
     await job.updateProgress({ uploadId, platform: 'archive', pct: 100 });
 
     await publishArchiveLinks(uploadId, audioKey);
+
+    // The archive is the source for everything downstream: platform jobs are
+    // created queued at submit and started HERE, on the finished artefacts —
+    // one download, one trim, one loudness pass, and the platforms become thin
+    // uploads of the same two files everyone gets. Also what makes "MixCloud
+    // succeeded but the archive failed" impossible: the archive comes first.
+    const rows = await getPlatformJobsForUpload(uploadId);
+    for (const row of rows) {
+      if (row.platform === 'archive' || row.platform === 'compress' || row.status !== 'queued') continue;
+      await uploadQueue.add(row.platform, {
+        ...job.data,
+        jobId: row.id,
+        platform: row.platform as 'youtube' | 'mixcloud',
+        videoS3Key: mp4Key,
+        audioS3Key: audioKey,
+        // Already applied while archiving — re-trimming would cut the show twice.
+        trimStart: null,
+        trimEnd: null,
+        autoTrimSilence: false,
+      });
+    }
 
     return JSON.stringify({ uploadId, platform: 'archive', key: audioKey });
   } catch (err) {
@@ -200,7 +187,7 @@ async function remuxVideoToMp4(
     trim: { trimStart: string | null; trimEnd: string | null };
     loudness: LoudnessMeasurement | null;
   }
-): Promise<void> {
+): Promise<string> {
   const { uploadId, jobId, videoS3Key, ext, inputPath, mp4Path, trim, loudness } = ctx;
 
   const isMp4 = ext.toLowerCase() === '.mp4';
@@ -209,7 +196,7 @@ async function remuxVideoToMp4(
   // Already an MP4, nothing to cut and nothing to normalise — no work to do, and
   // re-running must stay a no-op. Normalising counts as work even when the
   // container is already right, so it cannot be skipped here.
-  if (isMp4 && !hasTrim && !loudness) return;
+  if (isMp4 && !hasTrim && !loudness) return videoS3Key;
 
   const onProgress = async (pct: number) => {
     const adjusted = 60 + Math.round(pct * 0.3);
@@ -265,4 +252,5 @@ async function remuxVideoToMp4(
       console.warn(`Remuxed to ${mp4Key} but could not delete ${videoS3Key}:`, err)
     );
   }
+  return mp4Key;
 }

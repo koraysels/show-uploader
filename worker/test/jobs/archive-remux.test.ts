@@ -51,6 +51,8 @@ vi.mock('../../src/services/workspace', () => ({
 import { remuxToMp4, trimVideoCopy, resolveTrim, measureLoudness, extractAudio } from '../../src/services/ffmpeg';
 import { deleteFromS3, uploadToS3 } from '../../src/services/s3';
 import { finalizeArchiveRecord } from '../../src/services/shows-api';
+import { uploadQueue } from '../../src/queue';
+import { getPlatformJobsForUpload } from '../../src/db';
 import { processArchive } from '../../src/jobs/archive';
 
 function makeJob(over: Record<string, unknown> = {}) {
@@ -163,6 +165,40 @@ describe('archive video remux', () => {
     });
   });
 
+
+  describe('platform hand-off', () => {
+    // The inversion's contract: platforms upload archive artefacts, so their
+    // queued rows are started by the archive job, with the archived keys —
+    // never the source key the archive was itself given.
+    it('enqueues queued platform rows with the archived keys', async () => {
+      vi.mocked(getPlatformJobsForUpload).mockResolvedValue([
+        { id: 'yt-1', platform: 'youtube', status: 'queued', result_url: null },
+        { id: 'mc-1', platform: 'mixcloud', status: 'queued', result_url: null },
+        { id: 'done-1', platform: 'youtube', status: 'done', result_url: 'x' },
+      ] as any);
+
+      await processArchive(makeJob());
+
+      const adds = vi.mocked(uploadQueue.add).mock.calls;
+      expect(adds).toHaveLength(2);
+      for (const [name, payload] of adds as any) {
+        expect(['youtube', 'mixcloud']).toContain(name);
+        expect(payload.videoS3Key).toBe('shows/rec/video.mp4');
+        expect(payload.audioS3Key).toBe('shows/rec/audio.m4a');
+        // Applied while archiving — a platform re-trimming would cut twice.
+        expect(payload.trimStart).toBeNull();
+        expect(payload.autoTrimSilence).toBe(false);
+      }
+    });
+
+    it('enqueues nothing when no platform rows are queued', async () => {
+      // clearAllMocks resets calls, not implementations — undo the previous
+      // test's mockResolvedValue explicitly.
+      vi.mocked(getPlatformJobsForUpload).mockResolvedValue([] as any);
+      await processArchive(makeJob());
+      expect(vi.mocked(uploadQueue.add)).not.toHaveBeenCalled();
+    });
+  });
 
   describe('agenda write-back', () => {
     // Permanent links, not presigned ones: PocketBase stores these forever and a

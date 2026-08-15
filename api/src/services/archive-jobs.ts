@@ -54,7 +54,9 @@ export function readyToArchive(jobs: PlatformJob[]): boolean {
 export async function enqueueArchiveJob(
   db: Sql,
   upload: ShowUpload & { jobs: PlatformJob[] },
-  opts?: { delay?: number }
+  // includeJingle rides along for the platform jobs the archive enqueues when
+  // it finishes — the operator's checkbox isn't persisted anywhere else.
+  opts?: { delay?: number; includeJingle?: boolean }
 ): Promise<boolean> {
   let job = upload.jobs.find((j) => j.platform === 'archive');
   if (job?.status === 'processing') return false;
@@ -74,7 +76,7 @@ export async function enqueueArchiveJob(
       tags: upload.tags ?? [],
       imageUrl: upload.image_url,
       jingleS3Key: upload.jingle_s3_key,
-      includeJingle: false,
+      includeJingle: opts?.includeJingle ?? false,
       autoTrimSilence: true,
       trimStart: upload.trim_start,
       trimEnd: upload.trim_end,

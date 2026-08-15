@@ -41,6 +41,7 @@ export type JobPayload = {
   uploadId: string;
   platform: 'youtube' | 'mixcloud' | 'archive' | 'compress';
   videoS3Key: string;
+  audioS3Key?: string | null;
   title: string;
   description: string;
   tags: string[];

@@ -1,60 +1,51 @@
 import type { Job } from 'bullmq';
-import path from 'path';
 import fs from 'fs';
 import type { JobPayload } from '../types';
 import { env } from '../env';
 import { downloadFromS3 } from '../services/s3';
 import { uploadToMixcloud } from '../services/mixcloud-client';
-import {
-  extractAudio,
-  prependJingle,
-  captureSquareFrame,
-  resolveTrim,
-  measureLoudness,
-  cleanup,
-} from '../services/ffmpeg';
+import { prependJingle, captureSquareFrame, measureLoudness } from '../services/ffmpeg';
 import { setJobStatus, getUploadRow } from '../db';
 import { finalizeArchiveRecord } from '../services/shows-api';
 import { baseTitle, htmlToText } from '../services/format';
-import { maybeEnqueueArchive } from './archive';
 import { createWorkspace } from '../services/workspace';
 
+/**
+ * Upload the ARCHIVED audio to MixCloud.
+ *
+ * A thin upload on purpose: the archive job already extracted, trimmed and
+ * normalised the audio — this job is enqueued by it, receives the finished
+ * shows/<slug>/audio.m4a, and only prepends the jingle when asked. What
+ * MixCloud plays is the archive's own audio, and the extraction work happens
+ * exactly once.
+ */
 export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
-  const { jobId, uploadId, videoS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle, trimStart, trimEnd, autoTrimSilence } = job.data;
+  const { jobId, uploadId, videoS3Key, audioS3Key, title, description, tags, imageUrl, jingleS3Key, includeJingle } =
+    job.data;
 
   await setJobStatus(jobId, 'processing', { progress_pct: 0 });
 
+  if (!audioS3Key) {
+    // Platform jobs are enqueued by the archive job with both keys — a payload
+    // without one predates the inversion or was hand-built wrong.
+    const msg = 'No archived audio for this upload — run the archive job first';
+    await setJobStatus(jobId, 'failed', { error: msg });
+    throw new Error(msg);
+  }
+
   const ws = createWorkspace(jobId);
-  const videoPath = ws.path(path.basename(videoS3Key));
   const audioPath = ws.path('audio.m4a');
   const jinglePath = ws.path('jingle.m4a');
   const mergedPath = ws.path('merged.m4a');
   const thumbPath = ws.path('cover.jpg');
+  const videoPath = ws.path('video.mp4');
 
   try {
     await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 5 });
-    await downloadFromS3(videoS3Key, videoPath);
+    await downloadFromS3(audioS3Key, audioPath);
 
-    await setJobStatus(jobId, 'processing', { progress_pct: 15 });
-    await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 15 });
-
-    const trim = await resolveTrim(videoPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
-
-    const loudness = await measureLoudness(videoPath, {
-      trimStart: trim.trimStart,
-      trimEnd: trim.trimEnd,
-    });
-
-    await extractAudio(videoPath, audioPath, {
-      trimStart: trim.trimStart,
-      trimEnd: trim.trimEnd,
-      loudness,
-      onProgress: async (pct) => {
-        const adjusted = 15 + Math.round(pct * 0.4);
-        await setJobStatus(jobId, 'processing', { progress_pct: adjusted });
-        await job.updateProgress({ uploadId, platform: 'mixcloud', pct: adjusted });
-      },
-    });
+    await setJobStatus(jobId, 'processing', { progress_pct: 25 });
+    await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 25 });
 
     let finalAudioPath = audioPath;
 
@@ -64,7 +55,8 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       try {
         await downloadFromS3(jingleS3Key, jinglePath);
         // Measured separately so the jingle lands at the same target as the show
-        // rather than whatever level it happens to be mastered at.
+        // rather than whatever level it happens to be mastered at. The show
+        // audio itself is already at target — the archive job put it there.
         const jingleLoudness = await measureLoudness(jinglePath);
         await prependJingle(jinglePath, audioPath, mergedPath, jingleLoudness);
         finalAudioPath = mergedPath;
@@ -76,9 +68,13 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       }
     }
 
+    await setJobStatus(jobId, 'processing', { progress_pct: 50 });
+    await job.updateProgress({ uploadId, platform: 'mixcloud', pct: 50 });
+
     // Cover art: the PocketBase record image (the master cover, set by the
-    // operator) wins; otherwise a square frame grabbed 20s into the video. Both
-    // are non-fatal — publish coverless if they fail.
+    // operator) wins; otherwise a square frame grabbed 20s into the archived
+    // video — fetched only for this, since the audio upload needs no video.
+    // Both are non-fatal — publish coverless if they fail.
     if (imageUrl) {
       try {
         // Fetch the PB cover over the internal host (the public one isn't reachable
@@ -95,9 +91,12 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
       }
     }
     if (!fs.existsSync(thumbPath)) {
-      await captureSquareFrame(videoPath, thumbPath, 20).catch((err) =>
-        console.warn('Cover frame capture failed:', err instanceof Error ? err.message : err)
-      );
+      try {
+        await downloadFromS3(videoS3Key, videoPath);
+        await captureSquareFrame(videoPath, thumbPath, 20);
+      } catch (err) {
+        console.warn('Cover frame capture failed:', err instanceof Error ? err.message : err);
+      }
     }
 
     await setJobStatus(jobId, 'processing', { progress_pct: 70 });
@@ -125,8 +124,6 @@ export async function processMixcloud(job: Job<JobPayload>): Promise<string> {
         mediaLinks: [{ label: 'MixCloud', type: 'audio', url: resultUrl }],
       });
     }
-
-    await maybeEnqueueArchive(job.data);
 
     return JSON.stringify({ uploadId, platform: 'mixcloud', url: resultUrl });
   } catch (err) {

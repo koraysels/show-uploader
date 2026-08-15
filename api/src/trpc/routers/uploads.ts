@@ -259,40 +259,14 @@ export const uploadsRouter = router({
         console.log(`Show live — deferring upload ${upload.id} jobs until ${live.resumeAt!.toISOString()}`);
       }
 
-      // Attach-only: no platform to publish (none picked, or none left to
-      // pick on an already-published show). Nothing will ever call
-      // maybeEnqueueArchive's normal "every platform job is done" trigger
-      // with zero platform jobs to wait on, so start the archive job here —
-      // the same enqueueArchiveJob the remux/compress backfills already use.
-      // Deferred by the same live-guard delay as every other job below, so an
-      // archive-only submission during a live show doesn't jump the queue.
-      if (data.platforms.length === 0) {
-        await enqueueArchiveJob(db, { ...upload, jobs }, { delay });
-      }
-
-      await Promise.all(
-        jobs.map((job) =>
-          uploadQueue.add(
-            job.platform,
-            {
-              jobId: job.id,
-              uploadId: upload.id,
-              platform: job.platform,
-              videoS3Key: data.videoS3Key,
-              title: data.title,
-              description: data.description,
-              tags: data.tags,
-              imageUrl: data.imageUrl,
-              jingleS3Key,
-              includeJingle: data.includeJingle,
-              autoTrimSilence: data.autoTrimSilence,
-              trimStart: data.trimStart ?? null,
-              trimEnd: data.trimEnd ?? null,
-            },
-            { delay }
-          )
-        )
-      );
+      // Archive first, always: one download, one trim, one loudness pass
+      // producing the two canonical files, and the platform jobs upload THOSE.
+      // Their rows are created queued here so the operator sees the whole
+      // pipeline at submit, but only the archive job enters the queue — it
+      // enqueues the platforms itself when its artefacts exist. That ordering
+      // is what makes "MixCloud succeeded but the archive failed" impossible,
+      // and it cut the per-show work to a third.
+      await enqueueArchiveJob(db, { ...upload, jobs }, { delay, includeJingle: data.includeJingle });
 
       // The show is now published — free its claim so it drops off everyone's
       // "being processed" list immediately, and clear the staged row. Row only:
@@ -328,21 +302,38 @@ export const uploadsRouter = router({
           throw new TRPCError({ code: 'CONFLICT', message: 'Job already running' });
         }
 
+        // Platforms upload archive artefacts; retrying one before those exist
+        // would hand it the raw source (or nothing, for audio). The archive
+        // job enqueues them itself when it finishes — including after its own
+        // retry — so the answer here is "retry the archive", not a dead job.
+        if (platform !== 'archive') {
+          const archiveDone = upload.jobs.some((j) => j.platform === 'archive' && j.status === 'done');
+          if (!archiveDone) {
+            throw new TRPCError({
+              code: 'PRECONDITION_FAILED',
+              message: 'The archive step has not finished — retry that first; it starts the platform uploads itself.',
+            });
+          }
+        }
+
         await resetPlatformJobForRetry(db, job.id);
         await uploadQueue.add(platform, {
           jobId: job.id,
           uploadId,
           platform,
+          // Post-archive these point at the archived artefacts — the row was
+          // repointed when archiving finished.
           videoS3Key: upload.video_s3_key,
+          audioS3Key: upload.audio_s3_key,
           title: upload.title,
           description: upload.description ?? '',
           tags: upload.tags ?? [],
           imageUrl: upload.image_url,
           jingleS3Key: upload.jingle_s3_key,
           includeJingle: !!upload.jingle_s3_key,
-          autoTrimSilence: true,
-          trimStart: upload.trim_start,
-          trimEnd: upload.trim_end,
+          autoTrimSilence: false,
+          trimStart: null,
+          trimEnd: null,
         });
         return { ok: true };
       } catch (err) {
