@@ -15,6 +15,7 @@ export type AgendaShow = {
   mediaLinks: MediaLink[];
   // The linked show/series blurb (archive.show → shows.description).
   showDescription: string | null;
+  updated: string;
 };
 
 export type GeneratedMeta = {
