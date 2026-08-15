@@ -322,7 +322,9 @@ export function useCompressVideo() {
   const qc = useQueryClient();
   const trpc = useTRPC();
   return useMutation({
-    mutationFn: (uploadId: string) => trpcClient.uploads.compressArchiveVideo.mutate({ uploadId }),
+    // Keyed by the show: the server creates its own bookkeeping row when none
+    // exists, so the button never depends on one being there already.
+    mutationFn: (showId: string) => trpcClient.uploads.compressArchiveVideo.mutate({ showId }),
     onSuccess: () => qc.invalidateQueries(trpc.uploads.pathFilter()),
   });
 }

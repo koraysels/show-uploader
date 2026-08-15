@@ -419,7 +419,7 @@ function SourceVideo({ upload }: { upload: UploadWithJobs }) {
             question="re-encodes the video (lossy) and replaces the only copy on s3. cannot be undone. proceed?"
             pending={compress.isPending}
             pendingLabel="starting…"
-            onConfirm={() => compress.mutate(upload.id)}
+            onConfirm={() => compress.mutate(upload.show_id)}
             title={
               compressJob?.status === 'failed'
                 ? compressJob.error ?? 'shrink failed — retry'
@@ -546,6 +546,7 @@ function ArchiveCard({
   const [playerOpen, setPlayerOpen] = useState(false);
   const publish = usePublishRecord();
   const unpublish = useUnpublishRecord();
+  const compressNoRow = useCompressVideo();
   // Platform links come off the agenda record, not off finished platform jobs
   // — the record outlives them, and it's what the website actually renders.
   const links = show.mediaLinks.filter((l) => toPlatform(l.label) !== null);
@@ -705,6 +706,14 @@ function ArchiveCard({
                     </Link>
                   </Box>
                 </Tooltip>
+                <ConfirmAction
+                  label="shrink"
+                  question="re-encodes the video (lossy) and replaces the only copy on s3. cannot be undone. proceed?"
+                  pending={compressNoRow.isPending}
+                  pendingLabel="starting…"
+                  onConfirm={() => compressNoRow.mutate(show.id)}
+                  title="re-encodes this recording to a smaller file (h.264, crf 23). lossy, replaces the original on s3 — no undo"
+                />
               </Stack>
             )}
           </Field>
