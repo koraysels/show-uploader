@@ -1,5 +1,5 @@
 import { Worker } from 'bullmq';
-import { redis, QUEUE_NAME, PREVIEW_QUEUE_NAME } from './queue';
+import { redis, QUEUE_NAME, PREVIEW_QUEUE_NAME, COMPRESS_QUEUE_NAME } from './queue';
 import { processYoutube } from './jobs/youtube';
 import { processMixcloud } from './jobs/mixcloud';
 import { processArchive } from './jobs/archive';
@@ -97,6 +97,29 @@ previewWorker.on('completed', (job) => {
 // preview.
 previewWorker.on('failed', (job, err) => {
   console.error(`Preview remux failed: ${job?.data?.videoS3Key}`, err.message);
+});
+
+// Compress lane: shrinks are whole-file re-encodes, by far the slowest job in
+// the system — on the shared queue one of them parked every fresh upload for
+// an hour. Own lane, still one at a time; the ffmpeg side runs niced and
+// thread-capped so a shrink beside an archive job can't repeat the IO-wait
+// pile-up that took the box down (2026-08-15). The main worker keeps its
+// 'compress' case for jobs already sitting in the old queue at deploy time.
+const compressWorker = new Worker<JobPayload>(
+  COMPRESS_QUEUE_NAME,
+  async (job) => {
+    console.log(`Processing compress ${job.id} for upload ${job.data.uploadId}`);
+    return processCompress(job);
+  },
+  { connection: redis, concurrency: 1 }
+);
+
+compressWorker.on('completed', (job) => {
+  console.log(`Compress completed: ${job.id}`);
+});
+
+compressWorker.on('failed', (job, err) => {
+  console.error(`Compress failed: ${job?.id}`, err.message);
 });
 
 console.log('Worker started');

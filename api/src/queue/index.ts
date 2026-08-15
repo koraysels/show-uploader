@@ -3,6 +3,7 @@ import IORedis from 'ioredis';
 import { env } from '../env';
 
 export const QUEUE_NAME = 'platform-uploads';
+export const COMPRESS_QUEUE_NAME = 'compress-jobs';
 export const PREVIEW_QUEUE_NAME = 'video-previews';
 
 // Cast to bullmq's ConnectionOptions: bullmq bundles its own nested ioredis copy,
@@ -18,6 +19,19 @@ export const uploadQueue = new Queue(QUEUE_NAME, {
     backoff: { type: 'exponential', delay: 10000 },
     removeOnComplete: { count: 100 },
     removeOnFail: { count: 100 },
+  },
+});
+
+// Compress re-encodes get their own queue and their own worker lane: a shrink
+// is the slowest job in the system (a whole-file re-encode) and used to park
+// every fresh upload behind it for an hour. One attempt — the job is lossy and
+// manual, so a retry is the operator's call, never automatic.
+export const compressQueue = new Queue(COMPRESS_QUEUE_NAME, {
+  connection: redis,
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 50 },
   },
 });
 

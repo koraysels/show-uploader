@@ -380,12 +380,17 @@ export async function compressVideo(
 ): Promise<void> {
   const { audioCodec } = await probeStreams(inputPath);
 
-  const cmd = ffmpeg(inputPath).outputOptions([
+  // Niced and thread-capped on purpose: this encode runs on its own queue
+  // beside real publish work, and an unconstrained libx264 in parallel with an
+  // archive job is exactly the IO/CPU pile-up that made the box unreachable.
+  // A shrink is background maintenance — it may take twice as long.
+  const cmd = ffmpeg(inputPath, { niceness: 19 }).outputOptions([
     '-map', '0',
     '-c:v', 'libx264',
     '-crf', '23',
     '-preset', 'medium',
     '-pix_fmt', 'yuv420p',
+    '-threads', '2',
   ]);
 
   if (audioCodec && MP4_AUDIO_CODECS.has(audioCodec)) {
