@@ -561,7 +561,12 @@ function ArchiveCard({
     archivedFiles.data?.files.find((f) => f.name === 'video.mp4')?.bytes ?? null;
   // Only the remuxed MP4 plays in a browser; an upload still stored as MKV
   // stays download-only until its archive job has run.
-  const playable = !!upload && /\.mp4$/i.test(upload.video_s3_key);
+  // Every archived show has shows/<folder>/video.mp4 — that's what makes it
+  // archived. Playback needs an S3 key and nothing else, so it must not depend
+  // on a job row: gating it there made a show with its mp4 plainly listed read
+  // "download only" purely because its finished job had been cleared.
+  const playerKey = folder ? `shows/${folder}/video.mp4` : upload?.video_s3_key ?? null;
+  const playable = !!playerKey && /\.mp4$/i.test(playerKey);
   // Editing happens in the PocketBase agenda admin — the master record. There's
   // no duplicate record here, so the "edit" action just opens it there.
   const agendaUrl = `${AGENDA_BASE}/#/archive/${show.id}`;
@@ -670,14 +675,17 @@ function ArchiveCard({
           <Field label="archived file">
             {upload ? (
               <SourceVideo upload={upload} />
-            ) : archivedVideoSize !== null ? (
-              // Same file the video download serves. Replace and shrink work
-              // through the job row, so they're absent until one is attached.
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
+            ) : (
+              <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
                 <Typography variant="body2" sx={{ color: c.muted }}>
-                  {humanSize(archivedVideoSize)}
+                  {archivedVideoSize !== null ? humanSize(archivedVideoSize) : 'on s3'}
                 </Typography>
-                <Tooltip title="on s3 and downloadable. attach a recording to get replace, shrink and in-browser playback back — those work through this app's job row, which this show no longer has">
+                {/* Replace is just "upload a new recording for this show", which
+                    the upload page does from the show id alone — no job row
+                    needed, so it's offered for every archived show. Shrink is
+                    the one action that genuinely works through a job row, so
+                    it's simply absent rather than advertised as unavailable. */}
+                <Tooltip title="upload a different recording for this show">
                   <Box
                     sx={{
                       fontSize: '0.6875rem',
@@ -693,39 +701,10 @@ function ArchiveCard({
                     }}
                   >
                     <Link to="/upload/$showId" params={{ showId: show.id }}>
-                      attach
+                      replace
                     </Link>
                   </Box>
                 </Tooltip>
-              </Stack>
-            ) : (
-              // No job row. The archived files are fine — the downloads above
-              // serve them — so say what's actually missing rather than
-              // "no upload record", which reads as "the file is gone".
-              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', rowGap: 0.5 }}>
-                <Tooltip title="the archived video and audio are on s3 and download fine. what's missing is this app's job row, which is what replace, shrink and in-browser playback work through — attach the recording to rebuild it">
-                  <Typography variant="body2" color="text.disabled">
-                    no job row
-                  </Typography>
-                </Tooltip>
-                <Box
-                  sx={{
-                    fontSize: '0.6875rem',
-                    '& a': {
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      minHeight: 32,
-                      color: c.link,
-                      textDecoration: 'underline',
-                      textUnderlineOffset: '2px',
-                    },
-                    '& a:hover': { color: c.ink },
-                  }}
-                >
-                  <Link to="/upload/$showId" params={{ showId: show.id }}>
-                    attach
-                  </Link>
-                </Box>
               </Stack>
             )}
           </Field>
@@ -812,7 +791,7 @@ function ArchiveCard({
         </Typography>
       )}
 
-      {playerOpen && playable && upload && <SignedVideoPlayer objectKey={upload.video_s3_key} />}
+      {playerOpen && playable && playerKey && <SignedVideoPlayer objectKey={playerKey} />}
       {syncOpen && <SyncPanel showId={show.id} links={links} />}
     </Paper>
   );
