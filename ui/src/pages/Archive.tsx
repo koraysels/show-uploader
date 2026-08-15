@@ -605,12 +605,6 @@ function ArchiveCard({
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {show.date}
             {show.startTime ? ` · ${show.startTime}` : ''}
-            {show.updated && (
-              <Box component="span" sx={{ color: c.faint }}>
-                {' '}
-                · updated {show.updated.slice(0, 16)}
-              </Box>
-            )}
           </Typography>
         </Box>
       </Stack>
@@ -905,14 +899,14 @@ export default function Archive() {
   // Cover + real publish status per show from PocketBase, keyed by show_id —
   // polled, so a change made elsewhere shows up here.
   const { data: states = {} } = useArchiveStates();
-  // Last-updated by default: whatever the operator just archived, linked or
-  // edited is what they came back to find.
-  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title' | 'updated'>('updated');
+  // 'updated' returns as the default the moment the PocketBase archive
+  // collection gains an autodate field — radio-scheduler owns that schema and
+  // is adding timestamps; today no record carries one, so sorting on it was a
+  // silent no-op that made the order look broken.
+  const [sort, setSort] = useState<'date-desc' | 'date-asc' | 'title'>('date-desc');
   const sorted = [...shows].sort((a, b) =>
     sort === 'title'
       ? a.title.localeCompare(b.title)
-      : sort === 'updated'
-      ? b.updated.localeCompare(a.updated)
       : sort === 'date-asc'
       ? a.date.localeCompare(b.date)
       : b.date.localeCompare(a.date)
@@ -946,7 +940,6 @@ export default function Archive() {
             <MenuItem value="date-desc">date · newest</MenuItem>
             <MenuItem value="date-asc">date · oldest</MenuItem>
             <MenuItem value="title">title · a–z</MenuItem>
-            <MenuItem value="updated">last updated</MenuItem>
           </TextField>
           <TextField
             size="small"
