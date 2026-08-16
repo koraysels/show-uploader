@@ -425,11 +425,18 @@ export const uploadsRouter = router({
         if (input.platform === 'mixcloud' && !upload.audio_s3_key) {
           throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No archived audio for this show' });
         }
-        if (upload.jobs.some((j) => j.platform === input.platform && (j.status === 'queued' || j.status === 'processing'))) {
+        const existing = upload.jobs.find((j) => j.platform === input.platform);
+        if (existing && (existing.status === 'queued' || existing.status === 'processing')) {
           throw new TRPCError({ code: 'CONFLICT', message: `A ${input.platform} upload is already running` });
         }
 
-        const job = await createPlatformJob(db, { upload_id: upload.id, platform: input.platform });
+        // A finished/failed row from an earlier post is common (a deleted
+        // duplicate, a first attempt). The (upload_id, platform) unique index
+        // means a blind insert 500s — reuse and reset the row instead, exactly
+        // like retryJob and enqueueCompressJob do.
+        const job = existing
+          ? (await resetPlatformJobForRetry(db, existing.id), existing)
+          : await createPlatformJob(db, { upload_id: upload.id, platform: input.platform });
         await uploadQueue.add(input.platform, {
           jobId: job.id,
           uploadId: upload.id,
