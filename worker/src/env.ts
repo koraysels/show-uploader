@@ -33,6 +33,11 @@ const schema = z.object({
   ARCHIVE_VIDEO_BITRATE: z.string().default('4000k'),
   ARCHIVE_AUDIO_BITRATE: z.string().default('256k'),
   JINGLE_S3_KEY: z.string().optional(),
+  // silencedetect threshold for auto edge-trim. Anything below this level counts
+  // as silence, so a HIGHER (less negative) value also trims quiet room hiss /
+  // tape noise, not just near-digital silence. -30 catches typical hiss; drop
+  // toward -40 to be gentler on quiet fade-ins. Edges only — never mid-content.
+  SILENCE_NOISE_DB: z.coerce.number().default(-30),
 });
 
 export const env = schema.parse(process.env);
