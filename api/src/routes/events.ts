@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { QueueEvents } from 'bullmq';
-import { redis, QUEUE_NAME } from '../queue';
+import { redis, QUEUE_NAME, COMPRESS_QUEUE_NAME } from '../queue';
 
 export const eventsRouter = Router();
 
@@ -12,7 +12,10 @@ eventsRouter.get('/:id/events', (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.flushHeaders();
 
+  // Compress rides its own queue since the lane split — listen on both, or a
+  // shrink's progress bar freezes at 0 while the job runs fine.
   const queueEvents = new QueueEvents(QUEUE_NAME, { connection: redis });
+  const compressEvents = new QueueEvents(COMPRESS_QUEUE_NAME, { connection: redis });
 
   const send = (data: object) => {
     res.write(`data: ${JSON.stringify(data)}\n\n`);
@@ -42,14 +45,17 @@ eventsRouter.get('/:id/events', (req, res) => {
     send({ type: 'failed', jobId, error: failedReason });
   };
 
-  queueEvents.on('progress', onProgress);
-  queueEvents.on('completed', onCompleted);
-  queueEvents.on('failed', onFailed);
+  for (const ev of [queueEvents, compressEvents]) {
+    ev.on('progress', onProgress);
+    ev.on('completed', onCompleted);
+    ev.on('failed', onFailed);
+  }
 
   const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), 15000);
 
   req.on('close', () => {
     clearInterval(heartbeat);
     void queueEvents.close();
+    void compressEvents.close();
   });
 });
