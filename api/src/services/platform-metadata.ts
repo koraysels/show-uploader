@@ -1,5 +1,5 @@
 import { env } from '../env';
-import { appendHashtags, htmlToText } from './format';
+import { appendHashtags, htmlToText, sanitizeForYoutube } from './format';
 
 // Edit already-published metadata (title/description/tags) in place on each
 // platform — no re-upload. Called when an operator changes an archive record.
@@ -105,9 +105,10 @@ export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<
       body: JSON.stringify({
         id,
         snippet: {
-          title: edit.title,
-          // The description is rich-text HTML (the PB master); YouTube wants plain text.
-          description: appendHashtags(htmlToText(edit.description), edit.tags),
+          title: sanitizeForYoutube(edit.title),
+          // The description is rich-text HTML (the PB master); YouTube wants plain
+          // text, and rejects any `<`/`>` (a "<3" 400'd the whole sync).
+          description: sanitizeForYoutube(appendHashtags(htmlToText(edit.description), edit.tags)),
           tags: edit.tags,
           categoryId: '10',
         },

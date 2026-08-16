@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baseTitle, appendHashtags, tagsToHashtags, htmlToText } from '../../src/services/format';
+import { baseTitle, appendHashtags, tagsToHashtags, htmlToText, sanitizeForYoutube } from '../../src/services/format';
 
 describe('baseTitle — plain title for PocketBase, no convention suffix', () => {
   it('strips a "<date> @ coming soon" suffix as one unit', () => {
@@ -103,5 +103,20 @@ describe('htmlToText — rich-text description → plain text for platforms', ()
     it('falls back to the text when there is no address', () => {
       expect(htmlToText('<p><a href="">nothing</a></p>')).toBe('nothing');
     });
+  });
+});
+
+describe('sanitizeForYoutube — YouTube rejects < and > in title/description', () => {
+  it('swaps a "<3" heart for the look-alike guillemet', () => {
+    expect(sanitizeForYoutube('morning show. <3')).toBe('morning show. \u20393');
+  });
+  it('replaces both angle brackets', () => {
+    expect(sanitizeForYoutube('a <b> c')).toBe('a \u2039b\u203a c');
+  });
+  it('leaves text without brackets untouched', () => {
+    expect(sanitizeForYoutube('plain description')).toBe('plain description');
+  });
+  it('handles empty/undefined safely', () => {
+    expect(sanitizeForYoutube('')).toBe('');
   });
 });

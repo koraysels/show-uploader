@@ -9,6 +9,15 @@ export function tagsToHashtags(tags: string[]): string {
     .join(' ');
 }
 
+// YouTube rejects any `<` or `>` in a title or description (invalidDescription /
+// invalidTitle, HTTP 400) — a "<3" heart or a stray bracket kills the whole
+// sync. Swap them for the look-alike single guillemets, which YouTube accepts
+// and which read almost identically. MixCloud has no such rule, so this is
+// applied only on the YouTube path.
+export function sanitizeForYoutube(text: string): string {
+  return (text ?? '').replace(/</g, '\u2039').replace(/>/g, '\u203a');
+}
+
 export function appendHashtags(description: string, tags: string[]): string {
   const tail = tagsToHashtags(tags);
   if (!tail) return description;
