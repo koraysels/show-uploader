@@ -1,5 +1,5 @@
 import { env } from '../env';
-import { appendHashtags, htmlToText, sanitizeForYoutube } from './format';
+import { appendHashtags, htmlToText, sanitizeForYoutube, capTitle } from './format';
 
 // Edit already-published metadata (title/description/tags) in place on each
 // platform — no re-upload. Called when an operator changes an archive record.
@@ -105,7 +105,7 @@ export async function syncYoutubeMetadata(url: string, edit: MetaEdit): Promise<
       body: JSON.stringify({
         id,
         snippet: {
-          title: sanitizeForYoutube(edit.title),
+          title: sanitizeForYoutube(capTitle(edit.title)),
           // The description is rich-text HTML (the PB master); YouTube wants plain
           // text, and rejects any `<`/`>` (a "<3" 400'd the whole sync).
           description: sanitizeForYoutube(appendHashtags(htmlToText(edit.description), edit.tags)),
@@ -155,13 +155,13 @@ export async function syncMixcloudMetadata(
       const ct = img.headers.get('content-type') ?? 'image/jpeg';
       const buf = Buffer.from(await img.arrayBuffer());
       const form = new FormData();
-      form.append('name', edit.title);
+      form.append('name', capTitle(edit.title));
       form.append('description', description);
       edit.tags.slice(0, 5).forEach((tag, i) => form.append(`tags-${i}-tag`, tag));
       form.append('picture', new Blob([new Uint8Array(buf)], { type: ct }), `cover.${ct.split('/')[1]?.split(';')[0] || 'jpg'}`);
       res = await fetch(endpoint, { method: 'POST', body: form });
     } else {
-      const body = new URLSearchParams({ name: edit.title, description });
+      const body = new URLSearchParams({ name: capTitle(edit.title), description });
       edit.tags.slice(0, 5).forEach((tag, i) => body.append(`tags-${i}-tag`, tag));
       res = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
     }
