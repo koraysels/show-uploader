@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { env } from '../env';
 import { shouldDryRun, simulateUpload } from './dry-run';
+import { capTitle } from './format';
 
 type MixcloudResponse = {
   key?: string;
@@ -27,7 +28,7 @@ export async function uploadToMixcloud(params: {
   const audioBuf = await fs.promises.readFile(params.audioPath);
   const form = new FormData();
   form.append('mp3', new Blob([audioBuf], { type: 'audio/mp4' }), path.basename(params.audioPath));
-  form.append('name', params.title);
+  form.append('name', capTitle(params.title));
   if (params.description) form.append('description', params.description);
   params.tags.slice(0, 5).forEach((tag, i) => {
     form.append(`tags-${i}-tag`, tag);

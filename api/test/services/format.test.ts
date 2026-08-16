@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { baseTitle, appendHashtags, tagsToHashtags, htmlToText } from '../../src/services/format';
+import { baseTitle, appendHashtags, tagsToHashtags, htmlToText, sanitizeForYoutube, capTitle } from '../../src/services/format';
 
 describe('baseTitle — plain title for PocketBase, no convention suffix', () => {
   it('strips a "<date> @ coming soon" suffix as one unit', () => {
@@ -103,5 +103,44 @@ describe('htmlToText — rich-text description → plain text for platforms', ()
     it('falls back to the text when there is no address', () => {
       expect(htmlToText('<p><a href="">nothing</a></p>')).toBe('nothing');
     });
+  });
+});
+
+describe('sanitizeForYoutube — YouTube rejects < and > in title/description', () => {
+  it('swaps a "<3" heart for the look-alike guillemet', () => {
+    expect(sanitizeForYoutube('morning show. <3')).toBe('morning show. \u20393');
+  });
+  it('replaces both angle brackets', () => {
+    expect(sanitizeForYoutube('a <b> c')).toBe('a \u2039b\u203a c');
+  });
+  it('leaves text without brackets untouched', () => {
+    expect(sanitizeForYoutube('plain description')).toBe('plain description');
+  });
+  it('handles empty/undefined safely', () => {
+    expect(sanitizeForYoutube('')).toBe('');
+  });
+});
+
+describe('capTitle — platform 100-char limit, keep the @ coming soon suffix', () => {
+  const long =
+    'ONDA listening sessions: with: Aaron | Luis & Joke | Thomas Gram @ coming soon 24.04.2025';
+  it('leaves a short title untouched', () => {
+    expect(capTitle('Short show @ coming soon 01.01.2026')).toBe('Short show @ coming soon 01.01.2026');
+  });
+  it('caps to at most 100 characters', () => {
+    const padded = 'X'.repeat(90) + ' @ coming soon 24.04.2025';
+    expect(capTitle(padded).length).toBeLessThanOrEqual(100);
+  });
+  it('preserves the @ coming soon suffix when trimming', () => {
+    const padded = 'A very very very long show name that just runs on and on and on and on and on and on and on @ coming soon 24.04.2025';
+    const out = capTitle(padded);
+    expect(out.length).toBeLessThanOrEqual(100);
+    expect(out).toMatch(/@ coming soon 24\.04\.2025$/);
+    expect(out).toContain('\u2026');
+  });
+  it('plain-caps when there is no suffix', () => {
+    const out = capTitle('Z'.repeat(140));
+    expect(out.length).toBeLessThanOrEqual(100);
+    expect(out.endsWith('\u2026')).toBe(true);
   });
 });

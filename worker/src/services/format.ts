@@ -9,6 +9,34 @@ export function tagsToHashtags(tags: string[]): string {
     .join(' ');
 }
 
+// YouTube and MixCloud both cap a title at 100 characters (400 invalidTitle /
+// PostValidationError otherwise). When over, preserve the "@ coming soon <date>"
+// convention suffix — the branding + date that every title carries — and trim
+// the show-name part instead, joining with an ellipsis. Falls back to a plain
+// cap when no suffix is present.
+export function capTitle(title: string, max = 100): string {
+  const t = (title ?? '').trim();
+  if (t.length <= max) return t;
+  const m = t.match(/\s*@\s*coming soon.*$/i);
+  const suffix = m ? m[0].trim() : '';
+  if (suffix && suffix.length + 2 < max) {
+    const room = max - suffix.length - 2; // 2 = ellipsis + space
+    const name = t.slice(0, t.length - suffix.length).trim();
+    const cut = name.slice(0, room).replace(/\s+\S*$/, '').trim() || name.slice(0, room).trim();
+    return `${cut}\u2026 ${suffix}`;
+  }
+  return t.slice(0, max - 1).replace(/\s+\S*$/, '').trim() + '\u2026';
+}
+
+// YouTube rejects any `<` or `>` in a title or description (invalidDescription /
+// invalidTitle, HTTP 400) — a "<3" heart or a stray bracket kills the whole
+// sync. Swap them for the look-alike single guillemets, which YouTube accepts
+// and which read almost identically. MixCloud has no such rule, so this is
+// applied only on the YouTube path.
+export function sanitizeForYoutube(text: string): string {
+  return (text ?? '').replace(/</g, '\u2039').replace(/>/g, '\u203a');
+}
+
 export function appendHashtags(description: string, tags: string[]): string {
   const tail = tagsToHashtags(tags);
   if (!tail) return description;

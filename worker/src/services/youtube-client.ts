@@ -2,7 +2,7 @@ import { google } from 'googleapis';
 import fs from 'fs';
 import { env } from '../env';
 import { shouldDryRun, simulateUpload } from './dry-run';
-import { appendHashtags } from './format';
+import { appendHashtags, sanitizeForYoutube, capTitle } from './format';
 
 function getYouTubeClient() {
   if (!env.YOUTUBE_CLIENT_ID || !env.YOUTUBE_CLIENT_SECRET || !env.YOUTUBE_REFRESH_TOKEN) {
@@ -36,10 +36,11 @@ export async function uploadToYoutube(params: {
       part: ['snippet', 'status'],
       requestBody: {
         snippet: {
-          title: params.title,
+          title: sanitizeForYoutube(capTitle(params.title)),
           // Tags also go in the description as #hashtags — YouTube never shows
           // the tags field publicly, only description hashtags are visible.
-          description: appendHashtags(params.description, params.tags),
+          // sanitize: YouTube 400s on any `<`/`>` (a "<3" in the notes killed it).
+          description: sanitizeForYoutube(appendHashtags(params.description, params.tags)),
           tags: params.tags,
           categoryId: '10', // Music
         },
