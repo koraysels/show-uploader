@@ -5,6 +5,7 @@ import type { JobPayload, PreviewJobPayload } from './types';
 
 export const QUEUE_NAME = 'platform-uploads';
 export const PREVIEW_QUEUE_NAME = 'video-previews';
+export const COMPRESS_QUEUE_NAME = 'compress-jobs';
 
 // Cast to bullmq's ConnectionOptions: bullmq bundles its own nested ioredis copy,
 // so the instance's type differs from ours even though it's the same runtime class.

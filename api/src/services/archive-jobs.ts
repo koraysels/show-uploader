@@ -1,7 +1,7 @@
 import type { Sql } from 'postgres';
 import { createPlatformJob, resetPlatformJobForRetry } from '../db/queries';
 import type { PlatformJob, ShowUpload } from '../db/queries';
-import { uploadQueue } from '../queue';
+import { uploadQueue, compressQueue } from '../queue';
 
 /**
  * Drop an upload's not-yet-started jobs from the queue.
@@ -127,7 +127,7 @@ export async function enqueueCompressJob(
     await resetPlatformJobForRetry(db, job.id);
   }
 
-  await uploadQueue.add(
+  await compressQueue.add(
     'compress',
     {
       jobId: job.id,
