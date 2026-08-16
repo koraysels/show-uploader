@@ -478,7 +478,7 @@ export async function detectSilenceBounds(
   videoPath: string,
   opts: { noiseDb?: number; minSilenceSec?: number } = {}
 ): Promise<{ trimStart: string | null; trimEnd: string | null }> {
-  const noise = opts.noiseDb ?? -40;
+  const noise = opts.noiseDb ?? env.SILENCE_NOISE_DB;
   const minSil = opts.minSilenceSec ?? 1.0;
   return new Promise((resolve) => {
     const silences: Silence[] = [];
