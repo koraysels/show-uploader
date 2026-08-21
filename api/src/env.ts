@@ -37,6 +37,11 @@ const schema = z.object({
   // Browser-facing file links always use the public POCKETBASE_URL.
   POCKETBASE_INTERNAL_URL: z.string().url().optional(),
   LIVE_GUARD_BUFFER_MIN: z.coerce.number().default(15),
+  // An episode claiming a longer air window than this is bad schedule data —
+  // the guard ignores it instead of parking the queue behind it.
+  LIVE_GUARD_MAX_EPISODE_HOURS: z.coerce.number().default(12),
+  // Ceiling on how far a live show can push queued work, whatever PB says.
+  LIVE_GUARD_MAX_DEFER_MIN: z.coerce.number().default(240),
   // Superuser creds — needed at runtime to read draft archive records (gated).
   PB_SERVICE_EMAIL: z.string().optional(),
   PB_SERVICE_PASSWORD: z.string().optional(),
