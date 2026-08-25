@@ -3,6 +3,9 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(() => 'mock-jwks'),
   jwtVerify: vi.fn(),
+  // The rejection path logs the token's shape (alg/kid) to make a misconfigured
+  // Zitadel app diagnosable from the api log.
+  decodeProtectedHeader: vi.fn(() => ({ alg: 'RS256', kid: 'key-1' })),
 }));
 
 vi.mock('../../src/env', () => ({
@@ -87,7 +90,7 @@ describe('requireAuth', () => {
     expect(vi.mocked(jwtVerify)).toHaveBeenCalledWith(
       'token',
       'mock-jwks',
-      { issuer: 'https://test.zitadel.cloud', audience: 'test-client-id' }
+      { issuer: 'https://test.zitadel.cloud', audience: 'test-client-id', clockTolerance: '30s' }
     );
   });
 
@@ -111,6 +114,29 @@ describe('requireAuth', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
+  // A JWKS fetch that timed out says nothing about the token. Answering 401
+  // there made the UI drop the session and bounce to Zitadel, whose live SSO
+  // session sent it straight back — the sign-in loop. 503 keeps the session.
+  it('returns 503 when the key set could not be fetched', async () => {
+    vi.mocked(jwtVerify).mockRejectedValue(
+      Object.assign(new Error('timeout'), { code: 'ERR_JWKS_TIMEOUT' })
+    );
+    const res = makeRes();
+    await requireAuth(makeReq('Bearer token'), res, next);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 with the jose code for an expired token', async () => {
+    vi.mocked(jwtVerify).mockRejectedValue(
+      Object.assign(new Error('exp'), { code: 'ERR_JWT_EXPIRED' })
+    );
+    const res = makeRes();
+    await requireAuth(makeReq('Bearer token'), res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Invalid token', code: 'ERR_JWT_EXPIRED' });
+  });
+
   // EventSource can't set headers, so both SSE streams authenticate this way.
   describe('access_token query param (SSE)', () => {
     it('accepts a member token passed as a query param', async () => {
@@ -122,7 +148,7 @@ describe('requireAuth', () => {
       expect(vi.mocked(jwtVerify)).toHaveBeenCalledWith(
         'sse-token',
         'mock-jwks',
-        { issuer: 'https://test.zitadel.cloud', audience: 'test-client-id' }
+        { issuer: 'https://test.zitadel.cloud', audience: 'test-client-id', clockTolerance: '30s' }
       );
     });
 

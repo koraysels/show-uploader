@@ -1,35 +1,20 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react';
-import { UserManager, WebStorageStateStore, type User } from 'oidc-client-ts';
+import type { User } from 'oidc-client-ts';
+import { userManager } from './user-manager';
+import { getAuthFailure, requestSignin, subscribeAuthFailure, type AuthFailure } from './signin';
 
-export const userManager = new UserManager({
-  authority: `https://${import.meta.env.VITE_ZITADEL_DOMAIN}`,
-  client_id: import.meta.env.VITE_ZITADEL_CLIENT_ID,
-  redirect_uri: `${window.location.origin}/callback`,
-  // offline_access asks Zitadel for a refresh token, which is what lets the
-  // session outlive the access token. It is SILENTLY IGNORED unless the
-  // "Refresh Token" grant is enabled on the app in the Zitadel console.
-  scope: 'openid profile email offline_access urn:zitadel:iam:org:project:roles',
-  response_type: 'code',
-  automaticSilentRenew: true,
-  // Default is sessionStorage, which drops the session when the tab closes — no
-  // token lifetime can survive that. localStorage is the tradeoff that makes a
-  // multi-day session possible: the refresh token is readable by any XSS on
-  // this origin for as long as it lives.
-  userStore: new WebStorageStateStore({ store: window.localStorage }),
-  // Renewal without a refresh token runs in a hidden iframe, which has to call
-  // signinSilentCallback(). Left at its default this points at /callback, which
-  // only handles the redirect flow — the iframe would never answer and every
-  // renewal would stall for the full 10s timeout before failing.
-  silent_redirect_uri: `${window.location.origin}/silent-renew`,
-  // Zitadel omits name/email from the ID token; fetch them from the userinfo
-  // endpoint so user.profile has a display name (header chip, presence).
-  loadUserInfo: true,
-});
+// The UserManager singleton lives in ./user-manager so the silent-renew iframe
+// (main.tsx) can import it without pulling in React. Re-exported here because
+// the rest of the app has always imported it from this module.
+export { userManager };
 
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
-  userManager: UserManager;
+  userManager: typeof userManager;
+  // Set once the loop breaker has stopped re-authenticating; the layout shows
+  // the failure screen instead of another "signing in…" spinner.
+  authFailure: AuthFailure | null;
 };
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
@@ -37,15 +22,31 @@ export const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authFailure, setAuthFailure] = useState<AuthFailure | null>(getAuthFailure);
 
   useEffect(() => {
-    const handleUserLoaded = (u: User) => setUser(u);
+    // The restore-from-storage chain below is async, and on /callback the token
+    // exchange can finish first. Without this flag its late `setUser(stored)`
+    // overwrote the user that just signed in with null — which the route guard
+    // read as "not logged in" and answered with another redirect.
+    let loaded = false;
+
+    const handleUserLoaded = (u: User) => {
+      loaded = true;
+      setUser(u);
+    };
     const handleUserUnloaded = () => setUser(null);
-    const handleSilentRenewError = () => {
+    const handleSilentRenewError = async () => {
+      // A failed renewal is not by itself a dead session: with a still-valid
+      // access token the next renewal tick can succeed, and forcing a redirect
+      // here is what turned one blocked iframe into a login loop.
+      const current = await userManager.getUser().catch(() => null);
+      if (current && !current.expired) return;
       setUser(null);
-      userManager.signinRedirect();
+      void requestSignin('silent-renew-failed');
     };
 
+    const unsubscribeFailure = subscribeAuthFailure(setAuthFailure);
     userManager.events.addUserLoaded(handleUserLoaded);
     userManager.events.addUserUnloaded(handleUserUnloaded);
     userManager.events.addSilentRenewError(handleSilentRenewError);
@@ -59,11 +60,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!stored?.expired) return stored;
         return await userManager.signinSilent().catch(() => stored);
       })
-      .then(setUser)
-      .catch(() => setUser(null))
+      .then((restored) => {
+        if (!loaded) setUser(restored);
+      })
+      .catch(() => {
+        if (!loaded) setUser(null);
+      })
       .finally(() => setLoading(false));
 
     return () => {
+      unsubscribeFailure();
       userManager.events.removeUserLoaded(handleUserLoaded);
       userManager.events.removeUserUnloaded(handleUserUnloaded);
       userManager.events.removeSilentRenewError(handleSilentRenewError);
@@ -71,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, userManager }}>
+    <AuthContext.Provider value={{ user, loading, userManager, authFailure }}>
       {children}
     </AuthContext.Provider>
   );
