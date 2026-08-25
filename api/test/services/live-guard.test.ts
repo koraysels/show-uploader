@@ -89,3 +89,67 @@ describe('evaluateLive', () => {
     expect(evaluateLive([ep()], at('2026-07-08T20:00:00Z'), BUF).resumeAt).toBeNull();
   });
 });
+
+describe('evaluateLive — bad-data hardening', () => {
+  // 2026-08-18 16:17Z → 2026-08-23 16:17Z: a real "live" episode in PocketBase
+  // whose endTime was five days out. It parked every upload for two days.
+  const marathon = ep({
+    status: 'live',
+    startTime: '2026-08-18 16:17:00.000Z',
+    endTime: '2026-08-23 16:17:00.000Z',
+  });
+
+  it('ignores an episode whose window is longer than the max', () => {
+    const r = evaluateLive([marathon], at('2026-08-21T19:00:00Z'), BUF, { maxEpisodeHours: 12 });
+    expect(r.isLive).toBe(false);
+    expect(r.resumeAt).toBeNull();
+  });
+
+  it('still honours a normal episode alongside an implausible one', () => {
+    const r = evaluateLive([marathon, ep()], at('2026-07-08T12:30:00Z'), BUF, {
+      maxEpisodeHours: 12,
+    });
+    expect(r.isLive).toBe(true);
+    expect(r.resumeAt?.toISOString()).toBe('2026-07-08T13:15:00.000Z');
+  });
+
+  it('keeps an episode exactly at the max window length', () => {
+    const twelve = ep({
+      startTime: '2026-07-08 06:00:00.000Z',
+      endTime: '2026-07-08 18:00:00.000Z',
+    });
+    const r = evaluateLive([twelve], at('2026-07-08T12:00:00Z'), BUF, { maxEpisodeHours: 12 });
+    expect(r.isLive).toBe(true);
+  });
+
+  it('ignores an episode with an unparseable timestamp', () => {
+    const r = evaluateLive([ep({ endTime: 'not-a-date' })], at('2026-07-08T12:30:00Z'), BUF);
+    expect(r.isLive).toBe(false);
+  });
+
+  it('ignores an episode whose end precedes its start', () => {
+    const r = evaluateLive(
+      [ep({ startTime: '2026-07-08 13:00:00.000Z', endTime: '2026-07-08 12:00:00.000Z' })],
+      at('2026-07-08T12:30:00Z'),
+      BUF
+    );
+    expect(r.isLive).toBe(false);
+  });
+
+  it('clamps resumeAt to now + maxDeferMin', () => {
+    const long = ep({ startTime: '2026-07-08 12:00:00.000Z', endTime: '2026-07-08 22:00:00.000Z' });
+    const r = evaluateLive([long], at('2026-07-08T12:30:00Z'), BUF, { maxDeferMin: 60 });
+    expect(r.isLive).toBe(true);
+    expect(r.resumeAt?.toISOString()).toBe('2026-07-08T13:30:00.000Z');
+  });
+
+  it('leaves resumeAt alone when it is inside the clamp', () => {
+    const r = evaluateLive([ep()], at('2026-07-08T12:30:00Z'), BUF, { maxDeferMin: 240 });
+    expect(r.resumeAt?.toISOString()).toBe('2026-07-08T13:15:00.000Z');
+  });
+
+  it('defaults keep the five-day marathon from deferring anything', () => {
+    const r = evaluateLive([marathon], at('2026-08-21T19:00:00Z'), BUF);
+    expect(r.isLive).toBe(false);
+  });
+});
