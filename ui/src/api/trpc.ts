@@ -1,6 +1,6 @@
 import { createTRPCClient, httpBatchLink } from '@trpc/client';
 import { createTRPCContext } from '@trpc/tanstack-react-query';
-import { userManager } from '../auth/AuthProvider';
+import { guardedSession } from '../auth/signin';
 import { withAuthRetry } from '../auth/session';
 // Type-only import of the server's router shape. No path alias exists between the
 // packages, so we reach into the api source directly (the type is erased at build
@@ -12,7 +12,7 @@ import type { AppRouter } from '../../../api/src/trpc/root';
 // sending so the body survives the retry.
 const authedFetch: typeof fetch = async (input, init) => {
   const base = input instanceof Request ? input : new Request(input as string, init);
-  return withAuthRetry(userManager, (token) => {
+  return withAuthRetry(guardedSession, (token) => {
     const req = base.clone();
     if (token) req.headers.set('Authorization', `Bearer ${token}`);
     return fetch(req);

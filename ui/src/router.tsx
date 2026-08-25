@@ -30,18 +30,30 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageLoading } from './components/Skeleton';
 import AuthCallback from './pages/AuthCallback';
 import AccessDenied from './pages/AccessDenied';
+import AuthFailed from './pages/AuthFailed';
+import { markSessionHealthy, requestSignin, signOut } from './auth/signin';
 import Storage from './pages/Storage';
 
 function AuthedLayout() {
-  const { user, loading, userManager } = useAuth();
+  const { user, loading, authFailure } = useAuth();
   const authCheck = useAuthCheck(!!user);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [navAnchor, setNavAnchor] = useState<HTMLElement | null>(null);
 
   useEffect(() => {
-    if (!loading && !user) void userManager.signinRedirect();
-  }, [loading, user, userManager]);
+    if (!loading && !user) void requestSignin('route-guard');
+  }, [loading, user]);
 
+  // The api accepting a token is the only proof the whole chain works, so it is
+  // what resets the loop breaker. Anything short of that leaves the count
+  // standing, which is how a bounce-forever session gets stopped.
+  useEffect(() => {
+    if (authCheck.isSuccess) markSessionHealthy();
+  }, [authCheck.isSuccess]);
+
+  // Signing in has failed enough times that continuing would just loop through
+  // Zitadel's live SSO session. Say so instead.
+  if (authFailure) return <AuthFailed failure={authFailure} />;
   // Never render null here — that blanks the page during auth/redirect (e.g. a
   // session that expired after long idle). Show a loader instead.
   if (loading) return <PageLoading label="loading…" />;
@@ -55,23 +67,10 @@ function AuthedLayout() {
     (user.profile.email as string) ||
     'account';
 
-  const handleLogout = async () => {
-    // Kill the refresh token at Zitadel first — removeUser() only drops the local
-    // copy, which would leave a token redeemable for its full 30-day idle life
-    // after the user believes they signed out. Fail-open: a revoke that errors
-    // must not trap the user in a session they asked to leave.
-    try {
-      await userManager.revokeTokens(['refresh_token']);
-    } catch {
-      // Nothing to revoke (no refresh token yet), or Zitadel is unreachable.
-    }
-    // Clear the local session and force the Zitadel login screen. We avoid the
-    // OIDC end-session endpoint — it requires a registered post_logout_redirect_uri
-    // (not configured), which dead-ends on a "Not Found". prompt=login makes this
-    // a real logout (re-auth / switch account) rather than a silent SSO bounce.
-    await userManager.removeUser();
-    await userManager.signinRedirect({ prompt: 'login' });
-  };
+  // Revoke at Zitadel, drop the local session, reset the loop breaker, then
+  // force a real login screen — all of it in auth/signin.ts so the failure
+  // screen's "sign out" and this button can never drift apart.
+  const handleLogout = () => void signOut();
 
   // Inverted fill marks the current tab — DESIGN.md's emphasis mechanism, since
   // there's no accent colour to lean on.

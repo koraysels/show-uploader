@@ -21,9 +21,10 @@ async function bootstrap() {
   // Target of silent_redirect_uri. This document only ever loads inside the
   // hidden renewal iframe, where the single job is to post the result back to
   // the parent window — mounting the app there would boot the whole provider
-  // tree (and open a second presence stream) for every token renewal.
+  // tree (and open a second presence stream) for every token renewal. Imports
+  // the manager directly (not via AuthProvider) so the iframe pulls no React.
   if (location.pathname === '/silent-renew') {
-    const { userManager } = await import('./auth/AuthProvider');
+    const { userManager } = await import('./auth/user-manager');
     // Failures are reported to the parent over the same channel; nothing here
     // can act on them, and this document is never seen by the user.
     await userManager.signinSilentCallback().catch(() => {});

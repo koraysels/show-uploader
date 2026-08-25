@@ -1,4 +1,4 @@
-import { userManager } from '../auth/AuthProvider';
+import { guardedSession } from '../auth/signin';
 import { getFreshAccessToken, withAuthRetry } from '../auth/session';
 
 export type MediaLink = { label: string; type: string; url: string };
@@ -59,7 +59,7 @@ async function requestWith<T>(path: string, token: string | undefined, options?:
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   // Token freshness and the 401 renew/retry policy live in auth/session.ts,
   // shared with the tRPC link.
-  const res = await withAuthRetry(userManager, (token) => requestWith(path, token, options));
+  const res = await withAuthRetry(guardedSession, (token) => requestWith(path, token, options));
   if (!res.ok) throw new Error(`API error ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -136,7 +136,7 @@ export const api = {
 export async function presenceStreamUrl(): Promise<string | null> {
   // Must be a *fresh* token: EventSource has no 401 hook, so a stale one leaves
   // the stream silently reconnecting forever.
-  const token = await getFreshAccessToken(userManager);
+  const token = await getFreshAccessToken(guardedSession);
   if (!token) return null;
   return `/api/presence/stream?access_token=${encodeURIComponent(token)}`;
 }
