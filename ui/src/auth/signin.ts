@@ -53,7 +53,13 @@ export function subscribeAuthFailure(fn: (f: AuthFailure | null) => void): () =>
  * without redirecting when the guard trips — callers keep rendering, and the
  * layout shows the failure screen.
  */
-export function requestSignin(reason: string, args?: { prompt?: string }): Promise<void> {
+export function requestSignin(
+  reason: string,
+  args?: { prompt?: string },
+  // Carried onto the failure screen when the guard trips, so a cause we already
+  // know (an unrenewable session, say) isn't reduced to a bare reason code.
+  detail?: string
+): Promise<void> {
   // Already stopped: another redirect would just resume the loop we broke.
   if (failure) return Promise.resolve();
   // A redirect is a page unload; the second caller has nothing left to start.
@@ -61,17 +67,21 @@ export function requestSignin(reason: string, args?: { prompt?: string }): Promi
 
   const { allowed, attempts } = recordAttempt(attemptStore(), Date.now());
   if (!allowed) {
-    failure = { reason, attempts };
+    failure = { reason, attempts, detail };
     console.error(`Auth loop broken after ${attempts} signin redirects (${reason})`);
     emit();
     return Promise.resolve();
   }
 
+  // One line per redirect, so a loop is readable in the console even when every
+  // individual bounce succeeds and never trips the guard.
+  console.warn(`Auth: interactive signin #${attempts} (${reason})`);
+
   pending = userManager
     .signinRedirect(args)
     .catch((err: unknown) => {
       // Never reached the login screen at all (Zitadel unreachable, bad config).
-      failure = { reason, attempts, detail: String(err) };
+      failure = { reason, attempts, detail: detail ? `${detail}\n${String(err)}` : String(err) };
       emit();
     })
     .finally(() => {

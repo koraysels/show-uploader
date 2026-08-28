@@ -51,6 +51,17 @@ describe('requireAuth', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  // The client-side loop (renewal fails, no token gets attached) never reaches
+  // jwtVerify, so this is the only line that makes it visible in the api log.
+  it('names the no-token case with a code the log and the UI can tell apart', async () => {
+    const res = makeRes();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await requireAuth(makeReq(), res, next);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Missing token', code: 'ERR_NO_TOKEN' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Auth: no token'));
+    warn.mockRestore();
+  });
+
   it('returns 401 when token verification throws', async () => {
     vi.mocked(jwtVerify).mockRejectedValue(new Error('bad token'));
     const res = makeRes();
