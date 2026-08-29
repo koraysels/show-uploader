@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 vi.mock('jose', () => ({
   createRemoteJWKSet: vi.fn(() => 'mock-jwks'),
@@ -43,12 +43,25 @@ describe('requireAuth', () => {
   const next = vi.fn();
 
   beforeEach(() => vi.clearAllMocks());
+  afterEach(() => vi.restoreAllMocks());
 
   it('returns 401 when Authorization header is missing', async () => {
     const res = makeRes();
     await requireAuth(makeReq(), res, next);
     expect(res.status).toHaveBeenCalledWith(401);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  // The client-side loop (renewal fails, no token gets attached) never reaches
+  // jwtVerify, so this is the only line that makes it visible in the api log.
+  it('names the no-token case with a code the log and the UI can tell apart', async () => {
+    const res = makeRes();
+    // restoreAllMocks in afterEach, so a failing assertion can't leave console
+    // silenced for the rest of the file.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await requireAuth(makeReq(), res, next);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Missing token', code: 'ERR_NO_TOKEN' });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Auth: no token'));
   });
 
   it('returns 401 when token verification throws', async () => {

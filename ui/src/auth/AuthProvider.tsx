@@ -1,7 +1,13 @@
 import { createContext, useEffect, useState, type ReactNode } from 'react';
 import type { User } from 'oidc-client-ts';
 import { userManager } from './user-manager';
-import { getAuthFailure, requestSignin, subscribeAuthFailure, type AuthFailure } from './signin';
+import {
+  getAuthFailure,
+  requestSignin,
+  subscribeAuthFailure,
+  type AuthFailure,
+} from './signin';
+import { canRenewSilently, renewFailureAction, NO_REFRESH_TOKEN_HINT } from './renewability';
 
 // The UserManager singleton lives in ./user-manager so the silent-renew iframe
 // (main.tsx) can import it without pulling in React. Re-exported here because
@@ -33,17 +39,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const handleUserLoaded = (u: User) => {
       loaded = true;
+      // Zitadel ignores `offline_access` unless the app has the Refresh Token
+      // grant, and the iframe fallback is blocked in more browsers every year.
+      // Say so once per sign-in rather than letting it surface as a loop.
+      if (!canRenewSilently(u)) console.warn(`Auth: ${NO_REFRESH_TOKEN_HINT}`);
       setUser(u);
     };
     const handleUserUnloaded = () => setUser(null);
     const handleSilentRenewError = async () => {
-      // A failed renewal is not by itself a dead session: with a still-valid
-      // access token the next renewal tick can succeed, and forcing a redirect
-      // here is what turned one blocked iframe into a login loop.
       const current = await userManager.getUser().catch(() => null);
-      if (current && !current.expired) return;
-      setUser(null);
-      void requestSignin('silent-renew-failed');
+      switch (renewFailureAction(current)) {
+        // Still-valid access token: the next tick can succeed. Dropping the
+        // session here is what turned one blocked iframe into a login loop.
+        case 'ignore':
+          return;
+        case 'reauth':
+          setUser(null);
+          void requestSignin('silent-renew-failed');
+          return;
+        // Expired, and renewal will fail the same way every time. Another
+        // redirect gets a fresh token that dies one lifetime later — the loop.
+        // Stop the retry timer too, or oidc keeps re-entering this handler.
+        case 'fail':
+          userManager.stopSilentRenew();
+          setUser(null);
+          void requestSignin('renew-unavailable', undefined, NO_REFRESH_TOKEN_HINT);
+      }
     };
 
     const unsubscribeFailure = subscribeAuthFailure(setAuthFailure);
@@ -58,6 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .getUser()
       .then(async (stored) => {
         if (!stored?.expired) return stored;
+        // No refresh token means signinSilent can only try the iframe, which
+        // costs a 10s timeout before failing. Go straight to the interactive
+        // signin the guard can count.
+        if (!canRenewSilently(stored)) {
+          void requestSignin('renew-unavailable', undefined, NO_REFRESH_TOKEN_HINT);
+          return null;
+        }
         return await userManager.signinSilent().catch(() => stored);
       })
       .then((restored) => {

@@ -60,7 +60,10 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
       ? req.query.access_token
       : undefined;
   if (!token) {
-    res.status(401).json({ error: 'Missing token' });
+    // A loop driven by the client failing to renew never reaches jwtVerify, so
+    // without this line the server log stays empty while the browser bounces.
+    console.warn(`Auth: no token on ${req.method} ${req.path}`);
+    res.status(401).json({ error: 'Missing token', code: 'ERR_NO_TOKEN' });
     return;
   }
   try {

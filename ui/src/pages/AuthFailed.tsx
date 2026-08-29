@@ -10,6 +10,8 @@ const REASONS: Record<string, string> = {
   'route-guard': 'the app never saw a signed-in session after returning from zitadel.',
   'callback-failed': 'the login could not be completed when zitadel redirected back.',
   'manual-retry': 'the retry did not get further than the previous attempt.',
+  'renew-unavailable':
+    'the session expired and could not be renewed without sending you back to zitadel.',
 };
 
 /**
