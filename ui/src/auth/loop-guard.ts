@@ -96,3 +96,18 @@ export function clearAttempts(store: AttemptStore): void {
     // Nothing to do; a stale counter expires with the window anyway.
   }
 }
+
+/**
+ * Wipe both counters. Only for an explicit act by the operator — signing out,
+ * or pressing "try again" — where the next redirect is one they asked for and
+ * must not be refused by history from the loop they are trying to escape.
+ */
+export function resetGuard(store: AttemptStore): void {
+  for (const key of [ATTEMPTS_KEY, HISTORY_KEY]) {
+    try {
+      store.removeItem(key);
+    } catch {
+      // Blocked storage: the windows expire on their own soon enough.
+    }
+  }
+}

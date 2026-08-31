@@ -6,6 +6,7 @@ import {
   recordAttempt,
   type AttemptStore,
   HISTORY_WINDOW_MS,
+  resetGuard,
 } from '../../src/auth/loop-guard';
 
 // ui's vitest run has no jsdom, so sessionStorage is faked with a plain map.
@@ -111,6 +112,27 @@ describe('clearAttempts', () => {
 
 // A loop that succeeds between bounces cleared the short counter every pass, so
 // it could redirect forever without the guard ever seeing more than one attempt.
+describe('resetGuard', () => {
+  it('clears the history too, so signing out is never refused', () => {
+    const data = new Map<string, string>();
+    const s = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    };
+    let now = 0;
+    for (let i = 0; i < 6; i++) {
+      recordAttempt(s, now);
+      clearAttempts(s);
+      now += 60_000;
+    }
+    expect(recordAttempt(s, now).allowed).toBe(false);
+
+    resetGuard(s);
+    expect(recordAttempt(s, now).allowed).toBe(true);
+  });
+});
+
 describe('long-window history', () => {
   const store = () => {
     const data = new Map<string, string>();
