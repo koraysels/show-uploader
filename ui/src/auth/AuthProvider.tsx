@@ -3,11 +3,13 @@ import type { User } from 'oidc-client-ts';
 import { userManager } from './user-manager';
 import {
   getAuthFailure,
+  guardedSession,
   requestSignin,
   subscribeAuthFailure,
   type AuthFailure,
 } from './signin';
 import { canRenewSilently, renewFailureAction, NO_REFRESH_TOKEN_HINT } from './renewability';
+import { renewSession } from './session';
 
 // The UserManager singleton lives in ./user-manager so the silent-renew iframe
 // (main.tsx) can import it without pulling in React. Re-exported here because
@@ -86,7 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           void requestSignin('renew-unavailable', undefined, NO_REFRESH_TOKEN_HINT);
           return null;
         }
-        return await userManager.signinSilent().catch(() => stored);
+        // Shared with the query path, so the page load can't fire a second
+        // refresh grant against a token the first one already rotated away.
+        return (await renewSession(guardedSession, stored.access_token)) ?? stored;
       })
       .then((restored) => {
         if (!loaded) setUser(restored);

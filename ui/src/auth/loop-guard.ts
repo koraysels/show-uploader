@@ -20,14 +20,21 @@ export interface AttemptStore {
 }
 
 export const ATTEMPTS_KEY = 'auth:signin-attempts';
+// A second, longer window that proving the session good does NOT clear. Without
+// it a cycle that alternates success and failure — sign in, work for one token
+// lifetime, lose the session, sign in again — resets the counter on every pass
+// and redirects forever without the guard ever seeing a loop.
+export const HISTORY_KEY = 'auth:signin-history';
+export const MAX_HISTORY = 5;
+export const HISTORY_WINDOW_MS = 600_000;
 // Three interactive redirects inside a minute is never a person signing in; a
 // real login is one redirect, and a genuine re-auth after expiry is one more.
 export const MAX_ATTEMPTS = 3;
 export const WINDOW_MS = 60_000;
 
-function read(store: AttemptStore): number[] {
+function read(store: AttemptStore, key: string = ATTEMPTS_KEY): number[] {
   try {
-    const raw = store.getItem(ATTEMPTS_KEY);
+    const raw = store.getItem(key);
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.filter((n): n is number => typeof n === 'number') : [];
@@ -43,6 +50,11 @@ export function recentAttempts(store: AttemptStore, now: number, windowMs = WIND
   return read(store).filter((t) => now - t < windowMs);
 }
 
+/** Redirects in the long window, which survives a healthy session. */
+export function signinHistory(store: AttemptStore, now: number): number[] {
+  return read(store, HISTORY_KEY).filter((t) => now - t < HISTORY_WINDOW_MS);
+}
+
 /**
  * Record one interactive signin and report whether it may proceed. The attempt
  * that trips the limit is still stored, so a caller that ignores `allowed`
@@ -55,16 +67,28 @@ export function recordAttempt(
 ): { allowed: boolean; attempts: number } {
   const max = opts.max ?? MAX_ATTEMPTS;
   const attempts = [...recentAttempts(store, now, opts.windowMs), now];
+  const history = [...signinHistory(store, now), now];
   try {
     store.setItem(ATTEMPTS_KEY, JSON.stringify(attempts));
+    store.setItem(HISTORY_KEY, JSON.stringify(history));
   } catch {
     // Storage full or blocked: the guard degrades to allowing the redirect,
     // which is the pre-guard behaviour, not a worse one.
   }
-  return { allowed: attempts.length <= max, attempts: attempts.length };
+  // Report whichever count did the blocking, so the failure screen's "stopped
+  // after N attempts" describes the loop that was actually seen.
+  const tooManyRecent = attempts.length > max;
+  const tooManyOverall = history.length > MAX_HISTORY;
+  return {
+    allowed: !tooManyRecent && !tooManyOverall,
+    attempts: tooManyOverall && !tooManyRecent ? history.length : attempts.length,
+  };
 }
 
-/** Called once the session is proven good — the counter starts from zero again. */
+/**
+ * Called once the session is proven good — the short counter starts from zero
+ * again. The long history deliberately survives, so a slow loop still adds up.
+ */
 export function clearAttempts(store: AttemptStore): void {
   try {
     store.removeItem(ATTEMPTS_KEY);
