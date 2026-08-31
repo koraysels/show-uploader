@@ -1,39 +1,6 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import type { CreateExpressContextOptions } from '@trpc/server/adapters/express';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { env } from '../env';
-import type { AuthUser } from '../middleware/requireAuth';
-
-// Reuse the EXACT same JWKS + verification that requireAuth performs, so tRPC
-// procedures enforce identical auth (Zitadel JWT + the `member` project role).
-const JWKS = createRemoteJWKSet(
-  new URL(`https://${env.ZITADEL_DOMAIN}/oauth/v2/keys`)
-);
-
-// Verify a bearer token the same way requireAuth does. Returns the identity on
-// success, or null if the token is missing/invalid or lacks the member role.
-async function verifyMember(token: string): Promise<AuthUser | null> {
-  try {
-    const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `https://${env.ZITADEL_DOMAIN}`,
-      audience: env.ZITADEL_CLIENT_ID,
-    });
-
-    const roles = payload['urn:zitadel:iam:org:project:roles'] as
-      | Record<string, unknown>
-      | undefined;
-    if (!roles || !('member' in roles)) return null;
-
-    const name =
-      (payload.name as string) ||
-      (payload.preferred_username as string) ||
-      (payload.email as string) ||
-      payload.sub!;
-    return { sub: payload.sub!, name };
-  } catch {
-    return null;
-  }
-}
+import { verifyToken, type AuthUser } from '../auth/verify-token';
 
 // The tRPC request context. `user` mirrors requireAuth's identity (null when not
 // a valid member). `headers` is exposed as a plain record — deliberately NOT the
@@ -42,14 +9,25 @@ async function verifyMember(token: string): Promise<AuthUser | null> {
 // coupling to Express types.
 export interface Context {
   user: AuthUser | null;
+  // Why there is no user, when a token was presented and refused. 503 means the
+  // key set could not be fetched: nothing is known about the token, and telling
+  // the client to sign in again would send it round the Zitadel loop for an
+  // outage on our side.
+  authStatus: 401 | 403 | 503 | null;
   headers: Record<string, string | string[] | undefined>;
 }
 
 export async function createContext({ req }: CreateExpressContextOptions): Promise<Context> {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
-  const user = token ? await verifyMember(token) : null;
-  return { user, headers: req.headers };
+  if (!token) {
+    console.warn(`Auth: no token on ${req.method} ${req.path}`);
+    return { user: null, authStatus: 401, headers: req.headers };
+  }
+  const result = await verifyToken(token, `${req.method} ${req.path}`);
+  return result.ok
+    ? { user: result.user, authStatus: null, headers: req.headers }
+    : { user: null, authStatus: result.status, headers: req.headers };
 }
 
 const t = initTRPC.context<Context>().create();
@@ -61,6 +39,15 @@ export const publicProcedure = t.procedure;
 // role. Downstream resolvers get a non-null `ctx.user`.
 const enforceMember = t.middleware(({ ctx, next }) => {
   if (!ctx.user) {
+    // Only a token problem may surface as 401 — that is the answer the UI
+    // reacts to by signing in again. A key-set failure must not, or an outage
+    // reads as a dead session and the app bounces to Zitadel in a loop.
+    if (ctx.authStatus === 503) {
+      throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: 'Auth backend unavailable' });
+    }
+    if (ctx.authStatus === 403) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Access not granted' });
+    }
     throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Access not granted' });
   }
   return next({ ctx: { ...ctx, user: ctx.user } });
