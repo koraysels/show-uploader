@@ -5,6 +5,7 @@ import {
   recentAttempts,
   recordAttempt,
   type AttemptStore,
+  HISTORY_WINDOW_MS,
 } from '../../src/auth/loop-guard';
 
 // ui's vitest run has no jsdom, so sessionStorage is faked with a plain map.
@@ -105,5 +106,43 @@ describe('clearAttempts', () => {
     clearAttempts(store);
     expect(recentAttempts(store, T0 + 5_000)).toEqual([]);
     expect(recordAttempt(store, T0 + 5_000).allowed).toBe(true);
+  });
+});
+
+// A loop that succeeds between bounces cleared the short counter every pass, so
+// it could redirect forever without the guard ever seeing more than one attempt.
+describe('long-window history', () => {
+  const store = () => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    };
+  };
+
+  it('stops a slow loop that clears the short counter on every pass', () => {
+    const s = store();
+    let now = 0;
+    const results = [];
+    for (let i = 0; i < 7; i++) {
+      results.push(recordAttempt(s, now).allowed);
+      clearAttempts(s); // the session proved healthy in between
+      now += 60_000; // one redirect a minute — never 3 inside the short window
+    }
+    expect(results.slice(0, 5)).toEqual([true, true, true, true, true]);
+    expect(results.slice(5)).toEqual([false, false]);
+  });
+
+  it('forgets history older than its window, so normal use is never blocked', () => {
+    const s = store();
+    let now = 0;
+    for (let i = 0; i < 5; i++) {
+      recordAttempt(s, now);
+      clearAttempts(s);
+      now += HISTORY_WINDOW_MS / 4;
+    }
+    // Well past the window: nothing from the earlier run counts any more.
+    expect(recordAttempt(s, now + HISTORY_WINDOW_MS).allowed).toBe(true);
   });
 });

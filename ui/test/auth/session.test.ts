@@ -107,3 +107,66 @@ describe('withAuthRetry', () => {
     expect(mgr.signinRedirect).not.toHaveBeenCalled();
   });
 });
+
+// Zitadel rotates refresh tokens: the grant invalidates the token it consumed.
+// The app opens several queries at once, so an expired session used to fire one
+// signinSilent per query — the second reused a spent refresh token, Zitadel's
+// reuse detection killed the whole chain, and the app was left with no token at
+// all. That is the "Auth: no token" the api logs during the loop.
+describe('concurrent renewal', () => {
+  it('renews once for callers that race on the same expired session', async () => {
+    let resolveRenew: (u: User) => void = () => {};
+    const renewal = new Promise<User>((r) => (resolveRenew = r));
+    const mgr = makeManager({
+      getUser: vi.fn(async () => user('stale', true)),
+      signinSilent: vi.fn(() => renewal),
+    });
+
+    const both = Promise.all([getFreshAccessToken(mgr), getFreshAccessToken(mgr)]);
+    resolveRenew(user('renewed'));
+
+    await expect(both).resolves.toEqual(['renewed', 'renewed']);
+    expect(mgr.signinSilent).toHaveBeenCalledTimes(1);
+  });
+
+  it('renews again after the in-flight renewal has settled', async () => {
+    const mgr = makeManager({
+      getUser: vi.fn(async () => user('stale', true)),
+      signinSilent: vi.fn(async () => user('renewed')),
+    });
+
+    await getFreshAccessToken(mgr);
+    await getFreshAccessToken(mgr);
+
+    expect(mgr.signinSilent).toHaveBeenCalledTimes(2);
+  });
+
+  // Another tab may have rotated the refresh token a moment earlier and stored
+  // the resulting session. That session is good; this tab's failure is not a
+  // reason to sign out.
+  it('falls back to a session another tab just stored', async () => {
+    const getUser = vi
+      .fn<() => Promise<User | null>>()
+      .mockResolvedValueOnce(user('stale', true))
+      .mockResolvedValue(user('from-other-tab'));
+    const mgr = makeManager({
+      getUser,
+      signinSilent: vi.fn(async () => {
+        throw new Error('token inactive');
+      }),
+    });
+
+    await expect(getFreshAccessToken(mgr)).resolves.toBe('from-other-tab');
+  });
+
+  it('gives up when the stored session is expired too', async () => {
+    const mgr = makeManager({
+      getUser: vi.fn(async () => user('stale', true)),
+      signinSilent: vi.fn(async () => {
+        throw new Error('token inactive');
+      }),
+    });
+
+    await expect(getFreshAccessToken(mgr)).resolves.toBeUndefined();
+  });
+});
