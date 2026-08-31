@@ -1,6 +1,6 @@
 import type { User } from 'oidc-client-ts';
 import { userManager } from './user-manager';
-import { clearAttempts, recordAttempt, type AttemptStore } from './loop-guard';
+import { clearAttempts, recordAttempt, resetGuard, type AttemptStore } from './loop-guard';
 import type { SessionManager } from './session';
 
 /**
@@ -104,24 +104,43 @@ export function markSessionHealthy(): void {
 
 /** Operator pressed "try again" on the failure screen. */
 export async function retrySignin(): Promise<void> {
-  clearAttempts(attemptStore());
+  // A retry they asked for must not be refused by the history of the loop they
+  // are trying to escape.
+  resetGuard(attemptStore());
   failure = null;
   emit();
   await requestSignin('manual-retry', { prompt: 'login' });
 }
 
-/** Operator pressed "sign out" — drop the local session and start clean. */
+/**
+ * Operator pressed "sign out".
+ *
+ * Local teardown happens first and unconditionally: revoking at Zitadel is a
+ * network call that can hang, and an awaited hang left the button looking dead
+ * while the session stayed put. Then end the session at Zitadel properly —
+ * signing in again with prompt=login re-authenticates but leaves the SSO cookie
+ * alive, so the "logout" never actually logged anyone out.
+ */
 export async function signOut(): Promise<void> {
-  try {
-    await userManager.revokeTokens(['refresh_token']);
-  } catch {
-    // Nothing to revoke, or Zitadel unreachable: must not trap the user.
-  }
-  await userManager.removeUser();
-  clearAttempts(attemptStore());
+  const revoked = userManager.revokeTokens(['refresh_token']).catch(() => {});
+  await Promise.race([revoked, new Promise((r) => setTimeout(r, 2_000))]);
+
+  await userManager.removeUser().catch(() => {});
+  resetGuard(attemptStore());
   failure = null;
   emit();
-  await userManager.signinRedirect({ prompt: 'login' });
+
+  try {
+    await userManager.signoutRedirect();
+  } catch (err) {
+    // No end-session support, or the post-logout URI isn't registered on the
+    // app in Zitadel. Falling back still gets the operator a login screen.
+    console.warn(`Auth: end-session failed, falling back to prompt=login (${String(err)})`);
+    await userManager.signinRedirect({ prompt: 'login' }).catch((e: unknown) => {
+      failure = { reason: 'signout-failed', attempts: 0, detail: String(e) };
+      emit();
+    });
+  }
 }
 
 /**

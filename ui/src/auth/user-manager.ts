@@ -23,4 +23,8 @@ export const userManager = new UserManager({
   // Zitadel omits name/email from the ID token; fetch them from the userinfo
   // endpoint so user.profile has a display name (header chip, presence).
   loadUserInfo: true,
+  // Where Zitadel sends the browser after ending the session. It has to be
+  // registered as a post-logout redirect URI on the app, or end_session errors
+  // and signOut falls back to a plain prompt=login.
+  post_logout_redirect_uri: window.location.origin,
 });
