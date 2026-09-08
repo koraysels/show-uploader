@@ -26,6 +26,7 @@ import { publishedPlatforms } from '../components/platforms';
 import { PageLoading } from '../components/Skeleton';
 import TrimFields from '../components/TrimFields';
 import VideoPreview from '../components/VideoPreview';
+import DownloadLink from '../components/DownloadLink';
 import { useUpload } from '../upload/UploadProvider';
 import { resolveVideo, type StagedVideo } from '../upload/resolveVideo';
 import { usePresence } from '../presence/PresenceProvider';
@@ -543,7 +544,7 @@ export default function NewUpload() {
                 <Typography noWrap sx={{ minWidth: 0 }}>
                   ✓ {videoFilename || 'video ready'}
                 </Typography>
-                <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
                   <Button
                     variant="text"
                     onClick={() => setPreviewOpen((v) => !v)}
@@ -551,6 +552,7 @@ export default function NewUpload() {
                   >
                     {previewOpen ? 'hide preview' : 'preview'}
                   </Button>
+                  <DownloadLink objectKey={videoS3Key || null} label="download" />
                   <Button
                     variant="text"
                     color={ROLE.destroy}

@@ -186,22 +186,35 @@ function IndicatorRow({ item, compact }: { item: UploadItem; compact?: boolean }
       <Box
         sx={{
           minWidth: 0,
+          flex: 1,
           '& a': { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, color: c.muted, textDecoration: 'none' },
           '& a:hover': { color: c.ink },
         }}
       >
         <Link to="/upload/$showId" params={{ showId: item.showId }}>
-          <Typography variant="caption" noWrap sx={{ maxWidth: 140 }}>
+          <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>
             {item.filename}
           </Typography>
           <LinearProgress
             variant="determinate"
             value={pct}
-            sx={{ width: 80, height: 4, flexShrink: 0 }}
+            sx={{ width: 60, height: 4, flexShrink: 0 }}
           />
-          <Typography variant="caption" sx={{ flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+          <Typography
+            variant="caption"
+            sx={{ flexShrink: 0, width: 30, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+          >
             {pct}%
           </Typography>
+          {item.bytesPerSec > 0 && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ flexShrink: 0, width: 62, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}
+            >
+              {prettyBytes(item.bytesPerSec)}/s
+            </Typography>
+          )}
         </Link>
       </Box>
       <Tooltip title="cancel upload">
@@ -259,7 +272,7 @@ export function UploadIndicator() {
         onClose={() => setOpen(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { variant: 'outlined', sx: { mt: 1, width: 288, p: 1 } } }}
+        slotProps={{ paper: { variant: 'outlined', sx: { mt: 1, width: 420, p: 1 } } }}
       >
         <Stack spacing={0.25}>
           {active.map((u) => (

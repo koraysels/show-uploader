@@ -38,8 +38,8 @@ import { ListSkeleton } from '../components/Skeleton';
 import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
 import SignedVideoPlayer from '../components/SignedVideoPlayer';
+import DownloadLink from '../components/DownloadLink';
 import { humanSize } from '../format';
-import { useSignObjectOnDemand } from '../api/hooks';
 import type { UploadWithJobs, AgendaShow } from '../api/client';
 import { platformOfLabel, PLATFORMS } from '../components/platforms';
 import { c, ROLE, LABEL_SX } from '../theme';
@@ -253,51 +253,6 @@ function publishedJobs(u: UploadWithJobs) {
   return u.jobs
     .filter((j) => (j.platform === 'youtube' || j.platform === 'mixcloud') && j.status === 'done' && j.result_url)
     .sort((a, b) => a.platform.localeCompare(b.platform));
-}
-
-/**
- * Signs its object only when clicked.
- *
- * The uploads list carries keys rather than presigned URLs — signing every
- * artefact on every poll was churn for objects that never change, and the
- * mutating URL tore down anything already using it.
- */
-function DownloadLink({ objectKey, label }: { objectKey: string | null; label: string }) {
-  const sign = useSignObjectOnDemand();
-  const [failed, setFailed] = useState(false);
-
-  if (!objectKey)
-    return (
-      <Typography variant="body2" color="text.disabled">
-        {label} —
-      </Typography>
-    );
-
-  // The tab must be opened inside the click's own task or the popup blocker
-  // eats it; the URL is filled in once signing resolves.
-  const open = () => {
-    // The tab must be opened inside the click's own task or the popup blocker
-    // eats it; the URL is filled in once signing resolves.
-    const tab = window.open('', '_blank');
-    setFailed(false);
-    sign(objectKey)
-      .then(({ url }) => {
-        if (tab) tab.location.href = url;
-        // A blocked popup leaves no tab and no error — say so rather than
-        // looking like nothing happened.
-        else setFailed(true);
-      })
-      .catch(() => {
-        tab?.close();
-        setFailed(true);
-      });
-  };
-
-  return (
-    <MuiLink component="button" onClick={open} color={ROLE.navigate} sx={linkSx}>
-      {label} {failed ? '— failed' : '↓'}
-    </MuiLink>
-  );
 }
 
 /**
