@@ -18,7 +18,7 @@ export type AgendaShow = {
   // Links already on the record (YouTube/MixCloud), so the UI can show what's
   // published and pre-select only the missing platform on a re-publish.
   mediaLinks: MediaLink[];
-  // The linked show/series blurb (archive.show → shows.description). Context for
+  // The linked series blurb (archive.series → series.description). Context for
   // the upload description: seed from it when the episode has no notes of its own,
   // and feed it to the AI suggestion. Null when there's no linked show.
   showDescription: string | null;
@@ -39,14 +39,14 @@ type ArchiveItem = Pick<
 > & {
   collectionId: string;
   updated?: string;
-  expand?: { genres?: { name: string }[]; show?: { description?: string } };
+  expand?: { genres?: { name: string }[]; series?: { description?: string } };
 };
 
 // The relation-expand string used everywhere we read an archive record — the
 // genre names for tags + the linked show's description for the upload context.
-const ARCHIVE_EXPAND = 'genres,show';
+const ARCHIVE_EXPAND = 'genres,series';
 const ARCHIVE_FIELDS =
-  'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,updated,expand.genres.name,expand.show.description';
+  'id,title,notes,startTime,endTime,image,genres,mediaLinks,collectionId,updated,expand.genres.name,expand.series.description';
 
 export function toAgendaShow(rec: ArchiveItem): AgendaShow {
   const start = splitDateTime(rec.startTime);
@@ -64,7 +64,7 @@ export function toAgendaShow(rec: ArchiveItem): AgendaShow {
     // Genres are a relation; use the expanded names (not the raw record IDs).
     tags: rec.expand?.genres?.length ? rec.expand.genres.map((g) => g.name).filter(Boolean) : null,
     mediaLinks: Array.isArray(rec.mediaLinks) ? (rec.mediaLinks as MediaLink[]) : [],
-    showDescription: rec.expand?.show?.description || null,
+    showDescription: rec.expand?.series?.description || null,
     updated: rec.updated ?? '',
   };
 }
