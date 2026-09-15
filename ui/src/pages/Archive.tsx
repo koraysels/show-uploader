@@ -39,7 +39,7 @@ import ConfirmAction from '../components/ConfirmAction';
 import PlatformIcon from '../components/PlatformIcon';
 import SignedVideoPlayer from '../components/SignedVideoPlayer';
 import DownloadLink from '../components/DownloadLink';
-import { humanSize } from '../format';
+import { humanSize, humanDuration } from '../format';
 import type { UploadWithJobs, AgendaShow } from '../api/client';
 import { platformOfLabel, PLATFORMS } from '../components/platforms';
 import { c, ROLE, LABEL_SX } from '../theme';
@@ -580,6 +580,7 @@ function ArchiveCard({
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
             {show.date}
             {show.startTime ? ` · ${show.startTime}` : ''}
+            {!!upload?.duration_seconds && ` · ${humanDuration(upload.duration_seconds)}`}
             {show.updated && (
               <Box component="span" sx={{ color: c.faint }}>
                 {' '}

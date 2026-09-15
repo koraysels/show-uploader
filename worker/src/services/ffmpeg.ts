@@ -6,7 +6,7 @@ import { env } from '../env';
 // Apply an absolute [start, end] trim: seek to start (-ss input) and limit the
 // output to (end - start) via -t. Using a duration avoids the ambiguity of -to
 // with an input seek, so the end point is honoured correctly.
-function hms(s?: string): number {
+export function hms(s?: string): number {
   if (!s) return 0;
   const [h = '0', m = '0', sec = '0'] = s.split(':');
   return Number(h) * 3600 + Number(m) * 60 + Number(sec);
@@ -34,6 +34,16 @@ async function probeStreams(
       const find = (kind: string) =>
         data.streams.find((s) => s.codec_type === kind)?.codec_name ?? null;
       resolve({ audioCodec: find('audio'), videoCodec: find('video') });
+    });
+  });
+}
+
+// Raw file duration in seconds, before any trim is applied.
+export async function probeDuration(input: string): Promise<number> {
+  return new Promise((resolve) => {
+    ffmpeg.ffprobe(input, (err, data) => {
+      if (err || !data?.format?.duration) return resolve(0);
+      resolve(data.format.duration);
     });
   });
 }

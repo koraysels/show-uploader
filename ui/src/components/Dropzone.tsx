@@ -192,7 +192,11 @@ function IndicatorRow({ item, compact }: { item: UploadItem; compact?: boolean }
         }}
       >
         <Link to="/upload/$showId" params={{ showId: item.showId }}>
-          <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="caption"
+            noWrap
+            sx={{ flex: compact ? 'none' : 1, minWidth: 0, maxWidth: compact ? 160 : 'none' }}
+          >
             {item.filename}
           </Typography>
           <LinearProgress

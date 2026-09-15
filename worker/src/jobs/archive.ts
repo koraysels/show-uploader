@@ -9,6 +9,8 @@ import {
   resolveTrim,
   measureLoudness,
   cleanup,
+  probeDuration,
+  hms,
   type LoudnessMeasurement,
 } from '../services/ffmpeg';
 import { env } from '../env';
@@ -17,6 +19,7 @@ import {
   setJobStatus,
   setAudioKey,
   setVideoKey,
+  setVideoDuration,
   getPlatformJobsForUpload,
   getUploadRow,
   createArchiveJobRecord,
@@ -62,6 +65,14 @@ export async function processArchive(job: Job<JobPayload>): Promise<string> {
     // moving between them is what says the job is alive rather than hung.
     const trim = await resolveTrim(inputPath, { manualStart: trimStart, manualEnd: trimEnd, autoTrimSilence });
     await report(25);
+
+    // Effective post-trim length, in seconds, for display in the archive UI.
+    const rawDuration = await probeDuration(inputPath);
+    const durationSeconds = Math.max(
+      0,
+      Math.round((trim.trimEnd ? hms(trim.trimEnd) : rawDuration) - hms(trim.trimStart ?? '00:00:00'))
+    );
+    await setVideoDuration(uploadId, durationSeconds);
 
     // Measured once and reused for both archives, so the downloadable audio and
     // the archived video sit at exactly the same level.

@@ -71,6 +71,10 @@ export async function setAudioKey(uploadId: string, key: string) {
   await db`UPDATE show_uploads SET audio_s3_key = ${key} WHERE id = ${uploadId}`;
 }
 
+export async function setVideoDuration(uploadId: string, seconds: number) {
+  await db`UPDATE show_uploads SET duration_seconds = ${seconds} WHERE id = ${uploadId}`;
+}
+
 // Repoint the video archive at the remuxed MP4. Clearing the trim is required,
 // not cosmetic: the retry endpoints rebuild job payloads from this row, and the
 // new file is *already* trimmed — leaving the bounds in place would cut a

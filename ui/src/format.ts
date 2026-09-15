@@ -6,6 +6,13 @@ export function humanSize(bytes: number): string {
   return `${Math.round(bytes / 1024)} KB`;
 }
 
+/** A show's runtime, e.g. "1h 23m" or "47m". */
+export function humanDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
 /** Coarse age for "how long has this been sitting there". */
 export function humanAge(ms: number): string {
   const h = ms / 3_600_000;

@@ -13,6 +13,7 @@ export type ShowUpload = {
   jingle_s3_key: string | null;
   trim_start: string | null;
   trim_end: string | null;
+  duration_seconds: number | null;
   created_at: Date;
 };
 
