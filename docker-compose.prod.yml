@@ -94,7 +94,10 @@ services:
       - default
 
   minio:
-    image: minio/minio:latest
+    # minio/minio was pulled from Docker Hub — quay.io/minio/minio is the only
+    # registry MinIO still publishes to. Pinned rather than :latest since an
+    # unattended host has no one watching for a breaking upgrade.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z.hotfix.7aa24e772
     command: server /data --console-address ":9001"
     env_file: .env
     environment:
